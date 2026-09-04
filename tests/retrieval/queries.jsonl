@@ -1,0 +1,63 @@
+{"query": "How do I apply a Hadamard gate to a qubit?", "target_doc_id": "QuantumCircuit.h", "query_type": "intent_phrasing", "also_correct": ["HGate"]}
+{"query": "What method adds a Pauli-X gate to a circuit?", "target_doc_id": "QuantumCircuit.x", "query_type": "intent_phrasing", "also_correct": ["XGate"]}
+{"query": "How do I apply a Pauli-Y gate?", "target_doc_id": "QuantumCircuit.y", "query_type": "intent_phrasing", "also_correct": ["YGate"]}
+{"query": "How do I apply a Pauli-Z gate?", "target_doc_id": "QuantumCircuit.z", "query_type": "intent_phrasing", "also_correct": ["ZGate"]}
+{"query": "How do I add a CNOT gate between a control and target qubit?", "target_doc_id": "QuantumCircuit.cx", "query_type": "intent_phrasing", "also_correct": ["CXGate"]}
+{"query": "What is the method for a controlled-Y gate?", "target_doc_id": "QuantumCircuit.cy", "query_type": "intent_phrasing", "also_correct": ["CYGate"]}
+{"query": "What is the method for a controlled-Z gate?", "target_doc_id": "QuantumCircuit.cz", "query_type": "intent_phrasing", "also_correct": ["CZGate"]}
+{"query": "How do I add a Toffoli gate (CCX) to my circuit?", "target_doc_id": "QuantumCircuit.ccx", "query_type": "intent_phrasing", "also_correct": ["CCXGate"]}
+{"query": "How do I swap the state of two qubits?", "target_doc_id": "QuantumCircuit.swap", "query_type": "intent_phrasing", "also_correct": ["SwapGate"]}
+{"query": "What method applies an iSWAP gate?", "target_doc_id": "QuantumCircuit.iswap", "query_type": "intent_phrasing", "also_correct": ["iSwapGate"]}
+{"query": "How do I apply an echoed cross-resonance gate?", "target_doc_id": "QuantumCircuit.ecr", "query_type": "intent_phrasing", "also_correct": ["ECRGate"]}
+{"query": "How do I rotate a qubit about the X axis by an angle?", "target_doc_id": "QuantumCircuit.rx", "query_type": "intent_phrasing", "also_correct": ["RXGate"]}
+{"query": "How do I rotate a qubit about the Y axis by an angle?", "target_doc_id": "QuantumCircuit.ry", "query_type": "intent_phrasing", "also_correct": ["RYGate"]}
+{"query": "How do I rotate a qubit about the Z axis by an angle?", "target_doc_id": "QuantumCircuit.rz", "query_type": "intent_phrasing", "also_correct": ["RZGate"]}
+{"query": "What method applies a two-qubit XX rotation gate?", "target_doc_id": "QuantumCircuit.rxx", "query_type": "intent_phrasing", "also_correct": ["RXXGate"]}
+{"query": "What method applies a two-qubit YY rotation gate?", "target_doc_id": "QuantumCircuit.ryy", "query_type": "intent_phrasing", "also_correct": ["RYYGate"]}
+{"query": "What method applies a two-qubit ZZ rotation gate?", "target_doc_id": "QuantumCircuit.rzz", "query_type": "intent_phrasing", "also_correct": ["RZZGate"]}
+{"query": "How do I apply the S phase gate to a qubit?", "target_doc_id": "QuantumCircuit.s", "query_type": "intent_phrasing", "also_correct": ["SGate"]}
+{"query": "How do I apply the inverse (dagger) of the S gate?", "target_doc_id": "QuantumCircuit.sdg", "query_type": "intent_phrasing", "also_correct": ["SdgGate"]}
+{"query": "How do I apply a T gate?", "target_doc_id": "QuantumCircuit.t", "query_type": "intent_phrasing", "also_correct": ["TGate"]}
+{"query": "How do I apply the inverse (dagger) of the T gate?", "target_doc_id": "QuantumCircuit.tdg", "query_type": "intent_phrasing", "also_correct": ["TdgGate"]}
+{"query": "What method applies the square-root-of-X gate?", "target_doc_id": "QuantumCircuit.sx", "query_type": "intent_phrasing", "also_correct": ["SXGate"]}
+{"query": "What method applies the inverse square-root-of-X gate?", "target_doc_id": "QuantumCircuit.sxdg", "query_type": "intent_phrasing", "also_correct": ["SXdgGate"]}
+{"query": "How do I apply a phase gate with a given angle?", "target_doc_id": "QuantumCircuit.p", "query_type": "intent_phrasing", "also_correct": ["PhaseGate"]}
+{"query": "How do I apply a general single-qubit unitary gate with three Euler angles?", "target_doc_id": "QuantumCircuit.u", "query_type": "intent_phrasing", "also_correct": ["UGate"]}
+{"query": "How do I apply an identity gate that does nothing?", "target_doc_id": "QuantumCircuit.id", "query_type": "intent_phrasing", "also_correct": ["IGate"]}
+{"query": "How do I measure a qubit into a classical bit?", "target_doc_id": "QuantumCircuit.measure", "query_type": "intent_phrasing"}
+{"query": "How do I measure every qubit in the circuit at once?", "target_doc_id": "QuantumCircuit.measure_all", "query_type": "intent_phrasing"}
+{"query": "How do I measure only the active qubits in the circuit?", "target_doc_id": "QuantumCircuit.measure_active", "query_type": "intent_phrasing"}
+{"query": "How do I insert a barrier to prevent optimizations across it?", "target_doc_id": "QuantumCircuit.barrier", "query_type": "intent_phrasing"}
+{"query": "How do I reset a qubit to the zero state?", "target_doc_id": "QuantumCircuit.reset", "query_type": "intent_phrasing"}
+{"query": "How do I add an idle delay on a qubit?", "target_doc_id": "QuantumCircuit.delay", "query_type": "intent_phrasing"}
+{"query": "How do I combine two circuits by composing one onto the other?", "target_doc_id": "QuantumCircuit.compose", "query_type": "intent_phrasing"}
+{"query": "How do I append an existing instruction to a circuit?", "target_doc_id": "QuantumCircuit.append", "query_type": "intent_phrasing"}
+{"query": "How do I convert a circuit into a reusable custom gate?", "target_doc_id": "QuantumCircuit.to_gate", "query_type": "intent_phrasing"}
+{"query": "How do I convert a circuit into an Instruction object?", "target_doc_id": "QuantumCircuit.to_instruction", "query_type": "intent_phrasing"}
+{"query": "How do I get the depth (critical path length) of a circuit?", "target_doc_id": "QuantumCircuit.depth", "query_type": "intent_phrasing"}
+{"query": "How do I get the total number of gate operations in a circuit?", "target_doc_id": "QuantumCircuit.size", "query_type": "intent_phrasing"}
+{"query": "How do I get the number of qubits and clbits in a circuit?", "target_doc_id": "QuantumCircuit.width", "query_type": "intent_phrasing"}
+{"query": "How do I count how many times each gate type appears in a circuit?", "target_doc_id": "QuantumCircuit.count_ops", "query_type": "intent_phrasing"}
+{"query": "How do I initialize a circuit's qubits to an arbitrary quantum state?", "target_doc_id": "QuantumCircuit.initialize", "query_type": "intent_phrasing"}
+{"query": "How do I bind numeric values to a circuit's free parameters?", "target_doc_id": "QuantumCircuit.assign_parameters", "query_type": "intent_phrasing"}
+{"query": "How do I look up the index of a qubit or clbit within a circuit?", "target_doc_id": "QuantumCircuit.find_bit", "query_type": "intent_phrasing"}
+{"query": "How do I apply an arbitrary unitary matrix as a gate?", "target_doc_id": "QuantumCircuit.unitary", "query_type": "intent_phrasing"}
+{"query": "What is the matrix representation and circuit symbol for the RZ rotation gate class?", "target_doc_id": "RZGate", "query_type": "intent_phrasing"}
+{"query": "What is the matrix representation and circuit symbol for the RX rotation gate class?", "target_doc_id": "RXGate", "query_type": "intent_phrasing"}
+{"query": "What is the matrix representation and circuit symbol for the Hadamard gate class?", "target_doc_id": "HGate", "query_type": "intent_phrasing"}
+{"query": "What is the matrix representation and circuit symbol for the CNOT (CX) gate class?", "target_doc_id": "CXGate", "query_type": "intent_phrasing"}
+{"query": "What is the matrix representation and circuit symbol for the RY rotation gate class?", "target_doc_id": "RYGate", "query_type": "intent_phrasing"}
+{"query": "What is the matrix representation and circuit symbol for the square-root-X (SX) gate class?", "target_doc_id": "SXGate", "query_type": "intent_phrasing"}
+{"query": "RZGate", "target_doc_id": "RZGate", "query_type": "exact_identifier"}
+{"query": "RXGate", "target_doc_id": "RXGate", "query_type": "exact_identifier"}
+{"query": "HGate", "target_doc_id": "HGate", "query_type": "exact_identifier"}
+{"query": "CXGate", "target_doc_id": "CXGate", "query_type": "exact_identifier"}
+{"query": "RYGate", "target_doc_id": "RYGate", "query_type": "exact_identifier"}
+{"query": "SXGate", "target_doc_id": "SXGate", "query_type": "exact_identifier"}
+{"query": "U3Gate", "target_doc_id": "U3Gate", "query_type": "exact_identifier"}
+{"query": "QuantumCircuit.cx", "target_doc_id": "QuantumCircuit.cx", "query_type": "exact_identifier"}
+{"query": "QuantumCircuit.h", "target_doc_id": "QuantumCircuit.h", "query_type": "exact_identifier"}
+{"query": "QuantumCircuit.measure", "target_doc_id": "QuantumCircuit.measure", "query_type": "exact_identifier"}
+{"query": "QuantumCircuit.rz", "target_doc_id": "QuantumCircuit.rz", "query_type": "exact_identifier"}
+{"query": "QuantumCircuit.barrier", "target_doc_id": "QuantumCircuit.barrier", "query_type": "exact_identifier"}
+{"query": "QuantumCircuit.compose", "target_doc_id": "QuantumCircuit.compose", "query_type": "exact_identifier"}

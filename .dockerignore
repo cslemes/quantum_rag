@@ -1,0 +1,17 @@
+.git/
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+results/
+*.log*
+.env*
+!.env.example
+Dockerfile*
+.dockerignore
+docker-compose.yml
+node_modules/
+.DS_Store
