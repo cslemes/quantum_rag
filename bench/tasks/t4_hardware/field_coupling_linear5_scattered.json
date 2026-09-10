@@ -1,0 +1,11 @@
+{
+  "task_id": "field_coupling_linear5_scattered",
+  "tier": "t4",
+  "prompt": "Build a 5-qubit circuit implementing, as a general-purpose circuit block: Hadamard on all 5 qubits, then the phase exp(-i*gamma*H) where H = 0.2*Z0 + 0.3*Z1 - 0.1*Z2 + 0.4*Z3 - 0.3*Z4 + 0.4*Z0*Z4 - 0.3*Z1*Z3 (single-qubit field terms on every qubit, plus two coupling terms between distant qubits). gamma = 0.4. This circuit will be transpiled for a 5-qubit LINEAR coupling map (qubit i only physically adjacent to qubit i-1 and i+1) — the coupling terms (0,4) and (1,3) are both between non-adjacent qubits, so routing overhead is expected. Any correct implementation of the phase terms is accepted. No measurement.",
+  "n_qubits": 5,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/field_coupling_linear5_scattered.qpy",
+  "coupling_map": "linear_5",
+  "tolerance": 0.99,
+  "max_depth_ratio": 2.0
+}

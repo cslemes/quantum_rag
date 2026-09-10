@@ -19,6 +19,7 @@ import pytest
 from qiskit import QuantumCircuit
 
 from qcagent.graph import (
+    StatePreparationOracle,
     build_graph,
     make_resource_check_node,
     make_semantic_check_node,
@@ -258,6 +259,45 @@ def test_scenario4_optimizes_after_resource_excess(pool: WorkerPool, tmp_path: P
     assert result["error_history"][0].stage == "resource"
 
 
+def test_task_max_depth_ratio_is_actually_used_not_the_hardcoded_default(
+    pool: WorkerPool, tmp_path: Path
+) -> None:
+    """Regression test: `TaskSpec.max_depth_ratio` (data-model.md, since
+    T043) was defined but never threaded through `make_resource_check_node`
+    — every task was silently graded against `check_resources`' own
+    hardcoded default (2.0) no matter what its JSON declared (found while
+    building T047, research.md D3h). `AgentState["max_depth_ratio"]` now
+    carries it the same way `coupling_map_name` already did.
+
+    Same HEAVY_BELL_CODE as `test_scenario4` above (depth_ratio=3.0,
+    cx_ratio=5.0 at opt_level=0 against BELL_ORACLE — comfortably over the
+    default max_depth_ratio=2.0) but with a state-level `max_depth_ratio`
+    loose enough (10.0) to admit it on the FIRST attempt. If the field were
+    still ignored (silently falling back to 2.0), this would take 2
+    iterations and record a ResourceExcess error, exactly like
+    `test_scenario4` — the assertions below only pass if the wiring works.
+    """
+    graph, generator_llm, critic_llm = _build(
+        pool,
+        tmp_path,
+        generator_responses=[f"```python\n{HEAVY_BELL_CODE}```"],
+        critic_responses=[],
+        resource_opt_level=0,
+    )
+
+    state = _initial_state()
+    state["max_depth_ratio"] = 10.0
+
+    result = graph.invoke(state)
+
+    assert result["status"] == "success"
+    assert result["iteration"] == 1  # passed on the first attempt, no optimize retry needed
+    assert result["error_history"] == []
+    assert result["resource"] is not None
+    assert result["resource"].passed
+    assert result["resource"].depth_ratio > 2.0  # would have failed under the old hardcoded default
+
+
 # -- Infrastructure failure must short-circuit before the critic ------------
 
 
@@ -433,3 +473,78 @@ def test_semantic_is_cleared_when_a_later_attempt_fails_at_static(
         "WrongGateDecomposition",
         "SyntaxError",
     ]
+
+
+# -- D3c: state-preparation oracle at the full graph level -------------------
+
+
+GHZ3_CHAIN_ORACLE = QuantumCircuit(3)
+GHZ3_CHAIN_ORACLE.h(0)
+GHZ3_CHAIN_ORACLE.cx(0, 1)
+GHZ3_CHAIN_ORACLE.cx(1, 2)
+
+# The exact circuit a live Ollama run produced for the ghz_3q task
+# (research.md D3c): a CX star (0->1, 0->2) instead of the oracle's CX chain
+# (0->1, 1->2). Both prepare the GHZ state from |000>, but `check_unitary`
+# rejected it — the task's prompt only ever specified the output state.
+GHZ3_STAR_CODE = (
+    "from qiskit import QuantumCircuit\nqc = QuantumCircuit(3)\nqc.h(0)\nqc.cx(0, 1)\nqc.cx(0, 2)\n"
+)
+
+GHZ_REQUIREMENTS_JSON = json.dumps(
+    {
+        "satisfiable": True,
+        "rejection_reason": None,
+        "requirements": [
+            {"id": "r1", "kind": "n_qubits", "description": "3 qubits", "value": 3},
+            {"id": "r2", "kind": "property", "description": "produce a GHZ state", "value": None},
+        ],
+    }
+)
+
+
+def test_statevector_oracle_accepts_a_different_valid_state_preparation(
+    pool: WorkerPool, tmp_path: Path
+) -> None:
+    """D3c regression, at the full graph level (not just semantic.py's unit
+    tests): reclassifying ghz_3q as oracle_kind="statevector" must let the
+    live-observed CX-star circuit succeed, AND resource_check must still run
+    — the routing fix keys off `verification_method`, not `unitary_equiv`
+    (which stays None for a statevector-oracle pass), specifically so a
+    state-prep task doesn't lose resource comparison as a side effect.
+    """
+
+    def ghz_oracle_loader(_ref: str) -> StatePreparationOracle:
+        return StatePreparationOracle(reference_circuit=GHZ3_CHAIN_ORACLE)
+
+    planner_llm = ScriptedLLMClient([GHZ_REQUIREMENTS_JSON], tmp_path / "planner_cache")
+    generator_llm = ScriptedLLMClient(
+        [f"```python\n{GHZ3_STAR_CODE}```"], tmp_path / "generator_cache"
+    )
+    critic_llm = ScriptedLLMClient([], tmp_path / "critic_cache")
+
+    graph = build_graph(
+        planner_node=make_planner_node(planner_llm, max_qubits=20),
+        retriever_node=_stub_retriever,
+        generator_node=make_generator_node(generator_llm),
+        static_check_node=make_static_check_node(pool),
+        semantic_check_node=make_semantic_check_node(ghz_oracle_loader),
+        resource_check_node=make_resource_check_node(ghz_oracle_loader),
+        critic_node=make_critic_node(critic_llm, max_iter=5),
+    )
+
+    result = graph.invoke(
+        {
+            "task_id": "t-ghz3",
+            "spec": "Build a 3-qubit GHZ state: (|000> + |111>) / sqrt(2), up to global phase",
+            "oracle_ref": "ghz_3q",
+            "coupling_map_name": None,
+            "iteration": 0,
+        }
+    )
+
+    assert result["status"] == "success"
+    assert result["iteration"] == 1
+    assert result["semantic"].state_equiv is True
+    assert result["semantic"].unitary_equiv is None
+    assert result["resource"] is not None  # not skipped despite unitary_equiv=None

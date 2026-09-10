@@ -1,0 +1,11 @@
+{
+  "task_id": "zstring_linear5_scattered",
+  "tier": "t4",
+  "prompt": "Build a 5-qubit circuit implementing, as a general-purpose circuit block: Hadamard on all 5 qubits, then the phase exp(-i*gamma*H) where H = 0.6 * Z0 * Z2 * Z4 (a single three-body interaction term over qubits 0, 2, and 4). gamma = 0.5. This circuit will be transpiled for a 5-qubit LINEAR coupling map (qubit i only physically adjacent to qubit i-1 and i+1) — qubits 0, 2, and 4 are not adjacent on this line, so routing overhead is expected. Any correct implementation is accepted (Z0*Z2*Z4 is diagonal, so any gate sequence producing the correct phase per computational basis state is correct — it does not need to match one specific decomposition). No measurement.",
+  "n_qubits": 5,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/zstring_linear5_scattered.qpy",
+  "coupling_map": "linear_5",
+  "tolerance": 0.99,
+  "max_depth_ratio": 2.0
+}

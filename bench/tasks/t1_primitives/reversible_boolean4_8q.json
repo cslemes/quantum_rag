@@ -1,0 +1,10 @@
+{
+  "task_id": "reversible_boolean4_8q",
+  "tier": "t1",
+  "prompt": "Build a reversible (no measurement, no classical bits) 8-qubit circuit using CNOT, Toffoli (CCX), and a 4-controlled-X (MCX) gate. Qubits 0, 1, 2, 3 are the inputs a, b, c, d; qubits 4-7 are fresh ancilla outputs, all starting at |0>, that must end up holding: qubit 4 = a XOR b XOR c XOR d (parity), qubit 5 = a AND b AND c AND d, qubit 6 = a AND b, qubit 7 = c AND d. IMPORTANT constraint: compute each of the four outputs using ONLY qubits 0-3 (the original inputs) as controls. Do not use any of qubits 4-7 as a control for computing another one of qubits 4-7 — every output must be independent of the others.",
+  "n_qubits": 8,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/reversible_boolean4_8q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

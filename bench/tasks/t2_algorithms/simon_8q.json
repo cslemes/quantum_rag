@@ -1,0 +1,10 @@
+{
+  "task_id": "simon_8q",
+  "tier": "t2",
+  "prompt": "Implement Simon's algorithm circuit for the hidden 4-bit period s = 1010 (satisfying f(x) = f(x XOR s) for every x). Use qubits 0-3 as the input register x and qubits 4-7 as the output register y (y_i is at qubit 4+i). Build the EXACT oracle below (this specific function, not any other function satisfying f(x)=f(x XOR s)): first copy the input register to the output register with CNOT(control=qubit i, target=qubit 4+i) for i = 0, 1, 2, 3. Then, using qubit 1 as an extra control (1 is the position of the lowest set bit of s), apply CNOT(control=qubit 1, target=qubit 4+i) for every i where bit i of s is 1 — that is, for i = 1 and i = 3 (s = 1010 has bits 1 and 3 set). Full circuit: Hadamard on qubits 0-3, then the oracle exactly as described, then Hadamard on qubits 0-3 again (not on qubits 4-7). Return the resulting 8-qubit state; no measurement.",
+  "n_qubits": 8,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/simon_8q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

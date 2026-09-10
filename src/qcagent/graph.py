@@ -24,6 +24,7 @@ from typing import Any, TypeAlias
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
+from pydantic import BaseModel, ConfigDict
 from qiskit import QuantumCircuit, qpy
 from qiskit.quantum_info import SparsePauliOp
 
@@ -43,16 +44,42 @@ from qcagent.validators.semantic import (
     ParameterBindingError,
     check_distribution,
     check_energy,
+    check_statevector_with_endianness,
     check_with_endianness,
 )
 from qcagent.validators.static import check_static
 
-# What a task's oracle resolves to: a circuit for the unitary path, a counts
-# dict for the distributional path, or (Hamiltonian, exact_value) for VQE.
-# How oracle_ref -> this object is bench/oracles' concern (Phase 5, T049),
-# not built yet — the loader is injected so this module stays decoupled
-# from that storage format.
-Oracle: TypeAlias = QuantumCircuit | dict[str, int] | tuple[SparsePauliOp, float]
+
+class StatePreparationOracle(BaseModel):
+    """Wraps a reference circuit for `oracle_kind="statevector"` tasks (D3c,
+    research.md — correction to D3/D3b): the task's prompt constrains only
+    the circuit's OUTPUT STATE from `|0...0>`, not its action on every
+    computational basis state, so `semantic_check` must dispatch it to
+    `check_statevector_with_endianness`, never `check_with_endianness`.
+
+    A bare `QuantumCircuit` oracle is ambiguous between "this circuit's full
+    unitary IS the spec" (oracle_kind="unitary") and "only its output state
+    from |0...0> is the spec" (oracle_kind="statevector") — both are loaded
+    from the exact same kind of QPY reference file. This wrapper exists
+    purely so `isinstance` dispatch in `make_semantic_check_node` (and
+    `make_resource_check_node`, which still needs the bare circuit
+    underneath for the depth/cx_ratio comparison) can tell the two apart,
+    without `graph.py` having to know about `TaskSpec.oracle_kind` strings.
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    reference_circuit: QuantumCircuit
+
+
+# What a task's oracle resolves to: a circuit for the unitary path, that same
+# circuit wrapped for the statevector path (see StatePreparationOracle), a
+# counts dict for the distributional path, or (Hamiltonian, exact_value) for
+# VQE. How oracle_ref -> this object is bench/oracles' concern (Phase 5,
+# T049), not built yet — the loader is injected so this module stays
+# decoupled from that storage format.
+Oracle: TypeAlias = (
+    QuantumCircuit | StatePreparationOracle | dict[str, int] | tuple[SparsePauliOp, float]
+)
 OracleLoader = Callable[[str], Oracle]
 
 
@@ -108,7 +135,13 @@ def make_semantic_check_node(
         oracle = oracle_loader(state["oracle_ref"])
         iteration = state.get("iteration", 0)
 
-        if isinstance(oracle, QuantumCircuit):
+        if isinstance(oracle, StatePreparationOracle):
+            result = check_statevector_with_endianness(generated, oracle.reference_circuit)
+            if result.error is not None:
+                result = result.model_copy(
+                    update={"error": result.error.model_copy(update={"iteration": iteration})}
+                )
+        elif isinstance(oracle, QuantumCircuit):
             result = check_with_endianness(generated, oracle, n_qubits=generated.num_qubits)
             if result.error is not None:
                 result = result.model_copy(
@@ -205,14 +238,31 @@ def make_resource_check_node(
     def resource_check(state: AgentState) -> dict:
         generated = _load_generated_circuit(state)
         oracle = oracle_loader(state["oracle_ref"])
-        if not isinstance(oracle, QuantumCircuit):
+        if isinstance(oracle, StatePreparationOracle):
+            reference = oracle.reference_circuit
+        elif isinstance(oracle, QuantumCircuit):
+            reference = oracle
+        else:
             raise TypeError(
                 "resource_check reached with a non-circuit oracle — "
-                "route_after_semantic should only route here when unitary_equiv is not None"
+                "route_after_semantic should only route here when "
+                "verification_method is not None"
             )
 
         coupling_map_name = state.get("coupling_map_name") or "all_to_all"
-        result = check_resources(generated, oracle, coupling_map_name, opt_level=opt_level)
+        # TaskSpec.max_depth_ratio (data-model.md) was defined since T043 but
+        # never threaded here — every task was silently graded against
+        # check_resources' own hardcoded default (2.0) regardless of what its
+        # own JSON declared (found while building T047, research.md D3h).
+        # AgentState carries it the same way coupling_map_name already does.
+        max_depth_ratio = state.get("max_depth_ratio", 2.0)
+        result = check_resources(
+            generated,
+            reference,
+            coupling_map_name,
+            opt_level=opt_level,
+            max_depth_ratio=max_depth_ratio,
+        )
 
         # ResourceResult has no `.error` field (data-model.md) — the
         # ErrorRecord is built here rather than in resource.py, purely so

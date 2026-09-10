@@ -1,0 +1,10 @@
+{
+  "task_id": "grover_4q",
+  "tier": "t2",
+  "prompt": "Implement Grover's search algorithm on 4 qubits to find the single marked basis state |1001>, using EXACTLY 3 Grover iterations (the optimal count for this problem size). Use a pure PHASE oracle with no ancilla qubit: it must flip the sign (apply a -1 phase) of |1001> and leave every other basis state unchanged. Each iteration is (oracle; diffuser), where the diffuser is the standard 'inversion about the mean' operator 2|s><s| - I (s = uniform superposition) — any correct gate decomposition of the diffuser is acceptable, it does not have to match a specific textbook gate sequence, as long as it implements exactly that unitary. Start from Hadamard on all 4 qubits, then apply 3 iterations. Return the resulting 4-qubit state; no measurement.",
+  "n_qubits": 4,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/grover_4q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

@@ -1,0 +1,10 @@
+{
+  "task_id": "reversible_half_adder_4q",
+  "tier": "t1",
+  "prompt": "Build a reversible (no measurement, no classical bits) 4-qubit half-adder circuit using CNOT and Toffoli (CCX) gates. Qubits 0 and 1 are the inputs a and b; qubits 2 and 3 are fresh ancilla outputs, both starting at |0>, that must end up holding sum = a XOR b (qubit 2) and carry = a AND b (qubit 3). IMPORTANT constraint: compute each output using ONLY qubits 0 and 1 (the original inputs) as controls. Do not use qubit 2 or qubit 3 as a control for computing the other output, and do not let one output's gates depend on the other output's qubit in any way.",
+  "n_qubits": 4,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/reversible_half_adder_4q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

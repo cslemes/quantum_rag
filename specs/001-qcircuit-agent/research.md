@@ -170,6 +170,703 @@ tratar isso como erro comum inflaria artificialmente a taxa de falha.
 
 ---
 
+## D3c — Oráculo de preparação de estado (correção a D3/D3b)
+
+**Achado**: rodada ao vivo do task `ghz_3q` com retrieval ativo (US2, T039/T042
+já concluídos). O enunciado é "Build a 3-qubit GHZ state circuit: (|000> +
+|111>) / sqrt(2), up to global phase" — pede um ESTADO. O gerador produziu GHZ
+via estrela de CX (`h(0); cx(0,1); cx(0,2)`); o oráculo de referência usa
+cadeia de CX (`h(0); cx(0,1); cx(1,2)`). Ambos preparam exatamente o mesmo
+estado a partir de `|000>` — verificado diretamente:
+
+```python
+Operator(star).equiv(Operator(chain))        # False
+Statevector(star).equiv(Statevector(chain))  # True, fidelidade ≈ 1.0
+```
+
+O verificador (`oracle_kind="unitary"`) rejeitou uma resposta correta. Isto
+**não é um bug de código do gerador** — é um descasamento entre o que o
+enunciado da tarefa pede e o que o oráculo verifica: `Operator.equiv()`
+compara o comportamento sobre TODA a base computacional (2ⁿ estados), mas o
+enunciado só restringe a saída sobre `|0...0>` (1 estado). D3/D3b assumiram
+implicitamente que equivalência unitária é o oráculo forte correto para toda
+tarefa de síntese de circuito. Isso só vale quando o enunciado de fato
+especifica uma transformação — não quando especifica um estado.
+
+**Decisão**: adicionar `oracle_kind="statevector"` a `TaskSpec`.
+`check_statevector_with_endianness` (paralelo a `check_with_endianness`,
+mesma categoria `EndiannessSwap`, mesmo formato de `_structural_diff`) evolui
+`|0...0>` por ambos os circuitos e compara via `Statevector.equiv()` — mesma
+tolerância a fase global que `Operator.equiv()` dá ao caminho unitário (FR-004
+continua valendo). `SemanticResult` ganha `state_equiv` (paralelo a
+`unitary_equiv`, nunca os dois preenchidos na mesma verificação) e
+`verification_method` passa a aceitar `"statevector"` além de `"exact"` /
+`"composition"`.
+
+**Efeito colateral no roteamento**: `route_after_semantic` decidia se
+`resource_check` roda checando `unitary_equiv is not None` — sob a premissa
+(agora falsa) de que só o oráculo unitário tem um circuito de referência para
+comparar recursos. Um oráculo de estado também tem um circuito de referência
+(veio do mesmo QPY). A condição foi trocada para `verification_method is not
+None`, que já era populado exatamente nos dois casos onde uma comparação
+circuito-vs-circuito de fato ocorre (unitário e, agora, estado) e nunca nos
+oráculos sem circuito de referência (`distribution`, `energy`) — reaproveita
+um campo existente em vez de introduzir um novo, e não muda o comportamento
+de nenhuma tarefa `oracle_kind="unitary"` já existente.
+
+**Benefício colateral**: o teto de 13 qubits de D3b (`Operator` materializa
+4ⁿ elementos) não se aplica ao oráculo de estado — `Statevector` materializa
+2ⁿ, do mesmo porte que o caminho de composição de D3b ou `check_distribution`.
+Não há necessidade de despacho exato/composição nem fallback probabilístico
+para `oracle_kind="statevector"` nos portes deste dataset (até 20 qubits).
+
+**Auditoria de `bench/tasks/`**: no momento deste achado, só existia
+`ghz_3q.json` (`t1_primitives`), usado como fixture de desenvolvimento por
+`bench/run_single.py` antes de T043-T052 existirem; foi reclassificado para
+`oracle_kind="statevector"` como correção direta. T044 (as 18 tarefas
+canônicas T1) foi concluído logo em seguida — ver D3d para o que essa
+construção revelou. A classificação abaixo — lida no enunciado de cada
+tarefa citada em T044/T045, não adivinhada pelo nome — orienta quem
+escrever T045-T047, para não reintroduzir este mesmo descasamento:
+
+| Tarefa (T044/T045) | Classificação | Razão |
+|---|---|---|
+| Bell, GHZ, W-state | `statevector` | enunciado pede só o estado de saída a partir de `\|0...0>` |
+| QFT | `unitary` — **manter** | QFT é especificada como transformação a ser aplicada sobre entrada arbitrária, não como preparação de um estado fixo. `QFT\|0...0>` é a superposição uniforme — o mesmo resultado que só aplicar H em cada qubit produz, sem exercitar nenhuma estrutura de fase relativa. Testar só a partir de `\|0>` aprovaria uma implementação errada; isto teria sido um falso positivo na direção oposta ao achado do GHZ |
+| Deutsch-Jozsa, Simon, Bernstein-Vazirani | `statevector` — **correção** | as três são "oráculo linear/XOR fixo, um circuito, uma execução": com o oráculo embutido no circuito de referência (não variável por instância dentro de uma mesma tarefa), o estado de saída é um alvo único e determinístico, exatamente como Bell/GHZ. A entrada original desta tabela classificava DJ/Simon como `distribution`, confundindo duas coisas distintas: Simon exige VÁRIAS execuções + álgebra linear clássica para recuperar `s`, mas o ESTADO QUÂNTICO que uma única execução produz (superposição uniforme sobre `{y : y·s=0}`) é, ele mesmo, um alvo fixo e exato — "precisa de várias amostras para responder classicamente" não é o mesmo que "o estado é não-determinístico". **Esta linha da tabela foi escrita de memória, sem verificar** — só foi corrigida porque construir o oráculo de DJ para T044 forçou testar a afirmação em vez de mantê-la por suposição (ver `bench/oracles/build_t1_primitives.py`'s `deutsch_jozsa()`). Ver D3d para esta e outras duas correções que a mesma disciplina (Princípio V) rendeu ao construir T044. |
+| Teleporte | **nenhum se encaixa limpo — não resolvido aqui** | o protocolo depende do estado arbitrário de entrada sendo teleportado; nem `unitary` nem `statevector` (que fixam um único alvo) capturam "funciona para qualquer estado de entrada". Provavelmente precisa de um oráculo próprio (fidelidade sobre múltiplos estados de entrada aleatórios) — deixado como item em aberto para quem escrever T044 |
+| Grover, QPE, QAOA MaxCut | depende da instância | Grover e QAOA são amplificação/otimização aproximada — a distribuição de medição (probabilidade de sucesso) é o critério natural, não igualdade exata de estado, então `distribution` é o padrão recomendado. QPE só tem alvo `statevector` exato quando a fase escolhida é EXATAMENTE representável no registrador (`k/2^n` para `k` inteiro); caso contrário a saída é espalhada e `distribution` é mais honesto. Decidir por tarefa na autoria (T045), não por família de algoritmo |
+| VQE H₂, QAOA (custo) | `energy` (já existente) | corretude é sobre valor esperado do Hamiltoniano no estado de saída, nunca sobre equivalência de circuito — já não usa oráculo unitário, não afetado por este achado |
+
+**Alternativa rejeitada**: reduzir toda tarefa de preparação de estado ao
+oráculo de distribuição (`check_distribution`) em vez de um oráculo de estado
+dedicado — perderia a garantia exata (`Statevector.equiv()` é determinístico;
+contagens de medição introduzem ruído estatístico e exigem `shots`/seeds/
+tolerância só para reobter o que a amplitude exata já dá de graça) e não
+generaliza para portes onde medir é caro mas materializar `2ⁿ` amplitudes não.
+
+---
+
+## D3d — T044 construído: teleporte descartado, flatness em aritmética
+reversível, e o placar do Princípio V
+
+**Contexto**: T044 (as 18 tarefas canônicas T1) foi completado nesta sessão —
+Bell×3, GHZ×3, W-state×3, QFT×3, Deutsch-Jozsa×3 (D3c), mais a família abaixo.
+Três achados genuínos surgiram no processo, não previstos ao planejar a
+tarefa. Registrados aqui juntos porque o padrão é o ponto: **construir o
+oráculo, não apenas escrevê-lo, encontrou os três** — nenhum teria sido pego
+por revisão de código do circuito de referência sozinho.
+
+### Achado 1 — teleporte descartado do conjunto canônico (não resolvido por "input fixo")
+
+Nem `unitary` nem `statevector` se encaixam: o protocolo precisa funcionar
+para um estado de entrada ARBITRÁRIO, e ambos os oráculos existentes fixam um
+único alvo. Duas opções foram descartadas:
+
+- **Fixar um estado de entrada específico** (ex.: sempre teleportar `\|+>`) —
+  rejeitada: admitiria circuitos acidentalmente corretos só para aquele
+  estado, o que é PIOR do que omitir a tarefa — recompensaria uma resposta
+  errada em vez de simplesmente não testar a propriedade.
+- **`unitary` sobre o circuito completo** — rejeitada: teleporte envolve
+  medição no meio do circuito com correção condicionada classicamente: o
+  circuito não é uma transformação unitária fixa nem produz um estado puro
+  determinístico ao final (o resultado depende do outcome da medição e da
+  correção aplicada). `statevector` também não se aplica de forma limpa
+  mesmo com entrada fixa, pelo mesmo motivo.
+
+**Trabalho futuro (não implementado)**: a solução conceitualmente correta é
+um oráculo de fidelidade de canal — evoluir K estados de entrada aleatórios
+através do circuito completo (medição real incluída) e comparar a fidelidade
+do qubit de saída contra cada estado de entrada original, média e pior caso.
+Isso exige uma convenção que não existe hoje: como o circuito GERADO expõe
+"qual qubit é a entrada a ser substituída" para o verificador injetar cada um
+dos K estados de teste. Definir essa convenção mal — por exemplo, se o
+enunciado disser "use o qubit 0 como entrada" mas o gerador rotular os
+qubits de forma diferente — criaria uma nova categoria de falso negativo:
+"falhou a tarefa" ficaria indistinguível de "não seguiu a convenção de
+qual-qubit-é-a-entrada", exatamente o tipo de erro que D3c e este documento
+existem para evitar, só que relocado do oráculo para o protocolo de
+comunicação oráculo↔gerador. Por isso fica como item em aberto, não como
+implementação apressada: o custo de fazer errado (rejeitar respostas
+corretas por violar uma convenção não comunicada) supera o custo de deixar
+teleporte fora do conjunto T1 por ora.
+
+**Substituição**: aritmética booleana reversível (meio-somador, somador
+completo, um lote de 4 funções booleanas), `oracle_kind="unitary"` — sem
+sobreposição com T045, e diversifica T1 (que sem isso teria só QFT como
+representante de `unitary` contra 4 famílias `statevector`).
+
+### Achado 2 — somador com "vai-um" encadeado: por que `unitary` só é sólido quando o circuito é FLAT
+
+A primeira tentativa da terceira variante foi um somador de 2 bits com
+"ripple carry" — a saída de vai-um do primeiro estágio (meio-somador)
+alimentando o segundo estágio (somador completo) como `cin`. `check_
+alternative_construction` (o próprio mecanismo do Princípio V) discordou da
+construção fechada independente. Investigação: o circuito primário estava
+CORRETO nos 16 casos "físicos" (ancillas começando em `\|0>`) — o
+desacordo estava inteiramente na extensão "não física" (ancillas começando
+em outro valor).
+
+A razão é estrutural, não um bug de digitação: quando um gate usa uma
+ancila (não uma entrada original) como CONTROLE — aqui, o vai-um do primeiro
+estágio controlando gates do segundo — o valor final dessa ancila em pontos
+do domínio onde ela não começa em `\|0>` passa a depender de QUAL sequência
+de gates reversíveis a computa, não apenas da função booleana pretendida.
+Duas implementações igualmente corretas nos 16 casos físicos podem
+legitimamente divergir nos 240 casos "não físicos" restantes — exatamente o
+mesmo tipo de ambiguidade que motivou D3c, só que aqui a equivalência unitária
+COMPLETA (não a equivalência de estado) é over-constrained, porque o
+enunciado da tarefa só define o comportamento no subespaço físico.
+
+**Fix**: toda tarefa de aritmética reversível em T044 é **flat** — cada gate
+usa como controle SOMENTE qubits de entrada originais, nunca uma saída/ancila
+computada. Sob essa restrição, a extensão ao domínio completo (2ⁿ_qubits
+entradas, incluindo as "não físicas") fica unicamente determinada pela
+definição booleana sozinha, verificado nos três circuitos finais (meio-somador,
+somador completo, lote de 4 funções) — todos concordam com a permutação de
+verdade fechada independente sobre TODO o domínio, não só o subespaço físico.
+
+**A restrição de flatness é declarada no ENUNCIADO da tarefa, não só no
+projeto do oráculo.** Um modelo recebendo apenas a especificação booleana
+("sum = a XOR b, carry = a AND b") poderia legitimamente produzir uma
+implementação correta que encadeia por uma ancila — e `Operator.equiv()`
+rejeitaria por violar uma restrição que ninguém comunicou. Isso é
+estruturalmente o mesmo defeito do caso GHZ (D3c): rejeitar uma resposta
+correta por um critério não declarado — só que relocado do oráculo para o
+enunciado. Cada um dos três `bench/tasks/t1_primitives/reversible_*.json`
+declara explicitamente: "compute each output using ONLY qubits N..M (the
+original inputs) as controls. Do not use a computed output or ancilla as a
+control for another output."
+
+### Achado 3 — QFT: direção do loop errada na primeira tentativa
+
+Registrado em D3c originalmente de forma breve; detalhado aqui porque é o
+terceiro ponto de dados do mesmo padrão. A primeira implementação de `qft()`
+processava qubits em ordem crescente com a fase controlada no qubit de índice
+maior — compilava, rodava, produzia uma unitária ERRADA (confirmado:
+`Operator.equiv()` contra `qiskit.circuit.library.QFTGate` retornou `False`
+para n=2,3,5,8). A correção foi processar do índice mais alto para o mais
+baixo, com o controle no qubit de índice MENOR — verificado contra `QFTGate`
+antes de aceitar.
+
+Um segundo problema, mais sutil, apareceu depois: a checagem de sanidade em 3
+seeds (T050) comparava uma execução real medida contra um alvo derivado do
+PRÓPRIO circuito primário — o que só testa "o simulador executa o que o
+circuito especifica", nunca "o circuito especifica a coisa certa". Para QFT
+especificamente isso era pior que inútil: QFT de qualquer estado de base
+computacional produz magnitude UNIFORME sobre todas as saídas,
+independentemente das fases estarem certas — confirmado experimentalmente,
+um circuito computando a QFT INVERSA (todos os sinais de fase trocados) mede
+fidelidade de Hellinger 1.0000 contra esse alvo, indistinguível de correto,
+para QUALQUER tolerância. Corrigido compondo o circuito primário com o
+inverso da construção alternativa independente antes de medir — um bug de
+fase agora vaza probabilidade medida para fora de um alvo nítido (o mesmo bug
+de sinal invertido agora mede 0.0000). Ver `bench/validate_oracles.py`'s
+`check_sanity_seeds` e `tests/unit/test_validate_oracles.py` (testes de
+regressão para os dois: exact `Operator.equiv()` continua pegando o bug
+incondicionalmente; a checagem de sanidade agora também pega, o que a versão
+original não fazia).
+
+### O que isso diz sobre o desenho do benchmark
+
+Três tarefas genuinamente diferentes (preparação de estado, transformação
+unitária, aritmética reversível), três erros reais de método, todos
+encontrados pela CONSTRUÇÃO independente exigida pelo Princípio I/FR-018, não
+por revisão de código: a direção do loop do QFT, a classificação errada de
+DJ/Simon/BV (linha da tabela escrita de memória, nunca verificada até
+construir o oráculo forçar o teste), e o encadeamento por ancila no somador.
+Nenhum desses seria pego só lendo o circuito de referência e concordando que
+"parece certo" — cada um exigiu uma segunda construção, escrita sem
+referência à primeira, discordando dela. Essa é exatamente a garantia que o
+Princípio V afirma existir; a taxa de acerto observada aqui — 3 de 3 tarefas
+onde a construção independente foi genuinamente testada contra uma primeira
+tentativa — é evidência de que o mecanismo funciona como desenhado, não
+apenas burocracia de processo. Vale registrar isso explicitamente porque é o
+tipo de achado que justifica o custo de exigir construção independente em
+TODA tarefa do dataset (T049), não só nas que "parecem arriscadas".
+
+---
+
+## D3e — T045 construído: classificação de oracle_kind, restrição não
+declarada (de novo), blindness de fase generalizada, e um bug real do Aer
+
+**Contexto**: T045 — 15 das 18 tarefas canônicas T2 (Bernstein-Vazirani×3,
+Simon×3, Grover×3, QPE×3, QAOA MaxCut×3). VQE H₂×3 **não incluído** — ver
+seção própria abaixo. Todas as 15 usam `oracle_kind="statevector"`.
+
+### Classificação de oracle_kind — por que todas as 15 são `statevector`
+
+Cada família embute UM oráculo/conjunto de parâmetros fixo por tarefa (nunca
+variável por instância dentro da mesma tarefa), o que torna a saída do
+circuito a partir de `\|0...0>` um alvo único e determinístico — exatamente
+como Bell/GHZ (D3c) e a correção de DJ/Simon/BV (D3d). Nenhuma das cinco
+famílias é `oracle_kind="unitary"` aqui: nenhuma é especificada como
+transformação geral sobre entrada arbitrária (o critério que mantém QFT em
+`unitary`, D3c). Detalhe por família:
+
+- **Bernstein-Vazirani, Simon**: mesma estrutura de oráculo linear/XOR fixo
+  já estabelecida para Deutsch-Jozsa em D3d — sem novidade de classificação.
+- **Grover**: item(ns) marcado(s) e número de iterações são fixos pelo
+  enunciado (nunca "o ótimo, calcule você mesmo"). Com ambos fixos, o estado
+  após as iterações a partir de `\|0...0>` é um único alvo matematicamente
+  determinado, independente de qual decomposição de gates do difusor o
+  chegou — não há a ambiguidade "muitos estados finais válidos" do caso GHZ,
+  porque o difusor tem UMA definição matemática (`2\|s><s\| - I`), só muitas
+  decomposições EQUIVALENTES dela.
+- **QPE**: fase escolhida exatamente representável no registrador de
+  contagem (`k/2^n_count`, `k` inteiro) — o registrador de contagem colapsa
+  EXATAMENTE em `\|k>` com certeza, não por aproximação. Uma fase não
+  exatamente representável produziria uma distribuição espalhada
+  (tipo sinc²), mais apropriada para `oracle_kind="distribution"` —
+  deliberadamente fora deste lote; ver nota abaixo.
+- **QAOA MaxCut**: grafo E os parâmetros (`gamma`, `beta`) totalmente fixos
+  no enunciado. Ver a seção de restrição-não-declarada abaixo para por que
+  isso é necessário, não apenas conveniente.
+
+### Restrição não declarada — de novo, agora relocada para o enunciado
+
+O usuário pediu explicitamente, para cada tarefa T2: "o oráculo aceita TODA
+implementação correta do que o enunciado pede, ou só a que eu tinha em
+mente?" Dois casos exigiram ação:
+
+**QAOA**: o ansatz p=1 tem liberdade de parametrização real — normalmente
+`gamma`/`beta` são otimizados classicamente para maximizar o valor esperado
+do corte. Se o enunciado nomeasse só o grafo, dois modelos escolhendo ângulos
+diferentes (ambos razoáveis, ou um genuinamente melhor) alcançariam estados
+finais legitimamente diferentes; fixar UMA escolha arbitrária como gabarito
+rejeitaria a outra. **Decisão**: enunciado fixa grafo E `gamma`/`beta`
+numericamente exatos — a tarefa deixa de ser "otimize" e passa a ser
+"construa este circuito parametrizado específico corretamente", o que
+resolve a ambiguidade tornando os parâmetros parte do enunciado, não algo a
+derivar. Isto é **estreitar o enunciado**, não alargar o oráculo — a
+alternativa (aceitar qualquer `gamma`/`beta` "razoável") exigiria um oráculo
+de otimização/qualidade-de-corte muito mais complexo, fora de escopo aqui.
+**Consequência a registrar para a análise de erro (T064)**: com `gamma`/
+`beta` fixos, estas 3 tarefas medem fidelidade de CONSTRUÇÃO do ansatz, não
+capacidade de otimização de QAOA — uma escolha de escopo legítima, mas que
+muda o que a tarefa de fato testa. Uma taxa alta de sucesso aqui não deve ser
+lida como evidência de que o gerador sabe otimizar QAOA. A mesma ressalva se
+aplica a VQE H₂ (D3e-3, mesmo motivo: `theta` fixo em vez de livre).
+
+**Aritmética booleana reversível já havia caído nesse defeito uma vez** (D3d,
+flatness). Confirmado ao revisar T2 que a lição generaliza: sempre que o
+oráculo especifica MAIS do que o enunciado pede — um circuito específico em
+vez de "qualquer circuito correto" — a restrição extra precisa aparecer no
+texto do enunciado, ou uma resposta correta é rejeitada por um critério nunca
+comunicado. Para Simon especificamente, isso significou declarar não só o
+segredo `s`, mas a construção EXATA do oráculo (qual qubit é o "controle
+extra", quais CNOTs exatamente) — existem MUITAS funções `f` satisfazendo
+`f(x)=f(x XOR s)` para o mesmo `s`; sem fixar qual delas, um modelo
+poderia legitimamente implementar uma `f` diferente (também válida) e chegar
+a um estado final genuinamente diferente do oráculo de referência. Cada
+enunciado de Simon em `bench/tasks/t2_algorithms/simon_*.json` declara a
+receita exata (qubit de controle extra, quais CNOTs), não apenas o segredo.
+
+Grover foi verificado e **não** precisou dessa correção: qualquer difusor
+correto implementa a MESMA unitária (`2\|s><s\|-I`), então não existe "muitos
+estados finais válidos" ali — só a convenção oráculo-de-fase-sem-ancilla
+precisou ser declarada explicitamente (ver enunciados), para não deixar em
+aberto se o modelo deveria usar um qubit ancilla para o phase kickback.
+
+### D3e-1 — blindness de fase generalizada além do QFT
+
+O achado de D3d sobre QFT (a checagem de sanidade em 3 seeds media contra um
+alvo derivado do PRÓPRIO circuito primário, cego a bugs de fase pura) não é
+específico de QFT: **qualquer** oráculo cuja distribuição-alvo (derivada da
+construção alternativa) seja espalhada tem a mesma lacuna estrutural.
+Medido ao construir T2:
+
+- Simon: estado conjunto completo é EXATAMENTE uniforme sobre `2^n`
+  resultados (`max_prob = 1/2^n`) — o pior caso observado.
+- Grover antes de amplificação ótima: comparável a uniforme (`k=0`:
+  `PR=16=dim`; `k=1`, sub-ótimo: `max_prob≈0.47`).
+- QAOA em p=1 com ângulos realistas: `max_prob` medido entre 0.11 e 0.37 nas
+  três instâncias construídas — nenhuma sequer perto de um pico dominante.
+
+**Decisão**: `check_sanity_seeds` agora aplica o design de round-trip (compor
+o primário com o inverso da alternativa independente, medir contra um alvo
+NÍTIDO) sempre que a probabilidade máxima da distribuição-alvo (derivada da
+alternativa) cai abaixo de `PEAKEDNESS_THRESHOLD=0.9` — computado por tarefa,
+não decidido por família. Isso significa que alguns casos de baixo risco
+(Bernstein-Vazirani: `max_prob=0.5`, mas só 2 resultados possíveis, não
+genuinamente espalhado) também passam a usar round-trip. Aceito como
+conservador, não errado: o round-trip nunca é menos informativo que a
+comparação direta, então aplicá-lo onde não era estritamente necessário não
+custa nada além de compute. Ver `bench/validate_oracles.py`'s
+`PEAKEDNESS_THRESHOLD` e `check_sanity_seeds` para a implementação e a
+justificativa completa.
+
+**Simplificação em relação a D3d**: para famílias `oracle_kind="statevector"`
+que precisam de round-trip, o circuito de round-trip é derivado
+GENERICAMENTE via `StatePreparation(alt.data)` — não é preciso registrar um
+circuito alternativo próprio por família (diferente de `oracle_kind=
+"unitary"`, que já exigia isso desde D3d). Isso não é o mesmo erro de
+"compor o primário com o próprio inverso" (que seria tautológico, sempre
+cancela não importa o que o primário compute): `alt` já é independente do
+primário por construção, então compor o primário com o inverso de UMA
+preparação diferente só cancela de volta à origem SE o primário de fato
+chegar ao mesmo alvo que `alt` — continua sendo um teste genuíno.
+
+### D3e-2 — bug real do Aer: `StatePreparation(...).inverse()` derruba o processo
+
+Ao generalizar o round-trip para famílias `statevector`, `bench.
+validate_oracles` **segfaultou** (`exit code 139`, não uma exceção Python)
+na primeiríssima tarefa testada (`bell_phi_minus_2q`, já validada e passando
+antes desta mudança). Isolado: `StatePreparation(...).inverse()` decompõe em
+instruções `"multiplexer"` que o Aer aceita silenciosamente via
+`transpile()` (nenhum erro na chamada de transpilação em si) mas derruba o
+processo ao executar via `sim.run()`. Não é um bug de lógica deste projeto —
+é uma incompatibilidade real entre a forma como `StatePreparation.inverse()`
+se decompõe e o que o backend Aer desta versão realmente suporta.
+
+**Fix**: `measured.decompose(reps=8)` antes de `transpile()`, desenrolando os
+gates `"multiplexer"` em gates padrão (`u`, `cx`) antes que o Aer os veja.
+Verificado a remover o crash e produzir resultados corretos (inclusive um
+caso em que a otimização do `transpile()` simplificou o round-trip inteiro
+de um oráculo correto até sobrar só `barrier`+`measure`, confirmando o
+cancelamento perfeito esperado). Coberto por
+`tests/unit/test_validate_oracles.py::
+test_inverted_stateprepation_round_trip_survives_aer_without_predecompose`
+— um alerta antecipado caso uma futura versão do Qiskit/Aer mude esse
+comportamento, já que o teste não pode importar `bench.validate_oracles`
+diretamente (`bench` não está no caminho de import do pytest) e por isso
+reproduz o padrão em vez de cobrir a call site em si.
+
+### D3e-3 — VQE H₂ construído a partir de uma fonte citável, não de memória
+
+As 3 tarefas de VQE H₂ (o gap deixado em aberto na primeira passada de T045)
+**foram construídas nesta sessão**, sem `qiskit-nature`/`pyscf` (continuam
+ausentes deste ambiente) e sem recitar coeficientes de estrutura eletrônica
+de memória — a alternativa que o Princípio V/FR-018 exige excluir.
+
+**Fonte, lida e citada, não recordada**: O'Malley et al., "Scalable Quantum
+Simulation of Molecular Energies", Phys. Rev. X 6, 031007 (2016),
+arXiv:1512.06860v2, Tabela I. `pdftotext -layout` rodado diretamente sobre o
+PDF do arXiv (baixado via WebFetch) extraiu a tabela real — os coeficientes
+`(g0..g5)` usados nos 3 oráculos são linhas REAIS da tabela (R=0.55, 0.75,
+1.30 Å), copiados do texto extraído, não digitados de memória nem
+interpolados. Conferência interna: a tabela extraída tem `g4==g5` em toda
+linha, batendo com a estrutura simétrica Y0Y1/X0X1 da Eq. (1) do próprio
+artigo — um sinal de que a extração não introduziu erro de transcrição.
+
+**A energia exata não é uma segunda citação** — é computada por diagonalização
+exata (`numpy.linalg.eigvalsh`) do Hamiltoniano construído a partir dos
+coeficientes citados, verificável independentemente por qualquer um a partir
+da própria tabela, sem depender de uma segunda fonte não verificável.
+
+**Ansatz** para cada instância: `X(qubit0); RY(theta, qubit1); CNOT(controle=
+qubit1, alvo=qubit0)`, com `theta` resolvido por minimização escalar exata
+(`scipy.optimize.minimize_scalar`, não adivinhado) até bater com a energia
+exata (erro < 1e-8 antes de qualquer arquivo ser escrito). `check_energy`
+proíbe `Parameter`s livres no circuito gerado (`ParameterBindingError` senão)
+— não há como um circuito gerado rodar uma otimização clássica de verdade
+dentro do sandbox, então o enunciado já entrega o ansatz e o `theta` exatos.
+
+**Isso significa que estas tarefas medem fidelidade de CONSTRUÇÃO, não
+capacidade de otimização de VQE** — exatamente a mesma ressalva de D3e para
+QAOA, e pelo mesmo motivo estrutural: `gamma`/`beta` fixos em QAOA e `theta`
+fixo aqui removem a liberdade de escolha de parâmetro que tornaria a tarefa
+"encontre bons parâmetros" em vez de "construa este circuito específico
+corretamente". Uma taxa alta de sucesso nestas tarefas (VQE H₂ e QAOA) NÃO
+deve ser lida, na análise de erro (T064) ou na dissertação, como evidência de
+que o gerador sabe otimizar VQE/QAOA — só que sabe reproduzir fielmente um
+circuito parametrizado já especificado. Uma tarefa que testasse otimização de
+verdade exigiria um loop de otimização clássica fora do sandbox (T3/T4? — não
+resolvido aqui, registrado como possível trabalho futuro).
+
+**Checagem própria em `validate_oracles.py`**: `oracle_kind="energy"` não é
+um circuito, então ganhou seu próprio conjunto de 4 checagens
+(`validate_energy_oracle`): hermiticidade do Hamiltoniano; construção
+alternativa via produtos de Kronecker escritos à mão (nunca
+`SparsePauliOp.to_matrix()`) diagonalizada por `scipy.sparse.linalg.eigsh`
+(Lanczos iterativo — algoritmo genuinamente diferente de `numpy.linalg.
+eigh`); N/A para cross-check de biblioteca (nenhum primitivo aplicável);
+sanidade em 3 seeds medindo `<H>` de verdade via `AerSimulator`, com
+mudança de base (Z direto; H em ambos os qubits para o termo XX; Sdg+H para
+o termo YY) — o jeito padrão de estimar valor esperado de Pauli a partir de
+contagens em base computacional. `ENERGY_SANITY_TOL=0.02` Hartree calibrado
+por Monte Carlo (10 tentativas, 8192 shots, mesmo padrão de `SANITY_
+FIDELITY_MIN`): desvio padrão observado ~0.0029, pior erro observado ~0.006
+— folga de ~3x. Todas as 3 tarefas passam nas 4 checagens.
+
+---
+
+## D3f — T046 construído: formulação, o espaço de respostas corretas mais
+largo do dataset, e uma segunda armadilha de convenção não declarada
+
+**Contexto**: T046 — 12 tarefas canônicas T3. T3 = "formulação": traduzir
+uma função de custo/Hamiltoniano/QUBO enunciado em prosa/números para o
+circuito que o aplica como fase diagonal `exp(-i*gamma*H)|+>^n`. Quatro
+famílias, três variantes de porte cada — todas `oracle_kind="unitary"`:
+
+- **A — Ising MaxCut com pesos não uniformes**: estende o QAOA de T2 (pesos
+  sempre uniformes) para arestas com pesos diferentes.
+- **B — interação multi-corpo (3 e 4 qubits)**: um termo `Z0*Z1*Z2` ou
+  `Z0*Z1*Z2*Z3` — um padrão de gate (escada de CNOT de comprimento
+  arbitrário) que não apareceu em T1 nem T2.
+- **C — campo + acoplamento combinados**: termos de campo de um qubit
+  (`h_i*Z_i`) e termos de acoplamento de pares na MESMA tarefa.
+- **D — QUBO → Ising**: matriz QUBO explícita, substituição declarada
+  (`x_i = (1-z_i)/2`), o enunciado pede a DERIVAÇÃO dos coeficientes de
+  Ising, não os entrega prontos — esta é a família que mais genuinamente
+  testa "formulação" (tradução algébrica), não só construção de circuito.
+
+`unitary`, não `statevector`: todo Hamiltoniano aqui é diagonal na base
+computacional, então a unitária resultante é bem definida em qualquer um dos
+2^n estados de entrada — a mesma razão que mantém QFT em `unitary` (D3c). E,
+diferente de D3d (aritmética reversível), **não há preocupação de flatness
+aqui**: nenhum qubit é ancila zerada, todos são variáveis reais do problema,
+então não existe "subespaço não físico" para o domínio completo da checagem
+unitária estar sobre-restringindo.
+
+### Restrição não declarada — de novo, uma terceira vez, e desta vez é uma convenção de sinal
+
+O usuário pediu para checar isso "mais do que em qualquer lugar" para T3,
+dado o espaço de respostas corretas mais largo do dataset até aqui. Achado
+real ao projetar a família D: a substituição QUBO → Ising `x_i = (1-z_i)/2`
+E `x_i = (1+z_i)/2` são AMBAS convenções padrão na literatura — e produzem
+Hamiltonianos de sinal OPOSTO (`h_i`, `J_ij` todos invertidos). Se o
+enunciado não declarasse qual, um modelo usando a outra convenção
+(igualmente válida) derivaria um Hamiltoniano genuinamente diferente do
+oráculo de referência e seria rejeitado por uma resposta correta sob uma
+convenção não comunicada — exatamente a mesma classe de defeito de D3c (GHZ)
+e D3d (flatness), a terceira instância encontrada nesta sessão. Cada
+enunciado `qubo_ising_*.json` declara a convenção exata
+(`x_i = (1 - z_i) / 2`) explicitamente.
+
+Famílias A, B, C foram checadas e **não** precisaram de nenhuma restrição
+extra além dos números em si: cada termo (`Z_i*Z_j`, `Z_{q1}...Z_{qk}`,
+`h_i*Z_i`) é diagonal com uma unitária única, então qualquer decomposição de
+gates correta chega à MESMA unitária — os enunciados dizem isso
+explicitamente ("any correct implementation... is accepted") em vez de
+prescrever uma sequência de gates específica, o oposto do que foi necessário
+para QAOA/Grover em T2 (lá a ambiguidade era de PARÂMETRO, não de
+decomposição — aqui não há ambiguidade de parâmetro nenhuma, `gamma` e todos
+os coeficientes são números fixos no enunciado).
+
+### Construção independente
+
+Um único alternativo fechado (`_alt_diagonal_ising` em `bench/
+validate_oracles.py`) cobre as quatro famílias: a fase diagonal computada
+DIRETAMENTE da definição da função de custo (soma de termos campo +
+acoplamento + multi-corpo), via `Diagonal`, sem nenhuma escada de CNOT — uma
+construção estruturalmente diferente da decomposição CNOT-ladder-mais-RZ do
+primário. Para a família D especificamente, a substituição QUBO→Ising é
+RE-DERIVADA de forma independente (`_alt_ising_from_qubo`, mesma fórmula,
+zero código compartilhado com `build_t3_formulation.py`'s `ising_from_qubo`)
+— as duas precisam concordar para a checagem 2 passar, o que torna isso um
+cross-check genuíno sobre a substituição em si, não só sobre o circuito de
+fase construído a partir dela. Verificado por força bruta sobre todos os
+bitstrings antes de confiar na fórmula (ver sessão): a substituição bate
+exatamente com a função de custo QUBO original para n=3.
+
+Todas as 12 tarefas passam nas 4 checagens (unitariedade, construção
+alternativa, sanity em 3 seeds — round-trip automático já que
+`oracle_kind="unitary"`; cross-check de biblioteca N/A, nenhuma família tem
+primitivo aplicável em `qiskit.circuit.library`).
+
+---
+
+## D3g — Padrão recorrente: oráculo mais estreito que o enunciado rejeita
+resposta correta em silêncio (resultado metodológico, não só detalhe de
+processo)
+
+Três achados independentes, em três tiers diferentes, mesma estrutura:
+
+- **D3c (GHZ, T044)**: GHZ via estrela de CX e via cadeia de CX preparam o
+  MESMO estado a partir de `\|000>`, mas `Operator.equiv()` (equivalência
+  unitária completa) os distingue — o oráculo testava mais do que o
+  enunciado pedia (só o estado de saída).
+- **D3d (aritmética reversível, T044)**: um somador de 2 bits com "vai-um"
+  encadeado por uma ancila tem extensão não-física (ancila não começando em
+  `\|0>`) dependente de qual decomposição de gates o computa — o oráculo
+  (`Operator.equiv()` sobre o domínio completo) testava um comportamento que
+  o enunciado nunca definiu, porque o enunciado só restringe o subespaço
+  físico.
+- **D3f (substituição QUBO→Ising, T046)**: `x_i=(1-z_i)/2` e
+  `x_i=(1+z_i)/2` são ambas convenções padrão, sinal oposto — sem declarar
+  qual, o oráculo aceitaria implicitamente só UMA das duas respostas
+  igualmente corretas.
+
+**A estrutura comum**: em cada caso, o oráculo era internamente
+CONSISTENTE — nunca lançou uma exceção, nunca produziu um resultado
+obviamente absurdo, sempre comparou exatamente o que foi programado para
+comparar. A falha é silenciosa precisamente PORQUE o oráculo funciona
+corretamente segundo sua própria definição — só que essa definição é mais
+estreita do que o problema que o enunciado da tarefa realmente coloca. Não
+existe sinal de alerta automático: sem a checagem de construção
+independente (Princípio V/FR-018) discordando da referência, ou sem alguém
+perguntando explicitamente "o oráculo aceita toda implementação correta, ou
+só a que eu tinha em mente?", os três teriam permanecido invisíveis —
+cada um rejeitaria silenciosamente uma fração de respostas corretas,
+deprimindo artificialmente a taxa de sucesso medida de QUALQUER gerador
+testado contra eles, por um motivo que nada tem a ver com a capacidade do
+gerador.
+
+**Isto generaliza além de circuitos quânticos.** É uma propriedade geral de
+benchmarks de código gerado com oráculo automatizado, sempre que (a) o
+espaço de implementações corretas é mais amplo do que uma única forma
+canônica, e (b) o oráculo compara contra uma referência ou uma propriedade
+que só cobre um subconjunto desse espaço sem que isso seja declarado. A
+mesma estrutura apareceria em qualquer domínio com múltiplas implementações
+válidas — geração de SQL contra um schema com índices alternativos,
+otimização de código contra um "gabarito" que não é o único ótimo,
+prova formal contra uma tática específica quando outras táticas válidas
+existem. O padrão de mitigação encontrado aqui — perguntar explicitamente,
+para cada tarefa, "o oráculo aceita toda implementação correta do que o
+enunciado pede, ou só a que eu tinha em mente", e preferir ESTREITAR O
+ENUNCIADO (tornar a resposta única e correta por definição) a ALARGAR O
+ORÁCULO (construir um verificador mais permissivo e mais complexo) sempre
+que estreitar o enunciado não sacrifica o que a tarefa pretende testar — é
+reproduzível fora deste projeto.
+
+**Candidato a seção própria na dissertação**, não apenas nota de processo:
+o achado central não é "encontramos três bugs", é que os três compartilham
+uma causa raiz estrutural e um teste diagnóstico repetível (constrói-se uma
+segunda implementação, genuinamente independente, e pergunta-se explicitamente
+se o oráculo aceitaria as duas) — isso é uma contribuição metodológica sobre
+desenho de benchmark para código gerado, não um detalhe de implementação
+deste dataset específico.
+
+---
+
+## D3h — T047 construído: `oracle_kind="resource"` não existe, o eixo
+inverte (a unitária deixa de ser o alvo), e a referência como alvo móvel
+
+**Contexto**: T047 — 12 tarefas canônicas T4 ("dependente de restrições do
+alvo físico", FR-016). T4 inverte o risco de desenho de oráculo de todos os
+tiers anteriores: em T1-T3 o que podia estar errado era a EQUIVALÊNCIA
+funcional (estado ou unitária); em T4, a funcional já está resolvida
+(reaproveita `statevector`/`unitary` de T1-T3) e o que pode estar errado é a
+comparação de RECURSOS (profundidade, contagem de CX) sob um mapa de
+acoplamento real.
+
+### Achado prévio a qualquer construção: `oracle_kind="resource"` não tem implementação
+
+Antes de escrever qualquer tarefa, `grep` em `src/qcagent/graph.py`
+confirmou: `make_semantic_check_node` só despacha sobre `StatePreparationOracle
+| QuantumCircuit | dict | tuple` — nenhum ramo trata `oracle_kind="resource"`,
+apesar do valor existir no `Literal` de `data-model.md`/`bench/schema.py`
+desde T043. Isto não bloqueia T4: `resource_check` já é ORTOGONAL a
+`oracle_kind` no pipeline existente — só precisa de um circuito de
+referência real (que `statevector`/`unitary` já fornecem) e já roda
+automaticamente assim que `semantic_check` popula `verification_method`
+(D3c/D3e). As 12 tarefas de T4 usam `oracle_kind="statevector"` (família
+GHZ) ou `"unitary"` (famílias Ising/Z-string/campo+acoplamento) — o mesmo
+valor que suas famílias já usariam em T1-T3. O que torna uma tarefa "T4" é
+`coupling_map="linear_5"` no `TaskSpec`, não um `oracle_kind` diferente.
+Registrado, não corrigido silenciosamente: se `oracle_kind="resource"` for
+necessário no futuro (para uma tarefa cuja corretude é PURAMENTE sobre
+recursos, sem alvo funcional — não é o caso de nenhuma tarefa aqui), precisa
+de um despacho novo em `make_semantic_check_node`, que não existe hoje.
+
+**Gap relacionado, também encontrado, não corrigido aqui**: `TaskSpec.
+max_depth_ratio` (schema desde T043) nunca é lido por `make_resource_check_node`
+— `check_resources` sempre usa seu próprio default (`2.0`), independente do
+que o JSON da tarefa declara. Os 12 enunciados de T4 incluem `max_depth_ratio:
+2.0` explicitamente (documentando a intenção mesmo que não tenha efeito
+ainda), e o gap fica registrado aqui para ser corrigido antes de T053
+(execução da matriz) — uma tarefa T4 genuinamente pesada em roteamento pode
+legitimamente precisar de um teto mais frouxo que 2.0, e hoje não há como
+declarar isso.
+
+### Disciplina do usuário, item 1 — `seed_transpiler` e transpilação simétrica
+
+Verificado, não assumido: `check_resources` (já implementado desde a Fase 3,
+T017-T023) já transpila `generated` e `reference` com `coupling_map`,
+`optimization_level` e `seed_transpiler` IDÊNTICOS — a armadilha 3 de
+`contracts/validators.md` já estava corrigida antes de T047 existir. O que
+FALTAVA era cobertura de teste: zero arquivos de teste para `resource.py`
+existiam antes desta sessão, apesar de T017-T023 estarem marcados `[X]` e
+todo teste de T1-T3 que chegasse a `resource_check` já exercitar esse
+código (com `coupling_map=null`, nunca estressando o caminho de roteamento
+de verdade — T4 é o primeiro tier a fazer isso). `tests/unit/test_resource.py`
+(4 testes, novo) cobre: transpilação simétrica (mesmo circuito nos dois
+lados dá ratio exatamente 1.0, quebraria sob parâmetros assimétricos);
+reprodutibilidade do seed (duas chamadas com os mesmos circuitos dão o
+mesmo `depth_ratio`); e a propriedade de segurança da desigualdade (próximo
+item).
+
+### Disciplina do usuário, item 2 — a referência como alvo móvel
+
+**Decisão**: a referência de cada tarefa T4 é uma construção "óbvia", do
+mesmo tipo já usado em T1-T3 (H+CX chain para GHZ, decomposição CNOT-ladder
+para os termos Ising) — NUNCA uma topologia escolhida à mão para ser ótima
+sob `linear_5`. Isso é defensável, não arbitrário, por uma razão estrutural
+específica: o critério de aprovação de `check_resources` é `depth_ratio <=
+max_depth_ratio` — um LIMITE SUPERIOR, não igualdade. Um circuito gerado que
+roteia MELHOR que a referência (ex.: um modelo que reconhece que uma cadeia
+é mais barata que uma estrela numa linha) produz `depth_ratio < 1.0`, que
+SEMPRE satisfaz o limite superior. Isso neutraliza estruturalmente o risco
+"minha referência não é ótima, uma resposta melhor pontua pior que 1.0" que
+o usuário levantou: só um circuito genuinamente PIOR que a referência pode
+falhar — uma referência subótima só torna a barra mais fácil de passar,
+nunca mais difícil. Verificado com um teste dedicado
+(`test_a_cheaper_valid_topology_passes_even_though_it_beats_the_reference`):
+uma referência em estrela (pior para `linear_5`) comparada contra uma
+resposta em cadeia (melhor) passa com `depth_ratio <= 1.0`.
+
+`opt_level=2` usado sem alteração (default já existente de `check_resources`,
+não escolhido agora para favorecer algum resultado específico de T4) —
+mesma configuração em todos os tiers, mantendo a metodologia consistente em
+vez de ajustar por tier.
+
+### Achado de engenharia: `StatePreparation` como referência infla profundidade artificialmente
+
+A primeira versão da família GHZ de T4 usava `StatePreparation` como
+construção primária (a mesma escolha de T1, D3c — risco de derivação zero).
+Medido antes de aceitar: a referência assim gerada tinha profundidade
+transpilada de **57** (5 qubits, `linear_5`, `opt_level=2`) contra **5**
+para a construção H+CX chain equivalente — a síntese genérica de
+`StatePreparation` é muito mais profunda que qualquer circuito GHZ
+razoável escrito à mão. Usar isso como referência de RECURSOS tornaria
+`depth_ratio` quase sempre `<1.0` para qualquer resposta razoável, não
+porque o modelo fez algo hardware-aware, mas porque a referência estava
+desnecessariamente inflada — mascarando exatamente o eixo que T4 existe
+para medir. **Corrigido**: papéis invertidos em relação a T1 — a família
+GHZ de T4 usa a cadeia H+CX como PRIMÁRIA (mesmo risco baixo de derivação
+que `StatePreparation` tinha em T1, é o circuito-textbook de GHZ) e
+`StatePreparation` como ALTERNATIVA independente em `validate_oracles.py`.
+Isto é específico de tiers focados em recursos: T1-T3 nunca precisaram
+dessa cautela porque a profundidade da referência era irrelevante para o
+que estavam testando.
+
+### Nota honesta: distância de índice não força roteamento de verdade
+
+Tentativa inicial: escolher índices de qubit "distantes" (ex.: qubits 0 e 4
+numa linha de 5) assumindo que isso forçaria SWAPs. Verificado com
+`transpile()` real: **falso em geral** — o passo de `layout` do
+transpilador é livre para REMAPEAR índices lógicos para QUAISQUER qubits
+físicos, então um circuito cuja estrutura de conectividade é um CAMINHO
+(mesmo com índices "distantes" no rótulo lógico) sempre encontra um layout
+físico adjacente e roteia de graça. O que genuinamente força SWAPs
+independente de layout é um GRAU >= 3 (estrela) ou um CICLO na estrutura de
+conectividade — nenhuma linha de 5 qubits suporta grau > 2. As 12 tarefas
+de T4 ainda foram mantidas com a variação de localidade por índice (dá
+diversidade real de profundidade pós-transpilação, confirmado
+empiricamente — só não é "roteamento provadamente inevitável" no sentido
+de teoria de grafos). A corretude do tier não depende dessa distinção:
+transpilação simétrica + critério de desigualdade já garantem que a
+comparação é válida independente de a referência forçar roteamento
+"de verdade" ou não. Registrado para quem escrever T4 adicional ou revisar
+este desenho no futuro.
+
+### `heavy_hex_27` — não implementado, não fabricado
+
+`COUPLING_MAPS` só define `linear_5` e `all_to_all`. O comentário já
+existente em `resource.py` (anterior a esta sessão) já sinalizava:
+"heavy_hex_27 intencionalmente omitido... adicionar a lista real de arestas
+aqui quando as tarefas t4_hardware precisarem". Decisão desta sessão: não
+perseguir isso agora — as 12 tarefas de T4 cabem em `linear_5` (5 qubits,
+suficiente para a diversidade de localidade pretendida), e sourcing de uma
+topologia real de 27 qubits de um backend IBM de verdade (mesmo rigor da
+busca do Hamiltoniano do H₂ em D3e-3) fica como trabalho futuro explícito,
+não fabricado por conveniência.
+
+Todas as 12 tarefas passam nas 4 checagens de `validate_oracles.py`.
+
+---
+
 ## D4 — Modelo de embedding [PENDENTE-PILOTO]
 
 **Decisão preliminar**: avaliar dois candidatos por `recall@8` nas 50 consultas

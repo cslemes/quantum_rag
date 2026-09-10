@@ -1,0 +1,10 @@
+{
+  "task_id": "w_state_5q",
+  "tier": "t1",
+  "prompt": "Build a 5-qubit circuit that prepares the W state: an equal superposition of every computational basis state with exactly one qubit in |1> and the rest in |0>, i.e. (|00001> + |00010> + |00100> + |01000> + |10000>) / sqrt(5), up to global phase.",
+  "n_qubits": 5,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/w_state_5q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

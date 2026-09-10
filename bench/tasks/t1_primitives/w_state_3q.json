@@ -1,0 +1,10 @@
+{
+  "task_id": "w_state_3q",
+  "tier": "t1",
+  "prompt": "Build a 3-qubit circuit that prepares the W state: an equal superposition of every computational basis state with exactly one qubit in |1> and the rest in |0>, i.e. (|001> + |010> + |100>) / sqrt(3), up to global phase.",
+  "n_qubits": 3,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/w_state_3q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

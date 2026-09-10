@@ -49,8 +49,9 @@ class StaticResult(BaseModel):
 
 
 class SemanticResult(BaseModel):
-    unitary_equiv: bool | None = None       # None se oráculo for distribucional
-    verification_method: Literal["exact", "composition"] | None = None
+    unitary_equiv: bool | None = None       # None a menos que oracle_kind="unitary"
+    state_equiv: bool | None = None         # None a menos que oracle_kind="statevector" (D3c)
+    verification_method: Literal["exact", "composition", "statevector"] | None = None
     endianness_swapped: bool = False        # FR-005: categoria própria
     hellinger_fidelity: float | None = None
     hellinger_std: float | None = None      # desvio entre seeds
@@ -122,7 +123,7 @@ class TaskSpec(BaseModel):
     tier: Literal["t1", "t2", "t3", "t4"]
     prompt: str
     n_qubits: int                     # <= 20 geral; <= 13 se oracle_kind="unitary"
-    oracle_kind: Literal["unitary", "distribution", "energy", "resource"]
+    oracle_kind: Literal["unitary", "statevector", "distribution", "energy"]
     oracle_path: str
     gate_set: list[str] | None = None
     coupling_map: str | None = None
@@ -132,6 +133,19 @@ class TaskSpec(BaseModel):
     tolerance: float = 0.99
     max_depth_ratio: float = 2.0
 ```
+
+**Correção (D3h, research.md)**: `oracle_kind` listava `"resource"` como um
+quinto valor até T047. Não é um `oracle_kind` — nunca teve despacho em
+`make_semantic_check_node` (`src/qcagent/graph.py`), e `resource_check` é
+ORTOGONAL a `oracle_kind`: só precisa de um circuito de referência, que
+`"statevector"`/`"unitary"` já fornecem, e roda automaticamente assim que
+`semantic_check` popula `verification_method`. O que torna uma tarefa
+"hardware-constrained" (tier T4) é `coupling_map` não-nulo, não um
+`oracle_kind` diferente. Removido do `Literal` acima e de `bench/schema.py`
+para que o valor não seja mais autorável — antes, uma tarefa escrita com
+`oracle_kind="resource"` falharia de forma confusa em runtime
+(`NotImplementedError` em `_load_oracle`) em vez de um erro de tipo no
+momento de autoria.
 
 ```python
 class RunRecord(BaseModel):
@@ -236,8 +250,9 @@ Usada tanto pelo roteamento do `critic` (T026) quanto pela análise qualitativa
 | Regra | Onde | Requisito |
 |---|---|---|
 | `n_qubits <= 20` para qualquer tarefa | ingestão do dataset | T052 |
-| `n_qubits <= 13` quando `oracle_kind="unitary"` | ingestão do dataset | D3b — acima disso a verificação é probabilística |
-| `verification_method` preenchido sempre que `unitary_equiv` não for None | `semantic.py` | D3b — permite segmentar a análise |
+| `n_qubits <= 13` quando `oracle_kind="unitary"` | ingestão do dataset | D3b — acima disso a verificação é probabilística. **Não se aplica a `oracle_kind="statevector"`** (D3c): `Statevector` custa 2ⁿ, não 4ⁿ, então o teto de 13 é exclusivo do caminho unitário |
+| `verification_method` preenchido sempre que uma verificação circuito-vs-circuito rodou (`oracle_kind` `unitary` ou `statevector`) | `semantic.py` | D3b/D3c — permite ao roteamento decidir se `resource_check` tem referência, e à análise segmentar por método |
+| `oracle_kind="statevector"` para toda tarefa cujo enunciado especifica apenas o estado de saída a partir de `\|0...0>`, nunca `"unitary"` | autoria de tarefas (T044-T047) | D3c — `Operator.equiv()` rejeita decomposições unitariamente distintas do mesmo estado (ex.: GHZ via cadeia de CX vs. estrela de CX), o que rejeitaria respostas corretas |
 | Toda canônica tem exatamente uma perturbada | `validate_oracles.py` | FR-017 |
 | Oráculo unitário satisfaz `U @ U† ≈ I` | `validate_oracles.py` | FR-018 |
 | `results/` nunca sofre UPDATE ou DELETE | `runner.py` | Princípio II |

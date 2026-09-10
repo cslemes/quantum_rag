@@ -1,0 +1,10 @@
+{
+  "task_id": "simon_6q",
+  "tier": "t2",
+  "prompt": "Implement Simon's algorithm circuit for the hidden 3-bit period s = 101 (satisfying f(x) = f(x XOR s) for every x). Use qubits 0, 1, 2 as the input register x and qubits 3, 4, 5 as the output register y (y_i is at qubit 3+i). Build the EXACT oracle below (this specific function, not any other function satisfying f(x)=f(x XOR s)): first copy the input register to the output register with CNOT(control=qubit i, target=qubit 3+i) for i = 0, 1, 2. Then, using qubit 0 as an extra control (0 is the position of the lowest set bit of s), apply CNOT(control=qubit 0, target=qubit 3+i) for every i where bit i of s is 1 — that is, for i = 0 and i = 2 (s = 101 has bits 0 and 2 set). Full circuit: Hadamard on qubits 0-2, then the oracle exactly as described, then Hadamard on qubits 0-2 again (not on qubits 3-5). Return the resulting 6-qubit state; no measurement.",
+  "n_qubits": 6,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/simon_6q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

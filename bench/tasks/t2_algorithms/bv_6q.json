@@ -1,0 +1,10 @@
+{
+  "task_id": "bv_6q",
+  "tier": "t2",
+  "prompt": "Implement the Bernstein-Vazirani circuit to recover a hidden 5-bit secret string s from the linear oracle f(x) = x1 XOR x2 XOR x4 (i.e. s = 10110, bits 0 and 3 are unused). Use qubits 0-4 as the input register and qubit 5 as the ancilla. Steps: initialize the ancilla (qubit 5) to |1> with an X gate, apply Hadamard to all 6 qubits, apply the oracle as CNOT(control=qubit 1, target=qubit 5), CNOT(control=qubit 2, target=qubit 5), and CNOT(control=qubit 4, target=qubit 5), then apply Hadamard to qubits 0-4 only (not the ancilla). Return the resulting 6-qubit state; no measurement.",
+  "n_qubits": 6,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/bv_6q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

@@ -59,10 +59,17 @@ def route_after_static(state: AgentState) -> str:
 def route_after_semantic(state: AgentState) -> str:
     semantic = state["semantic"]
     assert semantic is not None, "route_after_semantic requires semantic_check to have run"
-    # unitary_equiv is None for distributional/energy oracles (no reference
-    # circuit exists to compare resources against) — skip resource_check for
-    # those even when the oracle itself passed.
-    if semantic.passed and semantic.unitary_equiv is not None:
+    # verification_method is set only by the two circuit-vs-circuit checks
+    # (check_with_endianness for oracle_kind="unitary", D3c's
+    # check_statevector_with_endianness for oracle_kind="statevector") —
+    # both leave a reference QuantumCircuit for resource_check to diff
+    # against. It stays None for distributional/energy oracles, which have
+    # no reference circuit at all (a counts dict / Hamiltonian instead), so
+    # resource_check is skipped for those even when the oracle itself
+    # passed. Deliberately NOT keyed on unitary_equiv (D3c): that field is
+    # None for a statevector-oracle pass too, and a statevector oracle still
+    # has a real reference circuit to compare resource usage against.
+    if semantic.passed and semantic.verification_method is not None:
         return "resource_check"
     return "critic"
 

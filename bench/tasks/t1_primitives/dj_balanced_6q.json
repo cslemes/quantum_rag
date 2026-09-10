@@ -1,0 +1,10 @@
+{
+  "task_id": "dj_balanced_6q",
+  "tier": "t1",
+  "prompt": "Implement the Deutsch-Jozsa circuit for the balanced oracle f(x) = x1 XOR x2 XOR x4 (bit 1 XOR bit 2 XOR bit 4 of the 5-bit input x; bits 0 and 3 are unused). Use qubits 0-4 as the input register and qubit 5 as the ancilla. Steps: initialize the ancilla (qubit 5) to |1> with an X gate, apply Hadamard to all 6 qubits, apply the oracle as CNOT(control=qubit 1, target=qubit 5), CNOT(control=qubit 2, target=qubit 5), and CNOT(control=qubit 4, target=qubit 5), then apply Hadamard to qubits 0-4 only (not the ancilla). Return the resulting 6-qubit state; no measurement.",
+  "n_qubits": 6,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/dj_balanced_6q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

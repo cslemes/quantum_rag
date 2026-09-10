@@ -1,0 +1,10 @@
+{
+  "task_id": "grover_5q",
+  "tier": "t2",
+  "prompt": "Implement Grover's search algorithm on 5 qubits to find EITHER of the two marked basis states |01101> or |10100>, using EXACTLY 3 Grover iterations (the optimal count for this problem size with 2 marked items). Use a pure PHASE oracle with no ancilla qubit: it must flip the sign (apply a -1 phase) of both |01101> and |10100>, and leave every other basis state unchanged. Each iteration is (oracle; diffuser), where the diffuser is the standard 'inversion about the mean' operator 2|s><s| - I (s = uniform superposition) — any correct gate decomposition of the diffuser is acceptable, it does not have to match a specific textbook gate sequence, as long as it implements exactly that unitary. Start from Hadamard on all 5 qubits, then apply 3 iterations. Return the resulting 5-qubit state; no measurement.",
+  "n_qubits": 5,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/grover_5q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

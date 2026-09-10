@@ -1,0 +1,10 @@
+{
+  "task_id": "qubo_ising_3var",
+  "tier": "t3",
+  "prompt": "You are given a QUBO cost function over binary variables x0, x1, x2 in {0,1}: C(x) = 2*x0 - 3*x1 + 1*x2 - 1*x0*x1 + 0.5*x0*x2 + 1.5*x1*x2. Convert this to an Ising Hamiltonian using EXACTLY the substitution x_i = (1 - z_i) / 2 (z_i in {-1,+1}, mapped to qubit i via z_i = Z_i, i.e. x_i=0 corresponds to the computational basis value 0 for qubit i). Expand C(x) fully in terms of z0, z1, z2: this produces H = h0*Z0 + h1*Z1 + h2*Z2 + J01*Z0*Z1 + J02*Z0*Z2 + J12*Z1*Z2 + constant. Drop the constant (it only contributes a global phase, which does not affect the circuit's correctness). Build a 3-qubit circuit implementing, as a general-purpose circuit block: Hadamard on all 3 qubits, then the phase exp(-i*gamma*H) using your derived h0, h1, h2, J01, J02, J12, with gamma = 0.5. Any correct implementation of the phase terms is accepted, as long as the derived coefficients and resulting unitary are correct. No measurement.",
+  "n_qubits": 3,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/qubo_ising_3var.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

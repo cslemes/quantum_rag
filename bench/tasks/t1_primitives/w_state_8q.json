@@ -1,0 +1,10 @@
+{
+  "task_id": "w_state_8q",
+  "tier": "t1",
+  "prompt": "Build an 8-qubit circuit that prepares the W state: an equal superposition of every computational basis state with exactly one qubit in |1> and the rest in |0>, i.e. (|00000001> + |00000010> + |00000100> + |00001000> + |00010000> + |00100000> + |01000000> + |10000000>) / sqrt(8), up to global phase.",
+  "n_qubits": 8,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/w_state_8q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

@@ -1,0 +1,10 @@
+{
+  "task_id": "ghz_5q",
+  "tier": "t1",
+  "prompt": "Build a 5-qubit GHZ state circuit: (|00000> + |11111>) / sqrt(2), up to global phase.",
+  "n_qubits": 5,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/ghz_5q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

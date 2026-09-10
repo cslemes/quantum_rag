@@ -1,0 +1,10 @@
+{
+  "task_id": "ising_zzz_3q",
+  "tier": "t3",
+  "prompt": "Build a 3-qubit circuit implementing, as a general-purpose circuit block: Hadamard on all 3 qubits, then the phase exp(-i*gamma*H) where H = 0.7 * Z0 * Z1 * Z2 (a single three-body interaction term). gamma = 0.6. Any correct implementation is accepted (Z0*Z1*Z2 is diagonal, so any gate sequence producing the correct phase +/-gamma*0.7 depending on the parity of the 3-bit computational basis state is correct — it does not need to match one specific decomposition, e.g. a CNOT-ladder-plus-RZ pattern is one valid way but not the only one). No measurement.",
+  "n_qubits": 3,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/ising_zzz_3q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

@@ -1,0 +1,10 @@
+{
+  "task_id": "qaoa_maxcut_5q",
+  "tier": "t2",
+  "prompt": "Implement a p=1 QAOA circuit for MaxCut on the 5-node cycle graph with edges (0,1), (1,2), (2,3), (3,4), (4,0), using the FIXED parameters gamma = 0.7 and beta = 0.35 (do not optimize or choose different values — the exact final state is only well-defined for these specific angles). Steps: Hadamard on all 5 qubits. Cost layer: for each edge (i,j) in the order (0,1), (1,2), (2,3), (3,4), (4,0), apply CNOT(i,j), then RZ(2*gamma, j), then CNOT(i,j) again (this implements exp(-i*gamma*Z_i*Z_j)). Mixer layer: apply RX(2*beta) to every qubit. Return the resulting 5-qubit state; no measurement.",
+  "n_qubits": 5,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/qaoa_maxcut_5q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

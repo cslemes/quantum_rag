@@ -1,0 +1,10 @@
+{
+  "task_id": "bell_phi_minus_2q",
+  "tier": "t1",
+  "prompt": "Build a 2-qubit circuit that prepares the Bell state |Phi-> = (|00> - |11>) / sqrt(2), up to global phase.",
+  "n_qubits": 2,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/bell_phi_minus_2q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

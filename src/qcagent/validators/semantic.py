@@ -29,6 +29,12 @@ class UnitaryVerdict(BaseModel):
     reason: str | None = None
 
 
+class StateVerdict(BaseModel):
+    equivalent: bool
+    fidelity: float
+    reason: str | None = None
+
+
 class DistributionVerdict(BaseModel):
     hellinger_fidelity: float  # mean across seeds
     hellinger_std: float  # deviation across seeds — mean alone hides instability
@@ -229,6 +235,98 @@ def check_with_endianness(
                 f"unitária diverge da referência (fidelidade={direct.fidelity:.4f}, "
                 f"método={direct.method})"
             ),
+            payload={
+                **_structural_diff(generated, reference),
+                "reversed_bit_order_matches": False,
+                "direct_fidelity": direct.fidelity,
+                "reversed_bit_order_fidelity": swapped.fidelity,
+            },
+        ),
+    )
+
+
+def check_statevector(generated: QuantumCircuit, reference: QuantumCircuit) -> StateVerdict:
+    """State-preparation oracle (D3c, research.md — correction to D3/D3b):
+    the task specifies only the circuit's OUTPUT STATE from |0...0>, not its
+    action on every computational basis state. Unlike `check_unitary`, two
+    circuits that reach the same physical state via different, unitarily
+    INEQUIVALENT decompositions (e.g. GHZ via a CX chain 0->1->2 vs a CX star
+    0->1,0->2 — identical state from |000>, different full unitary) must
+    both verify here; `check_unitary` would wrongly reject the second.
+
+    No size-dispatch: `Statevector(qc)` materializes 2^n amplitudes, not the
+    4^n of `Operator(qc)` — cheap up to n_qubits=20 (the dataset's general
+    cap, D3b/data-model.md), so there is no exact/composition split and no
+    probabilistic fallback to declare, unlike the unitary oracle.
+
+    TRAP 1 (FR-004) still applies: global phase. `Statevector.equiv()`
+    already accounts for it, same guarantee `Operator.equiv()` gives
+    `check_unitary`.
+    """
+    psi_gen, psi_ref = Statevector(generated), Statevector(reference)
+    if psi_gen.dim != psi_ref.dim:
+        return StateVerdict(equivalent=False, fidelity=0.0, reason="dim_mismatch")
+    if psi_gen.equiv(psi_ref):
+        return StateVerdict(equivalent=True, fidelity=1.0)
+    fid = float(abs(psi_ref.inner(psi_gen)))
+    return StateVerdict(equivalent=False, fidelity=fid)
+
+
+def check_statevector_with_endianness(
+    generated: QuantumCircuit, reference: QuantumCircuit
+) -> SemanticResult:
+    """State-preparation counterpart to `check_with_endianness`. TRAP 2
+    (FR-005) applies identically: a reference ported from a paper or
+    PennyLane may use the opposite bit-ordering convention, and testing only
+    the direct ordering would misclassify a convention mismatch as a real
+    failure. Reuses the same `EndiannessSwap` category and the same
+    `_structural_diff` payload shape as the unitary path — a retry gets the
+    identical diagnostic regardless of which oracle kind the task uses.
+    """
+    direct = check_statevector(generated, reference)
+    if direct.equivalent:
+        return SemanticResult(
+            state_equiv=True,
+            verification_method="statevector",
+            endianness_swapped=False,
+            passed=True,
+        )
+
+    reversed_ref = reference.reverse_bits()
+    swapped = check_statevector(generated, reversed_ref)
+    if swapped.equivalent:
+        return SemanticResult(
+            state_equiv=False,
+            verification_method="statevector",
+            endianness_swapped=True,
+            passed=False,
+            error=ErrorRecord(
+                iteration=0,
+                stage="semantic",
+                error_type="EndiannessSwap",
+                message=(
+                    "estado casa com a referência apenas quando os bits "
+                    "são invertidos — divergência de convenção, não erro "
+                    "funcional"
+                ),
+                payload={
+                    **_structural_diff(generated, reference),
+                    "reversed_bit_order_matches": True,
+                    "direct_fidelity": direct.fidelity,
+                },
+            ),
+        )
+
+    return SemanticResult(
+        state_equiv=False,
+        verification_method="statevector",
+        endianness_swapped=False,
+        passed=False,
+        error=ErrorRecord(
+            iteration=0,
+            stage="semantic",
+            error_type="WrongGateDecomposition",
+            message=(f"estado gerado diverge da referência (fidelidade={direct.fidelity:.4f})"),
             payload={
                 **_structural_diff(generated, reference),
                 "reversed_bit_order_matches": False,

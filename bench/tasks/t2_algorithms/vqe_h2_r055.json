@@ -1,0 +1,10 @@
+{
+  "task_id": "vqe_h2_r055",
+  "tier": "t2",
+  "prompt": "Build a 2-qubit VQE ansatz circuit for the H2 molecule at bond length R = 0.55 Angstrom, using the parity-reduced qubit Hamiltonian H = g0*I + g1*Z0 + g2*Z1 + g3*Z0*Z1 + g4*Y0*Y1 + g5*X0*X1 with g0=0.5979, g1=0.4125, g2=-0.6612, g3=0.6129, g4=0.0858, g5=0.0858 (source: O'Malley et al., 'Scalable Quantum Simulation of Molecular Energies', Phys. Rev. X 6, 031007 (2016), arXiv:1512.06860v2, Table I). Build EXACTLY this circuit (a fixed, already-optimized ansatz, not a free parameter to search over): X on qubit 0; RY(-0.158481, qubit 1) (angle in radians); CNOT(control=qubit 1, target=qubit 0). This reaches the exact ground-state energy for this Hamiltonian. No measurement, no free Parameter objects (the circuit must be fully numeric).",
+  "n_qubits": 2,
+  "oracle_kind": "energy",
+  "oracle_path": "bench/oracles/vqe_h2_r055.json",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

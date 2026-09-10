@@ -3,7 +3,7 @@
   "tier": "t1",
   "prompt": "Build a 3-qubit GHZ state circuit: (|000> + |111>) / sqrt(2), up to global phase.",
   "n_qubits": 3,
-  "oracle_kind": "unitary",
+  "oracle_kind": "statevector",
   "oracle_path": "bench/oracles/ghz_3q.qpy",
   "coupling_map": null,
   "tolerance": 0.99

@@ -1,4 +1,4 @@
-.PHONY: install index eval eval-retrieval run report test lint typecheck smoke
+.PHONY: install index eval eval-retrieval validate-oracles run report test lint typecheck smoke
 
 install:
 	uv sync --group dev
@@ -14,6 +14,11 @@ eval:
 # (T041). Requires a populated Qdrant (`make index` first).
 eval-retrieval:
 	uv run python -m analysis.eval_retrieval --verbose
+
+# Blocking dataset gate (T050, FR-018) — independent-construction + property
+# checks for every oracle in bench/tasks/. Must pass before any oracle ships.
+validate-oracles:
+	uv run python -m bench.validate_oracles
 
 # Dev inspection tool — one TaskSpec through the US1 graph, by hand:
 #   make run TASK=bench/tasks/t1_primitives/ghz_3q.json

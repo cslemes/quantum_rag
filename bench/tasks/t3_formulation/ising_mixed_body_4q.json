@@ -1,0 +1,10 @@
+{
+  "task_id": "ising_mixed_body_4q",
+  "tier": "t3",
+  "prompt": "Build a 4-qubit circuit implementing, as a general-purpose circuit block: Hadamard on all 4 qubits, then the phase exp(-i*gamma*H) where H = 0.4 * Z0 * Z1 + 0.6 * Z1 * Z2 * Z3 (one two-body term plus one three-body term). gamma = 0.5. Any correct implementation is accepted (each term is diagonal, so any gate sequence producing the correct combined phase per computational basis state is correct — it does not need to match one specific decomposition). No measurement.",
+  "n_qubits": 4,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/ising_mixed_body_4q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

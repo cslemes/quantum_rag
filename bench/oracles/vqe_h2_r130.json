@@ -1,0 +1,22 @@
+{
+  "source": "O'Malley et al., 'Scalable Quantum Simulation of Molecular Energies', Phys. Rev. X 6, 031007 (2016), arXiv:1512.06860v2, Table I",
+  "bond_length_angstrom": "1.30",
+  "pauli_labels": [
+    "II",
+    "IZ",
+    "ZI",
+    "ZZ",
+    "XX",
+    "YY"
+  ],
+  "coeffs": [
+    -0.1629,
+    0.2203,
+    -0.1238,
+    0.4735,
+    0.1083,
+    0.1083
+  ],
+  "exact_ground_energy": -1.0429960772068516,
+  "ansatz_theta_rad": -0.561805957849413
+}

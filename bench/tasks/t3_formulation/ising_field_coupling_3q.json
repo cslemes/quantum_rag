@@ -1,0 +1,10 @@
+{
+  "task_id": "ising_field_coupling_3q",
+  "tier": "t3",
+  "prompt": "Build a 3-qubit circuit implementing, as a general-purpose circuit block: Hadamard on all 3 qubits, then the phase exp(-i*gamma*H) where H = 0.3*Z0 + 0.5*Z1 - 0.2*Z2 + 0.4*Z0*Z1 (single-qubit 'field' terms plus one pairwise coupling term). gamma = 0.5. Any correct implementation is accepted (every term is diagonal, so any gate sequence producing the correct combined phase per computational basis state is correct — it does not need to match one specific decomposition). No measurement.",
+  "n_qubits": 3,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/ising_field_coupling_3q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

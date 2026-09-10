@@ -1,0 +1,11 @@
+{
+  "task_id": "ising_linear5_mixed",
+  "tier": "t4",
+  "prompt": "Build a 5-qubit circuit implementing, as a general-purpose circuit block: Hadamard on all 5 qubits, then the phase exp(-i*gamma*H) where H = 0.3*Z0*Z1 - 0.4*Z2*Z3 + 0.5*Z0*Z4. gamma = 0.45. This circuit will be transpiled for a 5-qubit LINEAR coupling map (qubit i only physically adjacent to qubit i-1 and i+1) — the first two terms are between adjacent qubits, the third (Z0*Z4) is between the two most distant qubits, so some routing overhead is expected. Any correct implementation of the phase terms is accepted. No measurement.",
+  "n_qubits": 5,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/ising_linear5_mixed.qpy",
+  "coupling_map": "linear_5",
+  "tolerance": 0.99,
+  "max_depth_ratio": 2.0
+}

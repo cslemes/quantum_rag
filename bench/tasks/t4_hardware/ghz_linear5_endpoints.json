@@ -1,0 +1,11 @@
+{
+  "task_id": "ghz_linear5_endpoints",
+  "tier": "t4",
+  "prompt": "Build a 5-qubit circuit that prepares a GHZ state (Bell state) across qubits 0 and 4 only: (|00000> + |10001>) / sqrt(2), up to global phase (qubits 1, 2, 3 remain |0>). This circuit will be transpiled for a 5-qubit LINEAR coupling map (qubit i is only physically adjacent to qubit i-1 and i+1). Qubits 0 and 4 are the two endpoints of the line, the maximum possible distance apart, so routing overhead is expected — any correct implementation is accepted, the choice of internal two-qubit gate topology is yours.",
+  "n_qubits": 5,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/ghz_linear5_endpoints.qpy",
+  "coupling_map": "linear_5",
+  "tolerance": 0.99,
+  "max_depth_ratio": 2.0
+}

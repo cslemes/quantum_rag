@@ -8,6 +8,8 @@ from qiskit import QuantumCircuit
 from qcagent.validators.semantic import (
     _check_by_composition,
     _check_exact,
+    check_statevector,
+    check_statevector_with_endianness,
     check_unitary,
     check_with_endianness,
 )
@@ -206,3 +208,123 @@ def test_exact_and_composition_agree_on_non_equivalent_8_qubit_circuits() -> Non
 
     assert exact.equivalent == composition.equivalent
     assert exact.equivalent is False
+
+
+# -- D3c: state-preparation oracle (correction to D3/D3b) -------------------
+#
+# Regression tests for a real failure hit against a live Ollama model on the
+# ghz_3q task (research.md D3c): the model built GHZ-3 via a CX star
+# (0->1, 0->2) instead of the reference's CX chain (0->1, 1->2). Both reach
+# exactly the same physical state from |000>, but `check_unitary` rejected
+# it — the task's prompt only ever specified the output STATE, not the
+# circuit's action on every computational basis state, so `oracle_kind=
+# "unitary"` was the wrong oracle for this task from the start.
+
+
+def _ghz_chain(n: int) -> QuantumCircuit:
+    qc = QuantumCircuit(n)
+    qc.h(0)
+    for q in range(n - 1):
+        qc.cx(q, q + 1)
+    return qc
+
+
+def _ghz_star(n: int) -> QuantumCircuit:
+    qc = QuantumCircuit(n)
+    qc.h(0)
+    for q in range(1, n):
+        qc.cx(0, q)
+    return qc
+
+
+def test_cx_star_and_cx_chain_ghz_are_state_equivalent_but_not_unitary_equivalent() -> None:
+    """The exact live failure. Both circuits prepare the GHZ state from
+    |000>; `check_statevector` must accept the pair that `check_unitary`
+    correctly (for a DIFFERENT question) rejects."""
+    chain = _ghz_chain(3)
+    star = _ghz_star(3)
+
+    unitary_verdict = check_unitary(star, chain, n_qubits=3)
+    state_verdict = check_statevector(star, chain)
+
+    assert unitary_verdict.equivalent is False  # different unitary — correctly rejected
+    assert state_verdict.equivalent is True  # same state from |000> — must be accepted
+    assert state_verdict.fidelity == pytest.approx(1.0)
+
+
+def test_statevector_result_never_reports_unitary_equiv() -> None:
+    """`unitary_equiv` must stay None for a statevector-oracle result even
+    on a pass — a state-equivalent circuit is not proven unitary-equivalent,
+    and `route_after_semantic`/resource_check gating must not be able to
+    confuse the two (D3c)."""
+    chain = _ghz_chain(3)
+    star = _ghz_star(3)
+
+    result = check_statevector_with_endianness(star, chain)
+
+    assert result.passed is True
+    assert result.state_equiv is True
+    assert result.unitary_equiv is None
+    assert result.verification_method == "statevector"
+
+
+def test_statevector_global_phase_alone_does_not_cause_a_mismatch() -> None:
+    reference = QuantumCircuit(2)
+    reference.h(0)
+    reference.cx(0, 1)
+
+    generated = QuantumCircuit(2)
+    generated.h(0)
+    generated.cx(0, 1)
+    generated.global_phase = np.pi / 3
+
+    verdict = check_statevector(generated, reference)
+    assert verdict.equivalent
+    assert verdict.fidelity == pytest.approx(1.0)
+
+
+def test_statevector_endianness_swap_is_reported_as_its_own_category() -> None:
+    generated = QuantumCircuit(3)
+    generated.x(0)
+    reference = generated.reverse_bits()
+
+    result = check_statevector_with_endianness(generated, reference)
+
+    assert result.endianness_swapped is True
+    assert result.passed is False
+    assert result.state_equiv is False
+    assert result.error is not None
+    assert result.error.error_type == "EndiannessSwap"
+    assert result.error.payload["reversed_bit_order_matches"] is True
+
+
+def test_statevector_check_does_not_mask_genuine_functional_errors() -> None:
+    """A circuit that matches NEITHER the reference NOR its bit-reversal, and
+    isn't a same-state-different-decomposition case either, must still be
+    rejected — D3c fixes a false negative, it must not introduce a false
+    positive."""
+    generated = QuantumCircuit(2)
+    generated.x(0)
+    reference = QuantumCircuit(2)
+    reference.h(0)
+    reference.h(1)
+
+    result = check_statevector_with_endianness(generated, reference)
+
+    assert result.endianness_swapped is False
+    assert result.passed is False
+    assert result.error is not None
+    assert result.error.error_type == "WrongGateDecomposition"
+
+
+def test_statevector_incompatible_dimensions_do_not_raise() -> None:
+    generated = QuantumCircuit(2)
+    generated.h(0)
+    reference = QuantumCircuit(3)
+    reference.h(0)
+
+    verdict = check_statevector(generated, reference)
+
+    assert verdict.equivalent is False
+    assert verdict.reason == "dim_mismatch"
+    assert verdict.fidelity == 0.0

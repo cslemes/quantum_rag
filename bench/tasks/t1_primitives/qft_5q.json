@@ -1,0 +1,10 @@
+{
+  "task_id": "qft_5q",
+  "tier": "t1",
+  "prompt": "Implement the 5-qubit Quantum Fourier Transform as a general-purpose circuit block (it must correctly transform an ARBITRARY input state, not just |00000> — do not build a circuit that only works from a fixed starting state). Use the standard textbook definition: Hadamard and controlled-phase gates, followed by a final reversal of qubit order via SWAP gates (Qiskit's conventional QFT ordering). No measurement.",
+  "n_qubits": 5,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/qft_5q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

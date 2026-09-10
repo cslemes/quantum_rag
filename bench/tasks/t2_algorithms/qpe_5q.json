@@ -1,0 +1,10 @@
+{
+  "task_id": "qpe_5q",
+  "tier": "t2",
+  "prompt": "Implement Quantum Phase Estimation with a 4-qubit counting register (qubits 0, 1, 2, 3; qubit 0 is least significant) and a 1-qubit eigenstate register (qubit 4). The eigenstate is |1> of the phase gate P(5*pi/8) (i.e. P(theta)|1> = e^{i*theta}|1>, theta = 5*pi/8) — initialize qubit 4 to |1> with an X gate. Steps: Hadamard on qubits 0-3; apply controlled-P(theta * 2^j) from counting qubit j onto qubit 4, for j = 0, 1, 2, 3 (so angles 5*pi/8, 5*pi/4, 5*pi/2, 5*pi respectively); apply the standard inverse Quantum Fourier Transform (Qiskit's conventional ordering, i.e. the exact inverse of the QFT convention used in the qft_Nq tasks) to the counting register (qubits 0-3) only. The phase 5/16 is exactly representable in 4 bits, so the counting register lands EXACTLY on qubit 0 = |1>, qubit 1 = |0>, qubit 2 = |1>, qubit 3 = |0> (binary for 5, qubit 0 least significant) with certainty — this is a deterministic target, not an approximation. Return the resulting 5-qubit state; no measurement.",
+  "n_qubits": 5,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/qpe_5q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

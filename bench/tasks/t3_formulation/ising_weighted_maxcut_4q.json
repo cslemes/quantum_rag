@@ -1,0 +1,10 @@
+{
+  "task_id": "ising_weighted_maxcut_4q",
+  "tier": "t3",
+  "prompt": "Build a 4-qubit circuit implementing, as a general-purpose circuit block: Hadamard on all 4 qubits, then the phase exp(-i*gamma*H) where H = sum over weighted edges of w_ij * Z_i * Z_j. Graph: edge (0,1) weight 0.3, edge (1,2) weight 0.7, edge (2,3) weight -0.5, edge (0,3) weight 0.4. gamma = 0.45. Any correct implementation of the phase term is accepted (Z_i*Z_j is diagonal, so any gate sequence producing the same phase per computational basis state is correct — it does not need to match one specific decomposition). No measurement.",
+  "n_qubits": 4,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/ising_weighted_maxcut_4q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

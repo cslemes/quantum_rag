@@ -228,6 +228,54 @@ def check_with_endianness(generated, reference, n_qubits) -> SemanticResult:
     """
 ```
 
+### Oráculo de preparação de estado (D3c — correção a D3/D3b)
+
+```python
+def check_statevector(generated: QuantumCircuit,
+                      reference: QuantumCircuit) -> StateVerdict:
+    """
+    Para `oracle_kind="statevector"`: o enunciado especifica apenas o ESTADO
+    DE SAÍDA do circuito a partir de |0...0>, não sua ação sobre toda base
+    computacional. `check_unitary` rejeita incorretamente uma decomposição
+    unitariamente distinta que ainda assim prepara o mesmo estado (ex.: GHZ
+    via cadeia de CX 0->1->2 vs. estrela de CX 0->1,0->2 — mesmo estado a
+    partir de |000>, unitárias diferentes).
+
+    Sem despacho por porte: Statevector(qc) materializa 2^n amplitudes, não
+    os 4^n de Operator(qc) — barato até n_qubits=20 (teto geral do dataset),
+    então não há caminho "composição" nem fallback probabilístico aqui,
+    diferente do oráculo unitário (D3b).
+
+    ARMADILHA 1 (fase global) continua valendo: Statevector.equiv() já trata,
+    mesma garantia que Operator.equiv() dá a check_unitary.
+    """
+
+
+def check_statevector_with_endianness(generated, reference) -> SemanticResult:
+    """
+    Contraparte de check_with_endianness para oráculo de estado. ARMADILHA 2
+    (convenção de ordenação) se aplica igualmente — testar contra a
+    referência original E `reference.reverse_bits()`. Mesma categoria
+    EndiannessSwap, mesmo formato de payload (_structural_diff) do caminho
+    unitário.
+
+    Preenche `state_equiv` (nunca `unitary_equiv`) e
+    `verification_method="statevector"`.
+    """
+```
+
+**Achado que motivou esta seção**: rodada ao vivo do task `ghz_3q` (GHZ-3,
+`oracle_kind="unitary"` original) — o modelo produziu GHZ via estrela de CX
+(0->1, 0->2), o oráculo de referência usa cadeia de CX (0->1, 1->2). Ambos
+preparam exatamente `(|000> + |111>)/sqrt(2)` a partir de `|000>`, mas
+`Operator.equiv()` os considera unitárias diferentes e rejeitou uma resposta
+correta. O enunciado do task só restringe o estado, nunca a transformação —
+`oracle_kind="unitary"` era o oráculo errado para essa tarefa desde o início.
+Ver D3c em research.md para a classificação de quais tarefas canônicas
+(T044-T047) precisam de qual oráculo.
+
+---
+
 ### Oráculos alternativos
 
 ```python

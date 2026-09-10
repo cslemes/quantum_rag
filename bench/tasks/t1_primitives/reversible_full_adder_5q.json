@@ -1,0 +1,10 @@
+{
+  "task_id": "reversible_full_adder_5q",
+  "tier": "t1",
+  "prompt": "Build a reversible (no measurement, no classical bits) 5-qubit full-adder circuit using CNOT and Toffoli (CCX) gates. Qubits 0, 1, 2 are the inputs a, b, cin; qubits 3 and 4 are fresh ancilla outputs, both starting at |0>, that must end up holding sum = a XOR b XOR cin (qubit 3) and cout = majority(a,b,cin) = (a AND b) XOR (b AND cin) XOR (a AND cin) (qubit 4). IMPORTANT constraint: compute each output using ONLY qubits 0, 1, 2 (the original inputs) as controls. Do not use qubit 3 or qubit 4 as a control for computing the other output, and do not let one output's gates depend on the other output's qubit in any way.",
+  "n_qubits": 5,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/reversible_full_adder_5q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

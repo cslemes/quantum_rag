@@ -1,0 +1,11 @@
+{
+  "task_id": "ghz_linear5_full",
+  "tier": "t4",
+  "prompt": "Build a 5-qubit circuit that prepares the GHZ state (|00000> + |11111>) / sqrt(2), up to global phase. This circuit will be transpiled for a 5-qubit LINEAR coupling map (qubit i is only physically adjacent to qubit i-1 and i+1 — no all-to-all connectivity), so prefer a construction that keeps two-qubit gates between nearby qubit indices where possible.",
+  "n_qubits": 5,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/ghz_linear5_full.qpy",
+  "coupling_map": "linear_5",
+  "tolerance": 0.99,
+  "max_depth_ratio": 2.0
+}

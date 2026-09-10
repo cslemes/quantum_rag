@@ -1,0 +1,10 @@
+{
+  "task_id": "dj_constant_4q",
+  "tier": "t1",
+  "prompt": "Implement the Deutsch-Jozsa circuit for the constant oracle f(x) = 0 for every 3-bit input x. Use qubits 0, 1, 2 as the input register and qubit 3 as the ancilla. Steps: initialize the ancilla (qubit 3) to |1> with an X gate, apply Hadamard to all 4 qubits, apply the oracle (for this constant-zero function, the oracle does nothing at all — no gates), then apply Hadamard to qubits 0, 1, 2 only (not the ancilla). Return the resulting 4-qubit state; no measurement.",
+  "n_qubits": 4,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/dj_constant_4q.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99
+}

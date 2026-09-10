@@ -42,8 +42,16 @@ class StaticResult(BaseModel):
 
 
 class SemanticResult(BaseModel):
-    unitary_equiv: bool | None = None  # None if the oracle is distributional
-    verification_method: Literal["exact", "composition"] | None = None
+    # None whenever oracle_kind isn't "unitary" — a statevector-oracle circuit
+    # can pass this check's target (see D3c, research.md) while still being
+    # unitarily inequivalent (e.g. GHZ via a CX chain vs a CX star), so
+    # `unitary_equiv=True` must never be inferred from `passed=True` alone.
+    unitary_equiv: bool | None = None
+    # None whenever oracle_kind isn't "statevector" (D3c) — the state-only
+    # counterpart to unitary_equiv, for oracle_kind="unitary" this stays None
+    # even when the check happens to pass.
+    state_equiv: bool | None = None
+    verification_method: Literal["exact", "composition", "statevector"] | None = None
     endianness_swapped: bool = False  # FR-005: its own category
     hellinger_fidelity: float | None = None
     hellinger_std: float | None = None  # deviation across seeds
@@ -75,6 +83,7 @@ class AgentState(TypedDict, total=False):
     spec: str
     oracle_ref: str
     coupling_map_name: str | None
+    max_depth_ratio: float  # threaded from TaskSpec — see graph.py's resource_check
 
     # working — overwritten each iteration
     requirements: list[Requirement]
