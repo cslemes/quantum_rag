@@ -1,193 +1,203 @@
-# Feature Specification: Síntese verificada de circuitos quânticos assistida por IA
+# Feature Specification: LLM Quantum Copilot
 
 **Feature Branch**: `001-qcircuit-agent`
-**Criada em**: 2026-08-11
+**Criada em**: 2026-08-11 | **Reescrita em**: 2026-09-11 (v2 — produto)
 **Status**: Draft
-**Input**: "Sistema que gera circuitos quânticos a partir de descrição em linguagem natural, verifica automaticamente se estão corretos e se corrige quando não estão — e mede se isso funciona melhor que geração direta."
+**Input**: "Um software que gera circuitos quânticos a partir de descrição em
+linguagem natural, verifica o que é verificável, transpila para hardware alvo e
+executa em simulador ou dispositivo real — sendo explícito sobre o que garantiu
+e o que não garantiu."
 
----
-
-## Clarifications
-
-### Session 2026-08-12
-
-- Q: Quando uma chamada ao gerador externo (Fronteira A ou B) falha de forma transitória durante a matriz de 5.400 execuções — rate limit, erro 5xx ou timeout — e não por defeito do código gerado, o que o sistema deve fazer? → A: Tentar novamente com backoff exponencial limitado; se persistir, marcar a execução como falha de infraestrutura e prosseguir com as demais execuções da matriz, sem abortar a rodada.
-- Q: Se a matriz de 5.400 execuções (≤72h de wall-clock) for interrompida no meio — queda de energia, crash, parada manual — o sistema deve retomar pulando combinações (gerador, condição, tarefa, seed) já persistidas, ou um reinício do zero é aceitável? → A: O executor DEVE ser retomável — pular no reinício qualquer combinação que já tenha registro persistido.
-- Q: Na amostra de dupla anotação de falhas (FR-024), quando os dois anotadores discordam da categoria, como o rótulo final é decidido? → A: Um terceiro anotador independente resolve a discordância por maioria.
-- Q: Para o caso de borda "descrição ambígua ou impossível → recusa explícita", a detecção deve ser uma checagem dedicada antes da geração, ou é aceitável deixar o loop normal esgotar `MAX_ITER` e reportar falha padrão? → A: Híbrido — o `planner` sinaliza casos óbvios (entidades faltantes, restrições contraditórias) antes de qualquer tentativa de geração; ambiguidade mais sutil segue o loop iterativo normal.
-- Q: O caso de borda "descrição cuja solução excede a capacidade de simulação → rejeitar na entrada" hoje só é aplicado ao dataset curado (na ingestão). Para uso ao vivo pelo pesquisador (US1), como a rejeição "na entrada" deve funcionar, já que a contagem de qubits só existe depois do código gerado? → A: O `planner` extrai a contagem de qubits declarada/inferível dos requisitos e rejeita antes de qualquer chamada ao `generator`, caso exceda o teto configurado.
+> **Mudança de escopo (v2)**. A v1 especificava um instrumento de pesquisa: um
+> experimento controlado com cinco condições e ablação, para medir se
+> recuperação e correção iterativa melhoram geração de circuitos. O entregável
+> passou a ser **produto com relatório**. O sistema construído permanece; o
+> aparato de medição sai. As 120 tarefas com referências verificadas mudam de
+> função: eram instrumento experimental, agora são suíte de regressão.
 
 ---
 
 ## User Scenarios & Testing
 
-### User Story 1 — Obter um circuito verificado a partir de uma descrição (Priority: P1)
+### US1 — Obter um circuito que executa e respeita o pedido (Priority: P1) ✅ IMPLEMENTADA
 
-Um pesquisador descreve em linguagem natural o circuito que precisa. O sistema
-produz um circuito, verifica-o automaticamente contra um critério de corretude
-objetivo e, se falhar, tenta corrigir usando o diagnóstico da falha. O
-pesquisador recebe o circuito acompanhado do veredito de verificação.
+O usuário descreve o circuito que precisa. O sistema gera, verifica o que é
+verificável sem referência, corrige-se quando falha, e entrega código que
+executa e transpila para a topologia alvo.
 
-**Why this priority**: é a fatia mínima que entrega valor real. Sem ela nada
-mais existe, e ela sozinha já é utilizável.
+**Why this priority**: é o valor mínimo do produto. Elimina a classe de erro
+mais frequente em geração de código quântico — API inexistente, código que não
+roda, circuito que não cabe no hardware.
 
-**Independent Test**: submeter 20 descrições com resposta de referência conhecida
-e confirmar que o sistema devolve, para cada uma, um circuito e um veredito
-correto — inclusive vereditos de falha, que devem ser reportados e não mascarados.
+**Independent Test**: submeter 20 descrições e confirmar que toda saída ou
+executa e transpila, ou reporta falha explícita.
 
 **Acceptance Scenarios**:
 
-1. **Given** uma descrição válida cuja solução o sistema acerta de primeira,
-   **When** o pedido é submetido, **Then** o sistema devolve o circuito com
-   veredito de aprovação e registro de uma única tentativa.
-2. **Given** uma descrição cuja primeira tentativa produz artefato inexecutável,
-   **When** o sistema detecta a falha, **Then** ele regenera usando o diagnóstico
-   e registra ambas as tentativas no histórico.
-3. **Given** uma descrição cuja solução o sistema não alcança dentro do limite de
-   tentativas, **When** o limite é atingido, **Then** o sistema devolve status de
-   falha com a última tentativa e o histórico completo de erros — nunca um
-   resultado apresentado como válido.
-4. **Given** um circuito funcionalmente correto porém que consome recursos muito
-   acima da referência, **When** a verificação de recursos roda, **Then** o
-   sistema sinaliza o excesso e tenta uma rodada de otimização.
+1. **Given** uma descrição válida, **When** submetida, **Then** o sistema
+   devolve código executável com o registro do que foi verificado.
+2. **Given** uma tentativa que produz artefato inexecutável, **When** a falha é
+   detectada, **Then** o sistema regenera usando o diagnóstico.
+3. **Given** que o limite de tentativas é atingido, **When** isso ocorre,
+   **Then** o sistema reporta falha explícita — nunca apresenta a última
+   tentativa como resultado.
 
 ---
 
-### User Story 2 — Evitar uso de interfaces obsoletas (Priority: P2)
+### US2 — Não receber código com interfaces obsoletas (Priority: P1) ✅ IMPLEMENTADA
 
-O pesquisador recebe artefatos que usam apenas construções válidas na versão
-corrente das bibliotecas alvo, mesmo quando o conhecimento prévio do gerador está
-desatualizado.
+O usuário recebe código que usa apenas construções válidas na versão corrente
+das bibliotecas alvo, mesmo quando o conhecimento do gerador está desatualizado.
 
-**Why this priority**: é a principal causa isolada de falha em geração para este
-domínio, e é resolvível sem alterar o gerador. Depende de US1 existir, mas é
-independentemente mensurável.
+**Why this priority**: é a causa isolada mais frequente de falha no domínio, e
+resolvê-la é o que torna o produto imediatamente útil.
 
-**Independent Test**: rodar um conjunto de descrições cuja solução envolve
-construções que mudaram entre versões, e comparar a taxa de uso de construção
-obsoleta com e sem o mecanismo de consulta ativado.
+**Independent Test**: comparar a taxa de construção obsoleta com e sem consulta
+à documentação versionada.
 
 **Acceptance Scenarios**:
 
-1. **Given** uma descrição cuja solução envolve uma construção renomeada em
-   versão recente, **When** o sistema gera, **Then** o artefato usa a construção
-   atual.
-2. **Given** que o gerador produziu uma construção obsoleta, **When** o
-   diagnóstico identifica a causa como desatualização, **Then** o sistema
-   reconsulta a fonte de referência antes de regenerar — e não apenas repete a
-   geração.
-3. **Given** uma consulta à fonte de referência, **When** o material recuperado
-   inclui construções obsoletas, **Then** elas chegam ao gerador explicitamente
-   rotuladas como não utilizáveis.
+1. **Given** uma descrição cuja solução envolve construção renomeada, **When** o
+   sistema gera, **Then** o código usa a construção atual.
+2. **Given** que o diagnóstico identifica desatualização, **When** o sistema
+   corrige, **Then** reconsulta a fonte antes de regerar.
+3. **Given** material obsoleto recuperado, **When** chega ao gerador, **Then**
+   está rotulado como não utilizável, com a substituição indicada.
 
 ---
 
-### User Story 3 — Medir se o sistema realmente melhora o resultado (Priority: P3)
+### US3 — Declarar o que o circuito deve fazer, e ter isso verificado (Priority: P1) 🆕
 
-O pesquisador executa a comparação entre o sistema completo e as variantes de
-controle sobre o conjunto de avaliação, e obtém as métricas que sustentam ou
-refutam as hipóteses do trabalho.
+O usuário declara, junto da descrição, propriedades que o circuito deve
+satisfazer — e o sistema as verifica por simulação, sem exigir um circuito de
+referência.
 
-**Why this priority**: é a contribuição científica. Depende de US1 e US2 estarem
-prontas, mas é o que a dissertação de fato defende.
+Exemplos de propriedade: o estado final tem amplitude igual em dois estados de
+base específicos; a medição de um registrador produz sempre o mesmo valor; o
+circuito usa apenas um conjunto declarado de portas; a saída é autoestado de um
+operador dado.
 
-**Independent Test**: executar a matriz completa e verificar que o relatório
-produzido contém, para cada combinação de gerador e condição, todas as métricas
-primárias com intervalo de variação entre seeds.
+**Why this priority**: **é a história que torna o produto um produto.** Sem ela,
+a corretude funcional só é verificável quando o usuário já tem a resposta — o
+que anula o motivo de gerar. A asserção é o oráculo numa forma que o usuário
+consegue fornecer.
+
+**Independent Test**: submeter descrições com asserções conhecidamente
+verdadeiras e conhecidamente falsas, e confirmar que o sistema aprova as
+primeiras e reprova as segundas.
 
 **Acceptance Scenarios**:
 
-1. **Given** a matriz experimental configurada, **When** a execução termina,
-   **Then** existe um registro imutável por execução contendo entrada, saída,
-   veredito, tentativas e custo.
-2. **Given** os registros de uma rodada, **When** o relatório é gerado, **Then**
-   as métricas de corretude aparecem em camadas separadas, nunca agregadas em
-   índice único.
-3. **Given** duas condições que diferem em um único componente, **When** a
-   ablação é calculada, **Then** o relatório atribui o ganho ao componente
-   isolado.
-4. **Given** itens canônicos e suas variantes perturbadas, **When** o relatório é
-   gerado, **Then** a diferença de desempenho entre eles aparece como métrica
-   própria por gerador e condição.
+1. **Given** uma descrição com asserções, **When** o circuito é gerado, **Then**
+   cada asserção é avaliada individualmente e o resultado de cada uma é
+   reportado.
+2. **Given** uma asserção que falha, **When** isso ocorre, **Then** a falha
+   entra no loop de correção como diagnóstico, e a asserção violada é nomeada.
+3. **Given** uma descrição sem asserção alguma, **When** o circuito é gerado,
+   **Then** o sistema informa explicitamente que a corretude funcional não foi
+   verificada.
+4. **Given** uma asserção mal formada ou impossível de avaliar, **When**
+   submetida, **Then** o sistema recusa explicitamente em vez de ignorá-la
+   silenciosamente.
 
 ---
 
-### User Story 4 — Demonstrar execução em dispositivo físico (Priority: P4)
+### US4 — Saber exatamente o que foi garantido (Priority: P1) 🆕
 
-O pesquisador executa um subconjunto dos artefatos aprovados em dispositivo
-quântico real e obtém a comparação entre comportamento simulado e medido.
+Toda saída vem acompanhada de um relatório de garantia: o que foi verificado,
+como, e o que permanece não verificado.
 
-**Why this priority**: fortalece a defesa ao mostrar o ciclo fechado até
-execução física, mas o trabalho permanece completo sem ela. Deliberadamente
-opcional.
+**Why this priority**: é o diferencial e o risco central. Um produto de
+verificação que exagera a própria garantia é pior que nenhum produto.
 
-**Independent Test**: submeter 12 artefatos aprovados ao dispositivo e verificar
-que o relatório apresenta a degradação de fidelidade em função do consumo de
-recursos.
+**Independent Test**: para cada combinação de verificações executadas, conferir
+que o relatório enumera corretamente o verificado e o não verificado.
 
 **Acceptance Scenarios**:
 
-1. **Given** um artefato aprovado em simulação, **When** submetido ao
-   dispositivo físico, **Then** o resultado medido é registrado ao lado do
-   simulado.
-2. **Given** indisponibilidade ou fila excessiva do dispositivo, **When** o prazo
-   configurado expira, **Then** a etapa é marcada como não executada sem
-   bloquear as demais entregas.
+1. **Given** um circuito aprovado em execução e transpilação mas sem asserções,
+   **When** o relatório é gerado, **Then** ele declara que a corretude funcional
+   não foi verificada.
+2. **Given** um circuito que satisfaz todas as asserções fornecidas, **When** o
+   relatório é gerado, **Then** ele enumera as asserções verificadas e não
+   afirma corretude além delas.
+3. **Given** execução em dispositivo físico, **When** o resultado é apresentado,
+   **Then** é rotulado como comportamento sob ruído, não como verificação.
 
 ---
 
-### User Story 6 — Demonstrar o sistema interativamente para a defesa (Priority: P6)
+### US5 — Executar o circuito (Priority: P2)
 
-O pesquisador mostra o sistema funcionando ao vivo: insere uma descrição de
-circuito, observa a geração, vê cada um dos quatro vereditos de verificação e
-acompanha o laço de correção ao longo das iterações quando falha.
+O usuário executa o circuito gerado em simulador e, opcionalmente, em
+dispositivo quântico real, e vê os resultados.
 
-**Why this priority**: comunica a contribuição muito melhor do que tabelas de
-métricas, mas não responde a nenhuma das hipóteses. É estritamente opcional,
-começa somente depois de M5 (análise completa) e é explicitamente condicional
-ao tempo restante — se não ocorrer, nada na dissertação fica enfraquecido. Não
-deve consumir tempo antes que a matriz experimental esteja completa.
-
-**Independent Test**: submeter uma descrição ao vivo na interface de
-demonstração e confirmar que os quatro vereditos de camada aparecem
-corretamente para uma execução que acerta de primeira, para uma que exige
-correção ao longo de iterações, e para uma que esgota `MAX_ITER`.
+**Why this priority**: fecha o ciclo do produto — o usuário não só recebe
+código, mas vê o circuito rodar. A execução em hardware é opcional e depende de
+credencial e fila externa.
 
 **Acceptance Scenarios**:
 
-1. **Given** uma descrição em linguagem natural, **When** submetida, **Then**
-   o código gerado e os quatro vereditos de camada são exibidos.
-2. **Given** uma tarefa que falha e é corrigida, **When** executa, **Then**
-   cada iteração é exibida com o diagnóstico que motivou a tentativa seguinte.
-3. **Given** uma tarefa que esgota o `MAX_ITER`, **When** o limite é atingido,
-   **Then** a falha é exibida explicitamente — nunca uma última tentativa
-   apresentada como resultado.
+1. **Given** um circuito aprovado, **When** executado em simulador, **Then** a
+   distribuição de medidas é apresentada.
+2. **Given** credencial de dispositivo físico, **When** o circuito é submetido,
+   **Then** o resultado medido é apresentado ao lado do simulado, com a
+   degradação de fidelidade visível.
+3. **Given** indisponibilidade do dispositivo, **When** o prazo expira, **Then**
+   a etapa é reportada como não executada, sem bloquear o resto.
+
+---
+
+### US6 — Usar o sistema por interface (Priority: P2) 🆕
+
+O usuário opera o sistema por uma interface: escreve a descrição e as
+asserções, acompanha as tentativas, vê o relatório de garantia e os resultados
+de execução.
+
+**Why this priority**: sem interface, o produto é uma biblioteca. Com ela, é um
+produto.
+
+**Acceptance Scenarios**:
+
+1. **Given** uma descrição submetida pela interface, **When** o sistema
+   trabalha, **Then** o progresso das tentativas é visível, não apenas o
+   resultado final.
+2. **Given** uma tarefa que falha, **When** o limite é atingido, **Then** a
+   falha e o histórico de diagnósticos são exibidos.
+3. **Given** um circuito gerado, **When** o usuário quer reaproveitá-lo,
+   **Then** consegue copiar o código e o relatório de garantia.
+
+---
+
+### US7 — Garantir que mudanças não degradam o sistema (Priority: P2) 🆕
+
+O mantenedor executa a suíte de regressão sobre as tarefas de referência antes
+de adotar qualquer mudança em prompt, corpus, modelo ou pipeline.
+
+**Why this priority**: sistemas sobre LLM degradam em silêncio. Esta história
+transforma as 120 tarefas já construídas no ativo de qualidade do produto.
+
+**Acceptance Scenarios**:
+
+1. **Given** a suíte de regressão, **When** executada, **Then** produz taxa de
+   sucesso por tier com `run_id`, seeds e versões registradas.
+2. **Given** duas execuções da suíte, **When** comparadas, **Then** as
+   diferenças por tarefa são apresentadas, não apenas o agregado.
+3. **Given** uma referência da suíte, **When** o processo de validação roda,
+   **Then** referências não verificadas bloqueiam a execução.
 
 ---
 
 ### Edge Cases
 
-- Descrição ambígua ou impossível de satisfazer → o sistema deve recusar
-  explicitamente, não produzir artefato plausível e errado. Casos óbvios
-  (entidades faltantes, restrições contraditórias) são sinalizados pelo
-  `planner` antes de qualquer tentativa de geração; ambiguidade mais sutil
-  segue o loop iterativo normal até `MAX_ITER` e reporta falha padrão.
-- Artefato funcionalmente correto mas com convenção de ordenação invertida em
-  relação à referência → categoria de veredito própria, distinta de erro.
-- Artefato correto a menos de fator de fase global → deve ser aceito.
-- Artefato que tenta acessar recursos externos ao ambiente de execução → deve
-  ser bloqueado antes da execução.
-- Referência de avaliação incorreta → deve ser detectada por verificação
-  independente antes de qualquer rodada.
-- Descrição cuja solução excede a capacidade de simulação disponível → rejeitar
-  na entrada, não falhar durante a execução. O `planner` extrai a contagem de
-  qubits declarada ou inferível dos requisitos e rejeita antes de qualquer
-  chamada ao `generator`, caso exceda o teto configurado.
-- Falha transitória de infraestrutura durante uma execução da matriz (rate
-  limit, erro 5xx ou timeout do gerador externo) → o sistema tenta novamente
-  com backoff exponencial limitado; se persistir, marca a execução como falha
-  de infraestrutura e prossegue com as demais execuções, sem abortar a rodada
-  nem contá-la como falha do gerador.
+- Descrição ambígua ou impossível → recusa explícita, não artefato plausível.
+- Asserção que contradiz a descrição → reportar o conflito, não escolher um
+  lado.
+- Circuito correto sob decomposição alternativa à esperada → aprovar; o produto
+  verifica propriedades, não semelhança com uma implementação de referência.
+- Circuito que excede a capacidade de simulação → recusar na entrada.
+- Código gerado que tenta acessar recursos externos → bloquear antes de
+  executar.
+- Dispositivo físico indisponível → degradar sem bloquear.
 
 ---
 
@@ -195,172 +205,149 @@ correção ao longo de iterações, e para uma que esgota `MAX_ITER`.
 
 ### Functional Requirements
 
-**Geração e verificação**
+**Geração e correção**
 
-- **FR-001**: O sistema DEVE aceitar uma descrição em linguagem natural e
-  produzir um artefato de circuito acompanhado de veredito de verificação.
-- **FR-002**: O sistema DEVE verificar cada artefato em camadas ordenadas —
-  executabilidade, viabilidade no alvo, corretura funcional e consumo de
-  recursos — e reportar o resultado de cada camada separadamente.
-- **FR-003**: O veredito de corretura funcional DEVE ser produzido por
-  verificação determinística e reexecutável, NUNCA por julgamento de modelo de
-  linguagem.
-- **FR-004**: O sistema DEVE aceitar como correto um artefato que difira da
-  referência apenas por fator de fase global.
-- **FR-005**: O sistema DEVE distinguir divergência de convenção de ordenação de
-  divergência funcional, reportando-as como categorias distintas.
-- **FR-006**: O sistema DEVE comparar consumo de recursos entre artefato gerado e
-  referência sob condições idênticas de preparação.
+- **FR-001**: O sistema DEVE aceitar descrição em linguagem natural e produzir
+  um circuito acompanhado de relatório de garantia.
+- **FR-002**: O sistema DEVE verificar executabilidade e viabilidade na
+  topologia alvo, reportando cada uma separadamente.
+- **FR-003**: Ao detectar falha, o sistema DEVE classificar sua causa e escolher
+  a ação corretiva correspondente.
+- **FR-004**: O sistema DEVE encerrar após um número máximo configurável de
+  tentativas e reportar falha explícita.
+- **FR-005**: O sistema DEVE registrar todas as tentativas, incluindo as
+  malsucedidas.
 
-**Correção iterativa**
+**Consulta a fontes**
 
-- **FR-007**: Ao detectar falha, o sistema DEVE classificar sua causa e escolher
-  a ação corretiva correspondente, em vez de repetir a mesma tentativa.
-- **FR-008**: O sistema DEVE encerrar após um número máximo configurável de
-  tentativas e reportar falha explícita, sem apresentar resultado não verificado
-  como válido.
-- **FR-009**: O sistema DEVE registrar todas as tentativas de uma execução,
-  incluindo as malsucedidas.
-- **FR-010**: O sistema DEVE oferecer ponto de revisão humana opcional,
-  desativado por padrão em execuções experimentais.
+- **FR-006**: O sistema DEVE consultar fontes versionadas antes de gerar,
+  associando a cada trecho a versão e o status de obsolescência.
+- **FR-007**: Material obsoleto DEVE chegar ao gerador rotulado como não
+  utilizável, com a substituição indicada.
+- **FR-008**: O sistema DEVE combinar busca por identificador literal e por
+  intenção.
 
-**Consulta a fontes de referência**
+**Verificação sem referência**
 
-- **FR-011**: O sistema DEVE consultar fontes de referência versionadas antes de
-  gerar, associando a cada trecho recuperado a versão a que corresponde e se está
-  obsoleto.
-- **FR-012**: O sistema DEVE preservar a unidade semântica do material
-  recuperado, mantendo íntegras as unidades que descrevem uma mesma construção.
-- **FR-013**: O sistema DEVE combinar busca por correspondência literal de
-  identificador e busca por similaridade de intenção.
-- **FR-014**: Material obsoleto recuperado DEVE chegar ao gerador rotulado como
-  não utilizável, em vez de simplesmente omitido.
-- **FR-015**: O sistema DEVE separar material de referência de interface de
-  material descritivo de algoritmo, entregando-os ao gerador de forma
-  distinguível.
+- **FR-009**: O sistema DEVE extrair da descrição os requisitos verificáveis
+  (número de qubits, conjunto de portas, restrição de topologia) e verificá-los
+  contra o circuito gerado.
+- **FR-010**: O sistema DEVE aceitar asserções declaradas pelo usuário sobre o
+  comportamento esperado e avaliá-las por simulação.
+- **FR-011**: Cada asserção DEVE ser avaliada e reportada individualmente.
+- **FR-012**: Asserção violada DEVE entrar no loop de correção como diagnóstico,
+  nomeando a asserção.
+- **FR-013**: Asserção mal formada DEVE ser recusada explicitamente, nunca
+  ignorada.
+- **FR-014**: Todo veredito DEVE ser produzido por verificação determinística,
+  NUNCA por julgamento de modelo de linguagem.
 
-**Avaliação**
+**Relatório de garantia**
 
-- **FR-016**: O conjunto de avaliação DEVE cobrir níveis crescentes de
-  dificuldade, do elementar ao dependente de restrições do alvo físico.
-- **FR-017**: Todo item canônico do conjunto de avaliação DEVE ter variante
-  perturbada pareada.
-- **FR-018**: Toda referência de avaliação DEVE ser verificada por construção
-  independente e checagem de propriedades, em processo automatizado e bloqueante.
-- **FR-019**: O sistema DEVE executar a matriz completa de geradores × condições
-  × itens × seeds e persistir cada execução em registro imutável.
-- **FR-020**: O sistema DEVE suportar condições de controle que desabilitem
-  isoladamente a consulta a fontes e a correção iterativa.
-- **FR-021**: O sistema DEVE reportar métricas de corretude em camadas separadas,
-  jamais agregadas em índice único.
-- **FR-022**: O sistema DEVE reportar custo e latência por execução resolvida.
-- **FR-023**: O sistema DEVE reportar a diferença de desempenho entre itens
-  canônicos e perturbados, por gerador e condição.
-- **FR-024**: O sistema DEVE permitir classificação das falhas segundo taxonomia
-  fechada, com registro de concordância entre anotadores; discordâncias na
-  amostra de dupla anotação DEVEM ser resolvidas por um terceiro anotador
-  independente, com decisão por maioria.
+- **FR-015**: Toda saída DEVE vir acompanhada da enumeração do que foi
+  verificado e do que não foi.
+- **FR-016**: Na ausência de asserções, o sistema DEVE declarar que a corretude
+  funcional não foi verificada.
+- **FR-017**: O sistema NÃO PODE apresentar aprovação em executabilidade e
+  restrições como equivalente a corretude.
 
-**Execução segura e reprodutibilidade**
+**Execução**
 
-- **FR-025**: Artefatos gerados DEVEM ser executados isoladamente do processo
-  principal, com limite de tempo e restrição de acesso a recursos externos.
-- **FR-026**: Toda execução DEVE registrar identificador de rodada, seed, versões
-  de dependência e revisão de código.
-- **FR-027**: Uma rodada completa DEVE ser reproduzível a partir de um único
-  arquivo de configuração versionado.
-- **FR-028**: O sistema DEVE reaproveitar respostas já obtidas para entradas
-  idênticas, evitando custo em reexecuções de análise.
-- **FR-029**: O sistema DEVE permitir retomar uma rodada da matriz
-  interrompida sem reexecutar combinações de gerador, condição, tarefa e seed
-  que já possuam registro persistido.
-- **FR-030**: O sistema DEVE sinalizar como não-satisfazível, antes de
-  qualquer tentativa de geração, descrições com entidades faltantes ou
-  restrições contraditórias identificáveis a partir dos requisitos extraídos;
-  ambiguidade não detectável nesta etapa segue o fluxo normal de correção
-  iterativa até o limite de tentativas.
-- **FR-031**: O sistema DEVE rejeitar, antes de qualquer chamada ao gerador,
-  descrições cuja contagem de qubits extraída pelo planner exceda a
-  capacidade de simulação configurada.
+- **FR-018**: O sistema DEVE executar o circuito em simulador e apresentar a
+  distribuição de medidas.
+- **FR-019**: O sistema DEVE suportar execução em dispositivo físico quando há
+  credencial, degradando sem bloquear quando indisponível.
+- **FR-020**: Resultado de dispositivo físico DEVE ser rotulado como
+  comportamento sob ruído, nunca como verificação.
+- **FR-021**: Código gerado DEVE executar isoladamente do processo principal,
+  com limite de tempo e restrição de acesso externo.
+
+**Interface**
+
+- **FR-022**: A interface DEVE permitir submeter descrição e asserções.
+- **FR-023**: A interface DEVE exibir o progresso das tentativas, não apenas o
+  resultado final.
+- **FR-024**: A interface DEVE exibir o relatório de garantia junto do código.
+
+**Regressão**
+
+- **FR-025**: O sistema DEVE executar a suíte de tarefas de referência e
+  reportar taxa de sucesso por tier.
+- **FR-026**: Toda execução da suíte DEVE registrar identificador de rodada,
+  seeds e versões de dependência.
+- **FR-027**: O sistema DEVE comparar duas execuções da suíte por tarefa, não só
+  no agregado.
+- **FR-028**: Referências da suíte DEVEM ser verificadas por construção
+  independente, em processo bloqueante.
 
 ### Key Entities
 
-- **Descrição de tarefa**: enunciado em linguagem natural, nível de dificuldade,
-  restrições, referência associada, marcação de variante perturbada.
-- **Artefato**: o circuito produzido em uma tentativa.
-- **Referência**: a resposta esperada, com seu tipo de critério de comparação e
-  tolerância.
-- **Veredito**: resultado por camada de verificação, com métricas associadas.
-- **Registro de erro**: iteração, camada, categoria e diagnóstico estruturado.
-- **Decisão corretiva**: ação escolhida, justificativa e orientação para a
-  próxima tentativa.
-- **Execução**: uma combinação de gerador, condição, tarefa e seed, com todo o
-  histórico e custo.
-- **Unidade de referência recuperada**: trecho, origem, versão, marcação de
-  obsolescência e relevância.
+- **Descrição** — o pedido em linguagem natural.
+- **Asserção** — propriedade declarada pelo usuário, avaliável por simulação.
+- **Requisito extraído** — restrição inferida da descrição (qubits, portas,
+  topologia).
+- **Circuito** — o artefato produzido.
+- **Relatório de garantia** — o que foi verificado, como, e o que não foi.
+- **Registro de erro** — iteração, camada, categoria, diagnóstico estruturado.
+- **Tarefa de referência** — item da suíte de regressão, com sua referência
+  verificada.
+- **Execução de regressão** — uma rodada da suíte, com versões e seeds.
 
 ---
 
 ## Success Criteria
 
-- **SC-001**: Dado um conjunto de descrições com referência conhecida, o sistema
-  devolve veredito verificável para 100% delas — incluindo os vereditos de falha.
-- **SC-002**: A taxa de artefatos que passam pela verificação de executabilidade
-  na condição completa supera a da geração direta em pelo menos 20 pontos
-  percentuais absolutos.
-- **SC-003**: A taxa de artefatos funcionalmente corretos na condição completa
-  supera a da condição sem correção iterativa em pelo menos 15 pontos percentuais
-  absolutos.
-- **SC-004**: A taxa de uso de construções obsoletas cai pelo menos 70% com a
-  consulta a fontes ativada, em relação à geração direta.
-- **SC-005**: O gerador local alcança ao menos 80% da corretude funcional do
-  gerador de referência quando ambos operam na condição completa.
-- **SC-006**: A mediana de tentativas até sucesso permanece igual ou inferior a 3
-  entre as execuções bem-sucedidas.
-- **SC-007**: A razão de consumo de recursos entre artefato gerado e referência
-  não piora entre a condição de geração direta e a condição completa.
-- **SC-008**: A ablação atribui o ganho a componentes isolados com sobreposição
-  de intervalo de variação entre seeds inferior a 50%.
-- **SC-009**: 100% das referências de avaliação passam pela verificação
-  independente antes da primeira rodada experimental.
-- **SC-010**: Uma rodada arquivada é reproduzida a partir de sua configuração com
-  divergência de métricas primárias inferior a 2 pontos percentuais.
-- **SC-011**: A classificação de falhas atinge concordância entre anotadores
-  (Cohen's κ) igual ou superior a 0,70.
-- **SC-012**: A diferença entre itens canônicos e perturbados é reportada para
-  todas as combinações de gerador e condição.
+- **SC-001**: Em 95% das descrições válidas, a saída executa e transpila para a
+  topologia alvo, ou reporta falha explícita.
+- **SC-002**: A taxa de uso de construções obsoletas fica abaixo de 5%.
+- **SC-003**: Asserções conhecidamente verdadeiras são aprovadas e
+  conhecidamente falsas são reprovadas em 100% dos casos de teste.
+- **SC-004**: Nenhuma saída afirma corretude funcional sem que ao menos uma
+  asserção tenha sido verificada.
+- **SC-005**: Um usuário sem familiaridade com o sistema consegue gerar um
+  circuito com asserção verificada em menos de 5 minutos pela interface.
+- **SC-006**: A mediana de tentativas até sucesso é igual ou inferior a 3.
+- **SC-007**: A suíte de regressão executa completa em menos de 3 horas.
+- **SC-008**: Duas execuções da suíte sobre o mesmo código e versões divergem em
+  menos de 5% das tarefas.
+- **SC-009**: 100% das referências da suíte passam pela verificação
+  independente.
 
 ---
 
 ## Assumptions
 
-- O conjunto de avaliação será construído pelo autor; não existe benchmark
-  público adequado com oráculo executável para este escopo.
-- A capacidade de simulação disponível localmente limita os itens de avaliação a
-  um porte modesto; nenhum item excede esse limite.
-- O acesso a dispositivo físico é gratuito porém sujeito a fila imprevisível —
-  por isso US4 é opcional.
-- US6 depende apenas de tempo restante após M5; é estritamente opcional e não
-  enfraquece a dissertação se não ocorrer.
-- Geradores acessados por serviço externo têm custo monetário; o orçamento é
-  restrição real e exige piloto prévio.
-- Os enunciados de avaliação são gerados pelo autor e não são adversariais; a
-  execução isolada mira segurança operacional razoável, não resistência a
-  ataque.
-- Nenhuma versão de biblioteca alvo muda durante a janela experimental; se mudar,
-  a matriz é reexecutada.
-
-## Dependencies
-
-- Fontes públicas de documentação versionada das bibliotecas alvo.
-- Acesso a pelo menos dois geradores externos e um gerador executável localmente.
-- Ambiente de simulação com aceleração por GPU disponível localmente.
-- Acesso a plano gratuito de dispositivo quântico físico (apenas US4).
+- O usuário do produto sabe descrever o circuito que quer e formular ao menos
+  uma propriedade esperada — não precisa saber implementá-lo.
+- A suíte de referência foi construída pelo autor; não existe benchmark público
+  adequado.
+- A capacidade de simulação local limita os circuitos a porte modesto.
+- O acesso a dispositivo físico é gratuito e sujeito a fila imprevisível.
+- As descrições de entrada não são adversariais; o isolamento mira segurança
+  operacional razoável, não resistência a ataque.
 
 ## Out of Scope
 
-- Busca por vantagem quântica ou execução em escala.
-- Treinamento ou ajuste fino de qualquer gerador.
+- Vantagem quântica ou execução em escala.
+- Treinamento ou ajuste fino de gerador.
 - Proposição de novo algoritmo quântico.
 - Mitigação de erro em dispositivo físico.
-- Uso em produção ou hardening contra código adversarial.
+- Verificação de corretude na ausência de asserção ou referência — o produto
+  informa a lacuna, não a preenche.
+- Operação multiusuário, autenticação, ou implantação em produção.
+
+---
+
+## Herança da v1
+
+Permanece válido e construído: cascata de validação, loop de correção,
+recuperação híbrida versionada, 120 tarefas com referências verificadas,
+ambiente containerizado.
+
+Removido com a mudança de escopo: as cinco condições experimentais, a ablação,
+as hipóteses H1–H5, o controle de contaminação como instrumento, a análise de
+concordância entre anotadores.
+
+Os achados metodológicos registrados em `dissertation-notes.md` permanecem
+material do relatório — como lições de engenharia, não como resultados de
+pesquisa.
