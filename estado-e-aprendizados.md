@@ -1,6 +1,14 @@
 # Estado do projeto e aprendizados
 
-**Feature**: `001-qcircuit-agent` | **Período**: 11/08/2026 – 09/09/2026 (semanas 1–4 de 12)
+**Feature**: `001-qcircuit-agent` | **Período**: 11/08/2026 – presente
+
+**Migração de escopo em 2026-09-11** (v1→v2, ver
+`specs/001-qcircuit-agent/MIGRATION.md`): o entregável passou de
+dissertação com experimento controlado para **produto com relatório**. O
+sistema construído permanece; o aparato de medição (condições C1-C5,
+ablação, hipóteses H1-H5, taxonomia de erros com κ) sai. Este documento
+descreve o estado ATUAL (pós-migração) — para o histórico de como se
+chegou aqui, ver `MIGRATION.md` e o git log de `research.md`/`spec.md`.
 
 **Este documento é um SNAPSHOT de estado** — o que está construído, o que
 está pendente, riscos vivos no momento em que foi escrito. É reescrito
@@ -18,19 +26,32 @@ divergirem.
 
 ## 1. Onde o projeto está
 
-| Fase | Escopo | Status |
-|---|---|---|
-| 1–2 | Setup e fundação | Completa |
-| 3 (US1) | Validadores, nós, grafo | Completa — MVP funcional |
-| 4 (US2) | Recuperação híbrida | Completa — portão M1 aprovado |
-| 5 (dataset) | 60 tarefas canônicas + oráculos | **Completa — 60/60 verificados** |
-| 5 (T048) | 60 variantes perturbadas | **Completa — 60/60 verificados, 120/120 oráculos no total** |
-| 6 (US3) | Matriz experimental | Não iniciada |
+**Construído e preservado integralmente pela migração** (nenhum código
+descartado — ver `MIGRATION.md` §1):
 
-O item de maior risco do projeto — o dataset com oráculos verificados
-independentemente — está concluído quatro semanas antes do previsto no
-cronograma original (que o colocava nas semanas 5–6), e agora inclui tanto
-o conjunto canônico quanto o perturbado.
+| Escopo | Status |
+|---|---|
+| US1 — gerar circuito que executa e transpila | Completa — MVP funcional |
+| US2 — recuperação híbrida versionada, sem API obsoleta | Completa — portão M1 aprovado |
+| Suíte de 120 tarefas com referências verificadas (60 canônicas + 60 perturbadas) | **Completa — 120/120 verificadas** |
+| Ambiente containerizado, pool de workers | Completa |
+
+**Novo em v2, ainda não iniciado** — ordem de prioridade de
+`MIGRATION.md` §3 (US3 é o caminho crítico: sem ela, corretude funcional só
+é verificável quando o usuário já tem a resposta):
+
+| História | Escopo | Status |
+|---|---|---|
+| US3 — verificação sem referência | gramática de asserção, avaliador por simulação, integração ao loop | Não iniciada |
+| US4 — relatório de garantia | estrutura verificado/como/não verificado, teste anti-overclaim | Não iniciada |
+| US6 — interface | submissão, progresso, exibição código+relatório | Não iniciada (P2 por decisão — ver riscos) |
+| US7 — regressão | runner com `run_id`/seeds/versões, comparação entre execuções | Não iniciada |
+
+O item de maior risco do projeto v1 — o dataset com oráculos verificados
+independentemente — segue concluído e agora sob escopo novo: era
+instrumento experimental, é suíte de regressão (`MIGRATION.md` §2). As 60
+variantes perturbadas, por sua vez, eram controle de contaminação de
+treino e passam a ser teste de robustez.
 
 ### Cobertura do dataset canônico
 
@@ -116,42 +137,74 @@ lacuna de corpus específica que foi corrigida.
 | Módulos sem cobertura de teste (auditoria feita, maioria dos gaps ainda sem teste) | `resource.py` ganhou `tests/unit/test_resource.py`; outros módulos identificados na auditoria seguem sem teste | escrever sob demanda, não em bloco |
 | Truncamento em 4.000 chars no chunking | implementação parcial do D6; corta exemplos de uso | cresce com o corpus |
 | `HallucinatedSymbol` para import faltando roteia para `retry_retrieval` | reconsultar não corrige esquecimento de import | cosmético |
-| VQE/QAOA com parâmetros fixos | medem construção de ansatz, não otimização (ver `report-notes.md` § Threats to validity) | registrado; relevante para T064 |
+| VQE/QAOA com parâmetros fixos | medem construção de ansatz, não otimização (ver `report-notes.md` § Threats to validity) — o caveat sobrevive à migração, a referência a T064 (removida) não | registrado; relevante para o relatório, não mais para uma taxonomia formal |
 
 ---
 
 ## 7. Riscos vivos
 
-As perguntas em si estão em `report-notes.md` § Open questions for
-the advisor (título do projeto, reunião com o orientador, segundo anotador
-para κ, calibração de descarte das perturbadas D12) — aqui só o prazo em
-que cada uma vira bloqueio, que é informação de estado, não de redação:
+**Um risco inteiro foi eliminado pela migração**: a segunda anotação
+independente para o cálculo de κ (T064) dependia de disponibilidade de
+terceiro e travava na semana 11 se não resolvida — T064 não existe mais em
+v2 (`MIGRATION.md`: "a remoção de T064 elimina o risco mais frágil do
+projeto"). O mesmo vale para a calibração de descarte de perturbadas via
+piloto (D12): sem condição C5 nem T055, não há mais essa decisão a tomar
+antes de prosseguir — as 60 variantes já construídas valem como estão.
 
-| Pergunta em aberto | Vira bloqueio quando |
+Riscos que permanecem, mais os quatro que a própria migração introduz
+(`MIGRATION.md` §7):
+
+| Risco | Nota |
 |---|---|
-| Segunda anotação da T064 (κ) | semana 11, se não resolvido antes |
-| Reunião com o orientador | no congelamento M2 — último ponto barato para mudar escopo |
-| Calibração de descarte das perturbadas (D12) | no piloto, T055 (não antes — decisão não pode ser antecipada) |
-| Nome do projeto | sem prazo rígido, mas quanto mais tarde, mais lugares para atualizar (repositório, dissertação, citações) |
+| Reunião com o orientador ainda pendente | agora é sobre revisar o escopo v2, não o desenho experimental v1 — M2 (congelamento de dataset/geradores) já tem sua barra técnica satisfeita (120/120 verificado), falta só a validação de escopo |
+| Nome do projeto | sem prazo rígido — três em circulação, ver `report-notes.md` § Open questions |
+| **Escopo inflado por liberdade** (novo) | sair da matriz experimental abre ~8 semanas; a tentação é adicionar funcionalidade — as histórias novas (US3/US4/US6/US7) já são o suficiente, o produto precisa estar PRONTO, não completo |
+| **A interface virar o projeto** (novo) | US6 é P2 por decisão deliberada — um produto bonito que verifica pouco é o oposto do que este trabalho defende |
+| **Perder a disciplina de verificação** (novo) | sem banca esperando rigor experimental, a pressão por evidência cai — Princípios I e IV (v2) existem para isso: a verificação determinística É o produto, não um processo a mais |
+| **A promessa exceder a garantia** (novo, o maior) | um produto de verificação que sugere garantia que não tem é pior que nenhum — Princípio II (v2) e US4 existem contra isso especificamente |
 
 ---
 
 ## 8. Próximos passos
 
-1. **M2 — congelamento de escopo.** Dataset e conjunto de geradores
-   imutáveis — dataset (120/120 tarefas) já pronto para isso
-2. Reunião com o orientador antes do congelamento
-3. T053–T055 — condições C1–C5 e piloto de custo, que fecha D8, D9, D12
-   (inclui a calibração de descarte das 60 perturbadas) e o orçamento de API
-4. T058 — matriz completa
+Ordem de prioridade de `MIGRATION.md` §3 ("Novas, em ordem de prioridade"):
+
+1. **US3 — verificação sem referência** (caminho crítico): gramática mínima
+   de asserção (amplitude em estados de base, determinismo de medida,
+   autoestado de operador, restrição de portas) → avaliador determinístico
+   por simulação → conversão dos `Requirement` já extraídos pelo `planner`
+   em checagens executáveis → integração ao loop (asserção violada vira
+   `ErrorRecord` nomeado) → recusa explícita de asserção mal formada →
+   testes com asserções conhecidamente verdadeiras/falsas
+2. **US4 — relatório de garantia**: estrutura verificado/como/não
+   verificado → declaração explícita quando não há asserção → teste que
+   impede afirmar corretude sem asserção verificada
+3. **US6 — interface** (P2): submissão de descrição+asserções → progresso
+   das tentativas visível → exibição de código e relatório juntos
+4. **US7 — regressão**: runner da suíte com `run_id`/seeds/versões →
+   comparação entre duas execuções por tarefa
+
+Tarefas v1 preservadas com escopo novo (não recomeçam do zero): T054 →
+persistência de execuções de regressão; T059–T061 → métricas da suíte;
+T066–T069 → execução em hardware como funcionalidade (não mais como
+tentativa de US4 v1).
+
+Reunião com o orientador para validar o escopo v2 continua sendo o passo
+que deveria acontecer antes de ir longe nas histórias novas — o
+congelamento M2 (dataset + geradores imutáveis) já está tecnicamente
+satisfeito, falta a validação humana.
 
 ---
 
 ## 9. O que este projeto já produziu de citável
 
-Independentemente do resultado do experimento principal — o dataset (120
-tarefas, canônicas e perturbadas, com oráculos verificados
-independentemente) e os achados F1–F5 de `report-notes.md` § Findings.
-Nenhum depende do sinal do resultado principal, o que satisfaz o Princípio
-VI: o trabalho permanece defensável mesmo se a hipótese central for
-refutada.
+O dataset (120 tarefas, canônicas e perturbadas, com oráculos verificados
+independentemente) e os achados F1–F5 de `report-notes.md` § Findings —
+reenquadrados como lições de engenharia de produto, não resultados de
+pesquisa (`MIGRATION.md` §6). Nenhum depende de rodar a matriz
+experimental, que não existe mais: o valor do trabalho não estava
+condicionado ao sinal de um experimento que a migração tornou
+desnecessário — é o que `MIGRATION.md` chama de "um relatório de produto
+que mostra por que o experimento controlado foi abandonado, e o que se
+aprendeu no caminho, é mais honesto e mais interessante que um que finge
+ter começado assim".
