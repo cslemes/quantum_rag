@@ -441,7 +441,15 @@ resolve a ambiguidade tornando os parâmetros parte do enunciado, não algo a
 derivar. Isto é **estreitar o enunciado**, não alargar o oráculo — a
 alternativa (aceitar qualquer `gamma`/`beta` "razoável") exigiria um oráculo
 de otimização/qualidade-de-corte muito mais complexo, fora de escopo aqui.
-**Consequência a registrar para a análise de erro (T064)**: com `gamma`/
+**Consequência a registrar para a análise de erro (T064)** — *T064 (taxonomia
+com dupla anotação e κ) foi removida na migração v1→v2 (2026-09-11,
+`MIGRATION.md`); a referência abaixo é histórica. O CAVEAT em si (taxa de
+sucesso alta não é evidência de capacidade de otimização) continua válido
+para a suíte de regressão v2 — se o relatório mostrar essas tarefas
+passando, ainda não deve ser lido como "o sistema otimiza QAOA/VQE", só que
+"o sistema reproduz fielmente um ansatz já especificado"; só o MECANISMO de
+registrar isso (uma taxonomia formal com anotação dupla entre condições
+experimentais) é que não se aplica mais*: com `gamma`/
 `beta` fixos, estas 3 tarefas medem fidelidade de CONSTRUÇÃO do ansatz, não
 capacidade de otimização de QAOA — uma escolha de escopo legítima, mas que
 muda o que a tarefa de fato testa. Uma taxa alta de sucesso aqui não deve ser
@@ -568,7 +576,8 @@ QAOA, e pelo mesmo motivo estrutural: `gamma`/`beta` fixos em QAOA e `theta`
 fixo aqui removem a liberdade de escolha de parâmetro que tornaria a tarefa
 "encontre bons parâmetros" em vez de "construa este circuito específico
 corretamente". Uma taxa alta de sucesso nestas tarefas (VQE H₂ e QAOA) NÃO
-deve ser lida, na análise de erro (T064) ou na dissertação, como evidência de
+deve ser lida, na análise de erro (T064 — **superada na migração v1→v2**,
+ver a nota acima nesta mesma seção) ou no relatório, como evidência de
 que o gerador sabe otimizar VQE/QAOA — só que sabe reproduzir fielmente um
 circuito parametrizado já especificado. Uma tarefa que testasse otimização de
 verdade exigiria um loop de otimização clássica fora do sandbox (T3/T4? — não
@@ -1158,8 +1167,23 @@ inteiramente excluída das 3 tarefas de VQE (T2), a única exclusão de
    cru em todo o módulo e generalizar isso ficou fora do escopo desta
    rodada (D3k tem o reprodutor mínimo e a análise completa).
 
-**Advertência explícita sobre análise, registrada agora enquanto o raciocínio
-das exclusões está fresco**: a distribuição de família NÃO é balanceada por
+> **SUPERADA em 2026-09-11** (migração v1→v2, ver `MIGRATION.md`): o
+> parágrafo abaixo é sobre `delta_perturbacao` como métrica INFERENCIAL —
+> T063, FR-023, comparação por gerador e por condição experimental (C1-C5)
+> — nenhum dos quais existe em v2. Preservado sem alteração porque o
+> RACIOCÍNIO sobre tamanho de célula continua correto e reaproveitável: se
+> o relatório v2 quiser reportar taxa de sucesso da suíte de robustez
+> QUEBRADA POR FAMÍLIA de perturbação (em vez de agregada), a mesma
+> advertência se aplica de forma descritiva — a família `composition` só
+> tem 9 tarefas no total, então uma quebra por família dentro de um único
+> tier ainda seria uma amostra pequena, mesmo sem C1-C5 nem T063 por trás
+> dela. O que não sobrevive à migração é o vocabulário de INFERÊNCIA
+> ESTATÍSTICA entre condições ("teste de hipótese sobre diferença real
+> entre famílias") — a suíte de regressão v2 reporta taxa de sucesso, não
+> testa hipóteses.
+
+**Advertência explícita sobre análise (v1), registrada enquanto o raciocínio
+das exclusões estava fresco**: a distribuição de família NÃO é balanceada por
 desenho — é o resultado de quais famílias são estruturalmente válidas para
 cada tarefa individual, checado caso a caso. Isso tem uma consequência real
 para T063 (cálculo de `delta_perturbacao`, FR-023): os efeitos de FAMÍLIA e
@@ -1356,25 +1380,52 @@ mais eficaz que ausência.
 
 ---
 
-## D8 — Teto de iterações [PENDENTE-PILOTO]
+## D8 — Teto de iterações [PENDENTE-PILOTO] — **SUPERADA (migração v1→v2)**
 
-**Decisão preliminar**: `MAX_ITER = 5`, validar saturação em T056.
+> **SUPERADA em 2026-09-11** (migração v1→v2, ver `MIGRATION.md`): a
+> validação de saturação em T056 pressupunha o piloto de custo da matriz
+> experimental, que não existe mais em v2 — não há mais "1.800 execuções ×
+> 2,5 chamadas" para justificar minimizar iterações por custo agregado.
+> `MAX_ITER` continua existindo como parâmetro do sistema; o que muda é
+> COMO calibrá-lo: pela suíte de regressão (SC-007 — suíte completa em
+> menos de 3h — e a taxa de sucesso por tier, FR-025), não por um piloto
+> dedicado medindo onde a curva de correção satura sob custo de API. A
+> razão original (não truncar o efeito que se quer medir) não se aplica
+> mais — v2 não está medindo um efeito de pesquisa, está calibrando um
+> parâmetro de produto. Preservada abaixo, sem alteração, como registro de
+> por que `MAX_ITER=5` foi a escolha inicial em v1 — o raciocínio é
+> material do relatório, não uma decisão ainda em vigor.
 
-**Razão**: valor escolhido para não truncar o efeito que o experimento quer
-medir. Se o piloto mostrar que a curva satura em 3, reduzir — cada iteração a
-mais custa dinheiro em 5.400 execuções e não altera a conclusão.
+**Decisão preliminar (v1)**: `MAX_ITER = 5`, validar saturação em T056.
+
+**Razão (v1)**: valor escolhido para não truncar o efeito que o experimento
+quer medir. Se o piloto mostrar que a curva satura em 3, reduzir — cada
+iteração a mais custa dinheiro em 5.400 execuções e não altera a conclusão.
 
 ---
 
-## D9 — Idioma dos prompts [PENDENTE-PILOTO]
+## D9 — Idioma dos prompts [PENDENTE-PILOTO] — **SUPERADA (migração v1→v2)**
 
-**Decisão preliminar**: prompts de sistema em inglês, enunciados de tarefa em
-inglês, com braço de controle em português no piloto.
+> **SUPERADA em 2026-09-11** (migração v1→v2, ver `MIGRATION.md`): o "braço
+> de controle em português no piloto" era uma condição experimental —
+> comparar recall/taxa de sucesso entre um braço inglês e um braço
+> português é uma pergunta de PESQUISA (o idioma da consulta afeta o
+> sistema? por quanto?), não uma decisão de produto. Em v2 não há braço de
+> controle a rodar; a escolha de idioma dos prompts passa a ser decidida
+> por teste direto na suíte de regressão (FR-025/SC-007) — se um idioma
+> degrada recall@8 de forma mensurável contra a suíte, o produto usa o
+> outro, sem precisar de um experimento dedicado para justificar a escolha.
+> O achado em si (se best documentation recall favorece consultas em
+> inglês) continua interessante e citável no relatório — só deixou de ser
+> uma pergunta que o produto precisa responder via piloto formal.
 
-**Razão**: toda a documentação recuperada é em inglês; misturar idiomas entre
-consulta e corpus tende a degradar a recuperação. Mas isso é hipótese, não fato,
-e o resultado é interessante por si só num programa brasileiro. Medir e
-documentar, seja qual for o resultado.
+**Decisão preliminar (v1)**: prompts de sistema em inglês, enunciados de
+tarefa em inglês, com braço de controle em português no piloto.
+
+**Razão (v1)**: toda a documentação recuperada é em inglês; misturar idiomas
+entre consulta e corpus tende a degradar a recuperação. Mas isso é hipótese,
+não fato, e o resultado é interessante por si só num programa brasileiro.
+Medir e documentar, seja qual for o resultado.
 
 ---
 
@@ -1490,10 +1541,29 @@ onde não deve, não exploração deliberada. Essa premissa está registrada no
 
 ---
 
-## D12 — Estratégia de perturbação [PENDENTE-PILOTO]
+## D12 — Estratégia de perturbação [PENDENTE-PILOTO] — **CRITÉRIO DE DESCARTE SUPERADO (migração v1→v2)**
 
-**Decisão**: cinco famílias, com quantidade por família definida após teste piloto
-de dificuldade.
+> **Critério de descarte SUPERADO em 2026-09-11** (migração v1→v2, ver
+> `MIGRATION.md`): o critério abaixo ("descartar perturbações em que o
+> gerador de fronteira, na condição completa, não passe de 20% de acerto")
+> dependia do piloto experimental (T055) e da condição C5, nenhum dos quais
+> existe em v2 — não há mais "condição completa" no sentido de C1-C5, nem
+> um piloto dedicado para calibrar dificuldade antes de decidir o que
+> descartar. **As CINCO FAMÍLIAS abaixo continuam válidas e já construídas
+> integralmente** — as 60 variantes perturbadas de T048 (D3i, D3j, D3k)
+> instanciam exatamente estas cinco famílias, verificadas oráculo por
+> oráculo com a mesma disciplina do conjunto canônico. O que muda de função
+> é o PAPEL delas: eram controle de contaminação de treino (memorização) —
+> um instrumento experimental — e passam a ser teste de robustez do
+> produto (o sistema continua funcionando quando a tarefa não é
+> textualmente idêntica a algo memorizável?), sem precisar de um piloto de
+> dificuldade nem de um critério de descarte por taxa de acerto: uma
+> variante perturbada que o produto não resolve é, em v2, um resultado de
+> teste a reportar (falhou o teste de robustez X), não um item a remover do
+> conjunto.
+
+**Decisão (v1)**: cinco famílias, com quantidade por família definida após
+teste piloto de dificuldade.
 
 | Família | Exemplo |
 |---|---|
@@ -1503,12 +1573,12 @@ de dificuldade.
 | Composição | QFT seguida de difusor de Grover no mesmo registrador |
 | Parametrização simbólica | `Parameter` em vez de valor fixo |
 
-**Razão**: a perturbação precisa quebrar a memorização sem tornar o item
-insolúvel. Se a taxa de acerto na variante perturbada cair a zero em todas as
-condições, o item não mede nada — vira ruído.
+**Razão (v1)**: a perturbação precisa quebrar a memorização sem tornar o
+item insolúvel. Se a taxa de acerto na variante perturbada cair a zero em
+todas as condições, o item não mede nada — vira ruído.
 
-**Critério**: descartar perturbações em que o gerador de fronteira, na condição
-completa, não passe de 20% de acerto.
+**Critério (v1, superado)**: descartar perturbações em que o gerador de
+fronteira, na condição completa, não passe de 20% de acerto.
 
 ---
 
