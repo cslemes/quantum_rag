@@ -867,6 +867,392 @@ Todas as 12 tarefas passam nas 4 checagens de `validate_oracles.py`.
 
 ---
 
+## D3i — T048 construído (parcial: T1, 18/18): quinto erro de construção
+pego pela disciplina de verificação independente, desta vez no PRÓPRIO
+conjunto de oráculos perturbados
+
+Ao construir a variante de ordenação de qubits `dj_balanced_6q_perturbed`
+(`bench/oracles/build_t1_perturbed.py`), a função `_deutsch_jozsa()` usava
+`qc.cx(j, n_input)` com `j` FIXO (posição do bit menos significativo de
+`secret`) para CADA bit setado de `secret`, em vez de `qc.cx(i, n_input)`
+com `i` variando por bit — o padrão da construção canônica já validada em
+`build_t1_primitives.py`. Como CX é autoinverso, repetir `CX(j, ancilla)`
+um número ÍMPAR de vezes colapsa para um único `CX(j, ancilla)` (função
+`f(x)=x_j`, não a função balanceada de múltiplos bits pretendida por
+`secret`); um número PAR de vezes cancela por completo (constante, não
+balanceada). Isso teria corrompido silenciosamente o oráculo de referência
+de `dj_balanced_6q_perturbed` (e teria afetado `dj_balanced_4q_perturbed`
+também, se não corrigido antes de construí-lo) — o oráculo errado
+continuaria internamente consistente (unitário/norma válidos, autoconsistente
+com a "construção alternativa" SE essa alternativa replicasse o mesmo erro,
+o que não é o caso aqui pois a alternativa em `validate_oracles.py` é
+derivada de `_alt_deutsch_jozsa`, independente).
+
+Pego ANTES de qualquer dano: ao derivar a descrição direta (sem
+`reverse_bits()`) para o texto do prompt de `dj_balanced_6q_perturbed`,
+imprimir o diagrama do circuito revelou o padrão de controle fixo, que não
+batia com a lembrança da construção canônica correta. Comparação direta
+contra `build_t1_primitives.py::deutsch_jozsa()` confirmou a divergência.
+Corrigido trocando `qc.cx(j, n_input)` por `qc.cx(i, n_input)`; os 3 `.qpy`
+que dependiam da função (`dj_constant_4q_perturbed` — seguro, pois
+`secret=None` não gera nenhum CX; `dj_balanced_6q_perturbed` e
+`dj_balanced_4q_perturbed`) foram reconstruídos e re-verificados via
+`Statevector.equiv()` contra a construção canônica antes de escrever
+qualquer arquivo de tarefa.
+
+Este é o QUINTO erro de construção genuíno pego pela disciplina de
+verificação independente nesta dissertação (após D3d's QFT/ripple-carry,
+D3e's DJ/Simon/BV, D3f's convenção de sinal QUBO→Ising) — e o primeiro a
+ocorrer DENTRO do próprio processo de construção do conjunto perturbado, não
+do conjunto canônico. Reforça [[D3g]]: a disciplina de "nunca confiar numa
+construção sem verificá-la contra uma segunda, independente" continua a
+pagar dividendos mesmo quando a segunda construção (aqui, uma variante da
+primeira) parece trivialmente derivada da primeira já validada.
+
+### As 18 tarefas de T1 perturbadas — tabela de validação
+
+Todas as 18 passam nas 4 checagens de `bench/validate_oracles.py`
+(unitariedade/normalização, construção alternativa, cross-check de
+biblioteca onde aplicável — só QFT, N/A para as demais — e sanity em 3
+seeds). Distribuição das 5 famílias (D12), 4/4/4/3/3 conforme planejado:
+
+- **Fase relativa** (4): `bell_phi_plus_2q`, `ghz_3q`, `ghz_8q`,
+  `w_state_3q`. Alternativa em `validate_oracles.py`: a construção canônica
+  hand-gate mais um `RZ` final num único qubit — verificado que RZ(φ) numa
+  superposição de exatamente dois ramos (Bell/GHZ) ou num único termo do
+  suporte do estado W adiciona exatamente a fase relativa pretendida, antes
+  de confiar nisso.
+- **Restrição de gate set** (4): `bell_phi_minus_2q`, `ghz_5q`,
+  `reversible_half_adder_4q`, `w_state_5q` — mesmo alvo do canônico (a
+  restrição vive só no PROMPT: `{rz, sx, x, cx}`, padrão de hardware IBM);
+  alternativa reaproveita a mesma função `_alt_*` já registrada para a
+  tarefa canônica correspondente, já que o alvo não muda.
+- **Ordenação de qubits / endianness explícita** (4): `dj_constant_4q`,
+  `dj_balanced_6q`, `qft_8q`, `reversible_full_adder_5q` — `.reverse_bits()`
+  do canônico (dj_*, full_adder) ou a convenção `do_swaps=False` do QFT.
+  Alternativa: a construção canônica independente já registrada,
+  bit-revertida via `.reverse_qargs()`/`.reverse_bits()` (uma operação
+  genérica de relabeling, não uma reconstrução manual que pudesse
+  compartilhar bug com o primário) — ou, para `qft_8q`, `QFTGate` com uma
+  camada de SWAP adicional para desfazer seu SWAP interno, verificado contra
+  o primário antes de confiar.
+- **Composição** (3): `bell_psi_plus_2q`, `w_state_8q`,
+  `reversible_boolean4_8q` — alvo canônico composto com QFT no mesmo
+  registrador. Alternativa: a construção canônica independente + `QFTGate`
+  (o mesmo primitivo de biblioteca já confiado como alternativa das próprias
+  tarefas `qft_Nq` canônicas).
+- **Parametrização simbólica** (3): `qft_3q`, `qft_5q`, `dj_balanced_4q` —
+  mesmo oráculo do canônico; a perturbação é só no PROMPT (fórmula em vez de
+  números já avaliados). Alternativa: reaproveita a alternativa canônica sem
+  alteração.
+
+### Pareamento (FR-017)
+
+`bench/validate_oracles.py::check_perturbation_pairing()` (nova, T048)
+verifica: (1) toda tarefa perturbada tem `base_task_id` apontando para uma
+tarefa canônica existente; (2) nenhuma tarefa canônica tem mais de uma
+variante perturbada. Essas duas invariantes são bloqueantes desde já,
+independente de quanto do conjunto perturbado já foi construído. A
+invariante de COMPLETUDE (toda tarefa canônica tem AO MENOS uma variante) é
+reportada mas não bloqueante enquanto T048 está em construção incremental —
+vira bloqueante automaticamente quando o número de pares bate com o número
+de tarefas canônicas, sem exigir alterar o código depois. Estado atual:
+18/60 pares.
+
+Conjunto completo (60 canônicas + 18 T1 perturbadas = 78 oráculos) passa
+`uv run python -m bench.validate_oracles` sem falhas. T2-T4 perturbadas
+(42 tarefas restantes) ficam para continuação de T048, após revisão do
+usuário deste primeiro lote.
+
+---
+
+## D3j — T048 construído (T2, 18/18): "mesma tarefa" não é automático por
+família — três armadilhas de perturbação vazia/inválida encontradas e
+evitadas ANTES de construir qualquer arquivo
+
+T2 são algoritmos, não primitivas de preparação de estado — a pergunta "essa
+perturbação ainda é reconhecivelmente a mesma tarefa, ou virou um problema
+diferente com o mesmo nome?" (levantada explicitamente pelo usuário antes
+desta rodada) exigiu checagem computacional por instância, não só por
+família, e revelou três armadilhas genuínas:
+
+1. **Ordenação de qubits pode ser um no-op silencioso.** `.reverse_bits()`
+   só perturba algo se o alvo não for simétrico sob reversão completa.
+   `grover_3q`/`grover_4q` têm strings marcadas palíndromas (101, 1001) —
+   reversão mapeia o valor marcado nele mesmo, e o circuito inteiro (oráculo
+   depende só do inteiro marcado, difusor é totalmente simétrico por
+   permutação de qubits) fica invariante. Mais notável: as TRÊS instâncias
+   de `qaoa_maxcut_*` (triângulo, ciclo-4, ciclo-5) são invariantes sob
+   reversão completa, porque todo grafo-ciclo C_n tem a reflexão i -> n-1-i
+   como automorfismo — um fato estrutural sobre ciclos, não coincidência das
+   três instâncias. Ordenação de qubits foi EXCLUÍDA por completo da família
+   QAOA aqui (0 de 3 instâncias), não só evitada em uma. `qpe_5q` também
+   deu reversão-simétrica (verificado, não óbvio a priori) — excluído,
+   movido para parametrização simbólica.
+2. **Fase relativa é vazia num alvo totalmente determinístico.** Os alvos de
+   Bernstein-Vazirani e QPE colapsam para um ÚNICO estado de base
+   computacional (afora a ancilla fixa |-> do BV) — um RZ em qualquer qubit
+   de um registro de base única é fase global pura, invisível a
+   `Statevector.equiv()` (tolerante a fase global por definição). Fase
+   relativa foi restrita às famílias com alvo genuinamente multi-termo:
+   Simon (verificado), Grover, QAOA — checado computacionalmente para uma
+   instância de cada antes de usar em todas.
+3. **Restrição de gate set para {rz, sx, x, cx} parece quebrar silenciosamente
+   em SWAP + esta combinação específica em `optimization_level >= 2`** — mas
+   NÃO é um bug do transpilador (ver [[D3k]] para a investigação completa e a
+   correção do que esta sessão registrou antes disso, em T1, como "quirk"): é
+   `TranspileLayout.final_layout`, um comportamento documentado e
+   propositalmente suportado — a partir de `optimization_level >= 2`, sem
+   `coupling_map`, o transpilador pode implementar um SWAP lógico só
+   permutando quais posições de saída correspondem a quais qubits de entrada
+   (sem emitir gates físicos de SWAP), registrando essa permutação em
+   `final_layout`. `Operator(circuito_transpilado)` ignora esse metadado — daí
+   a fidelidade ~1e-32 — mas `Operator.from_circuit(circuito_transpilado)`
+   (que LÊ `final_layout`) concorda exatamente com o circuito original. `qpe_
+   5q` transpilou "errado" por essa razão; opt_level 0/1 não aciona esse
+   comportamento porque não têm liberdade de layout a explorar. Toda
+   construção canônica de QPE tem um SWAP interno (do estágio de QFT
+   inversa), então restrição de gate set foi excluída das TRÊS instâncias de
+   QPE aqui de qualquer forma — não porque o transpilador esteja errado, mas
+   porque a metodologia de comparação de `validate_oracles.py` (`Operator.
+   equiv()` direto, sem correção de layout) precisaria ser generalizada para
+   lidar com isso, e isso ficou fora do escopo desta rodada. Registrado para
+   que qualquer tarefa futura envolvendo SWAP + `transpile()` com
+   `optimization_level >= 2` sem `coupling_map` saiba usar `Operator.
+   from_circuit()`, não `Operator()`, se decidir enfrentar isso.
+
+Consequência: a distribuição final de T2 (4 gate-set-restriction, 5
+qubit-ordering, 4 symbolic-parameterization, 3 relative-phase, 2
+composition) não é 4/4/4/3/3 como T1 — é o resultado honesto de quais
+famílias preservam a natureza de CADA tarefa, não uma meta a forçar. T3/T4
+devem compensar para que o balanceamento ENTRE tiers (não dentro de cada
+tier) se aproxime do equilíbrio.
+
+**VQE (3 instâncias) exigiu uma extensão real do validador.** `relative-
+phase` e `composition` foram descartados para as 3 tarefas de VQE porque
+mudam a energia alcançada — o ponto físico do VQE é atingir a energia do
+estado fundamental, então "a mesma construção + uma fase extra" deixaria de
+medir "construiu o ansatz certo" e passaria a medir "construiu ALGO que
+atinge uma energia diferente, não especificada" — uma mudança de tarefa, não
+uma perturbação, corretamente NÃO enviada. `gate-set-restriction` e
+`symbolic-parameterization` (com uma fórmula fechada para theta, derivada à
+mão de dE/dtheta=0 sobre o Hamiltoniano já citado — verificada contra os 3
+valores canônicos de `ansatz_theta_rad`, e agora travada como asserção em
+`build_t2_perturbed.py`, não só checada uma vez no sandbox) preservam a
+física exatamente e foram usadas. `qubit-ordering` (trocar qual qubit físico
+tem o papel X vs RY, com os coeficientes Z0/Z1 do Hamiltoniano trocados para
+casar) é fisicamente válido (verificado: mesma `exact_ground_energy`,
+mesmo theta) mas exigiu generalizar `check_energy_sanity_seeds` em
+`validate_oracles.py`, que tinha os papéis do ansatz (X/RY/CX) HARDCODED —
+agora lidos do payload com os valores canônicos como default, então nenhum
+oráculo VQE existente muda de comportamento.
+
+**Erro pego antes de embarcar**: o primeiro rascunho do prompt de
+`vqe_h2_r055_perturbed` (gate-set-restriction) citava uma identidade
+RY(theta) = RZ(-pi/2), SX, RZ(pi-theta), SX, RZ(-pi/2) de memória — verificada
+como FALSA antes de escrever o arquivo (`Operator.equiv()` = False). A
+identidade correta (RZ(-pi), SX, RZ(pi-theta), SX, fase global zero) foi
+obtida do próprio `transpile()` do Qiskit, não de memória, e só então usada
+no prompt — mais uma instância da disciplina "nunca confiar sem verificar",
+desta vez pegando um erro na AUTORIA do prompt, não na construção do
+oráculo.
+
+**Composição não introduz um "talvez coincida por acaso"**: como QFT é uma
+transformação unitária (bijetiva), qualquer diferença no estado PRÉ-QFT
+mapeia para um estado PÓS-QFT igualmente distinguível — a checagem de
+equivalência após compor com QFT é exatamente tão discriminante quanto
+checar o alvo pré-QFT diretamente. Isso resolve, por argumento matemático e
+não só por precedente de T1, a preocupação de que compor com QFT "dilua" o
+que está sendo testado.
+
+Todas as 18 tarefas passam nas 4 checagens de `validate_oracles.py`,
+incluindo o ansatz trocado do VQE (erro de energia 0.0033 Ha, dentro de
+`ENERGY_SANITY_TOL=0.02`). Conjunto completo agora: 60 canônicas + 36
+perturbadas (T1+T2) = 96 oráculos, todos passando.
+
+### T048 concluído (T3 12/12, T4 12/12): contabilidade final das 60
+perturbadas — distribuição por tier, todas as exclusões agrupadas por
+causa, e uma advertência sobre o que `delta_perturbacao` por família pode e
+não pode sustentar
+
+T3 e T4 seguiram a mesma disciplina computacional-antes-de-atribuir (D3i,
+acima nesta seção) e não introduziram nenhuma família ou tipo de armadilha
+nova além das já catalogadas em T1/T2 — só instâncias adicionais das MESMAS
+duas causas estruturais (simetria sob reversão de registrador; blindness de
+fase global num alvo de base única). A distribuição final por tier:
+
+| Família \ Tier | T1 (18) | T2 (18) | T3 (12) | T4 (12) | Total (60) |
+|---|---|---|---|---|---|
+| relative_phase | 4 | 3 | 2 | 2 | 11 |
+| gate_set_restriction | 4 | 4 | 3 | 3 | 14 |
+| qubit_ordering | 4 | 5 | 3 | 3 | 15 |
+| symbolic_parameterization | 3 | 4 | 2 | 2 | 11 |
+| composition | 3 | 2 | 2 | 2 | 9 |
+
+Nenhum tier usou 4/4/4/3/3 além de T1 (que definiu esse padrão inicial, antes
+de qualquer exclusão estrutural ter sido descoberta) — cada tier posterior é
+o resultado honesto de quais famílias preservam a NATUREZA de cada tarefa
+individual, não uma meta a forçar (a instrução original do usuário, desde o
+início de T048). O total por família, 9-15 numa base de 60, fica
+razoavelmente equilibrado apesar disso — `qubit_ordering` puxa para cima
+(15) por ser estruturalmente a família mais "segura" na maioria das tarefas
+que não têm simetria interna; `composition` puxa para baixo (9) porque foi
+inteiramente excluída das 3 tarefas de VQE (T2), a única exclusão de
+"mudança de identidade de tarefa" encontrada em todo o conjunto.
+
+**Todas as exclusões, agrupadas por causa:**
+
+1. **Perturbação vazia (a família não muda o alvo/unitária, ou muda só a
+   fase global de um alvo determinístico)** — a causa mais comum, sempre
+   verificada computacionalmente (`Statevector`/`Operator` `.equiv(...
+   reverse_qargs())` ou `.equiv()` pós-RZ), nunca assumida:
+   - T1: GHZ e W-state excluídos de `qubit_ordering` (estado
+     permutation-simétrico sob qualquer reversão de qubits).
+   - T2: `qaoa_maxcut_*` (as 3 instâncias) excluídas de `qubit_ordering`
+     (todo grafo-ciclo C_n tem a reflexão i -> n-1-i como automorfismo —
+     um fato estrutural sobre ciclos); `grover_3q`/`grover_4q` excluídos de
+     `qubit_ordering` (strings marcadas palíndromas); uma instância de
+     `qpe` excluída de `qubit_ordering` (simetria verificada, não óbvia a
+     priori); BV e QPE excluídos de `relative_phase` (alvo colapsa para um
+     ÚNICO estado de base computacional — RZ ali é fase global pura,
+     invisível a `Statevector.equiv()`).
+   - T3: `ising_zzz_3q` e `ising_zzzz_4q` excluídos de `qubit_ordering`
+     (ambos são um ÚNICO termo Z-string cobrindo TODOS os qubits do
+     registro — um termo-produto sobre todo o registro é invariante sob
+     qualquer permutação de seus próprios qubits, reversão inclusive).
+   - T4: `ghz_linear5_full`, `ghz_linear5_scattered_even`,
+     `ghz_linear5_endpoints`, `ising_linear5_endpoints`,
+     `zstring_linear5_scattered`, `zstring_linear5_full_chain` — SEIS
+     instâncias excluídas de `qubit_ordering`, todas pela mesma razão
+     estrutural: o conjunto de qubits que cada termo/subconjunto toca é
+     simétrico sob i -> 4-i (par de endpoints, subconjunto par-de-índices,
+     ou registro inteiro).
+   - Padrão único subjacente a TODAS essas instâncias (14 no total, de 6
+     tarefas-tipo distintas): a relabeling é um no-op exatamente quando o
+     conjunto de qubits que uma estrutura toca — ou o alvo que ela produz —
+     já é simétrico sob essa relabeling especificamente. Isso não precisou
+     ser redescoberto a cada tier; a partir de T2 já era um padrão
+     ESPERADO a checar, não uma surpresa.
+2. **Mudança de identidade de tarefa (a perturbação mudaria O QUE está
+   sendo medido, não só o quão fácil é reconhecer)** — encontrada em UM
+   lugar só, T2's VQE: `relative_phase` e `composition` excluídas das 3
+   tarefas `vqe_h2_*` porque ambas mudariam a energia do estado fundamental
+   alcançada — o ponto físico do VQE — transformando "construiu o ansatz
+   certo" em "construiu algo que atinge uma energia diferente, não
+   especificada". Esta é a única categoria onde a exclusão não é sobre a
+   perturbação ser vazia, mas sobre ela ser ilegítima mesmo sendo
+   NÃO-vazia — motivo pelo qual essa checagem (a pergunta do usuário: "essa
+   perturbação ainda é a mesma tarefa?") importa independentemente da
+   checagem de vacuidade.
+3. **Armadilha de transpilador aparentemente real, mas NÃO um defeito
+   (ver [[D3k]])** — `gate_set_restriction` excluída das 3 instâncias `qpe_*`
+   (T2) por causa de `TranspileLayout.final_layout` (SWAP interno da QFT
+   inversa + {rz,sx,x,cx} + `optimization_level>=2` sem `coupling_map`)
+   fazer `Operator()` cru discordar do circuito, ainda que `Operator.
+   from_circuit()` concorde exatamente. A mesma combinação já tinha
+   aparecido, sem registro formal em research.md, ao evitar QFT+swap na
+   família `gate_set_restriction` de T1 (por isso [[D3k]] descreve DUAS
+   ocorrências independentes) — corretamente resolvida como comportamento
+   documentado do Qiskit, não um bug a relatar, mas ainda assim uma
+   exclusão real neste conjunto porque `validate_oracles.py` usa `Operator()`
+   cru em todo o módulo e generalizar isso ficou fora do escopo desta
+   rodada (D3k tem o reprodutor mínimo e a análise completa).
+
+**Advertência explícita sobre análise, registrada agora enquanto o raciocínio
+das exclusões está fresco**: a distribuição de família NÃO é balanceada por
+desenho — é o resultado de quais famílias são estruturalmente válidas para
+cada tarefa individual, checado caso a caso. Isso tem uma consequência real
+para T063 (cálculo de `delta_perturbacao`, FR-023): os efeitos de FAMÍLIA e
+de TIER estão parcialmente confundidos (um tier específico nunca teve
+`qubit_ordering` aplicada a todas as suas tarefas GHZ/ciclo/termo-completo,
+por exemplo), e uma quebra de `delta_perturbacao` POR FAMÍLIA terá células
+desiguais e, nalguns casos, pequenas (a família `composition` tem só 9
+tarefas no total; excluindo qualquer uma delas por não sobreviver ao piso de
+20% de D12, uma quebra por família dentro de um único tier pode cair para
+2-3 tarefas). `delta_perturbacao` por família, portanto, é DESCRITIVO, não
+inferencial, nestes tamanhos de célula — útil para relatar "esta família
+pareceu mais fácil/difícil nesta amostra", não para sustentar um teste de
+hipótese sobre diferença real entre famílias. A métrica que carrega peso
+inferencial é o `delta_perturbacao` AGREGADO (canônica vs. perturbada, por
+gerador e por condição, T063/FR-023) — com 60 pares completos, essa
+agregação tem tamanho de amostra suficiente; a quebra por família não tem, e
+não deve ser lida como se tivesse. Registrar isso agora, antes do piloto
+(T055) rodar e produzir números reais, evita a tentação retrospectiva de
+tratar uma célula pequena como evidência mais forte do que ela é.
+
+Conjunto completo de T048 agora: **60 canônicas + 60 perturbadas = 120
+oráculos**, todos passando `uv run python -m bench.validate_oracles`.
+`check_perturbation_pairing()`'s invariante de completude (antes apenas
+informativa) agora reporta PASS automaticamente — as 60 tarefas canônicas
+têm, cada uma, exatamente um par perturbado.
+
+---
+
+## D3k — Correção: a "quebra do transpilador" em SWAP + {rz,sx,x,cx} +
+`optimization_level>=2` NÃO é um bug do Qiskit — é `TranspileLayout.
+final_layout`, documentado e usado de propósito; investigado após dois
+achados independentes (T1, T2) para decidir se valia um relato upstream
+
+[[D3j]] (item 3) e uma nota anterior em T1 (não commitada em research.md,
+só na conversa) caracterizaram esse comportamento como "um bug real,
+reproduzível do transpilador do Qiskit". O usuário pediu explicitamente,
+diante de DUAS ocorrências independentes, uma investigação própria: um
+reprodutor mínimo, a versão do Qiskit, e uma checagem se já é um issue
+conhecido upstream — para decidir se merece um relato de bug real e uma
+linha na dissertação como achado lateral, ou não.
+
+**Reprodutor mínimo** (não precisa de QFT, DJ, nem 8 qubits — um único
+SWAP de 2 qubits já basta):
+
+```python
+from qiskit import QuantumCircuit, transpile
+from qiskit.quantum_info import Operator
+
+qc = QuantumCircuit(2)
+qc.swap(0, 1)
+t = transpile(qc, basis_gates=["rz", "sx", "x", "cx"],
+              optimization_level=2, seed_transpiler=1)
+
+Operator(qc).equiv(Operator(t))               # False
+Operator(qc).equiv(Operator.from_circuit(t))  # True
+```
+
+`t` sai como um circuito VAZIO (0 gates) — o SWAP "desaparece". Ambiente:
+Qiskit `1.2.4`, `qiskit-aer` `0.15.1`.
+
+**Causa raiz, confirmada pela própria documentação do Qiskit** (docstring de
+`qiskit.transpiler.layout.TranspileLayout`, lido nesta investigação, não
+citado de memória): a partir de `optimization_level>=2`, SEM `coupling_map`
+(circuito livre para rodar em qualquer topologia), o estágio de roteamento
+pode implementar um SWAP lógico simplesmente reatribuindo qual posição de
+saída corresponde a qual qubit de entrada — sem emitir nenhum gate físico —
+e registra essa permutação em `TranspileLayout.final_layout`. Isso é
+UNITARY-PRESERVING até essa permutação, não uma otimização incorreta: a
+própria classe existe para que o chamador recupere a unitária real via
+`Operator.from_circuit(t)` (que lê `final_layout`; citado no próprio
+docstring: "used by Operator.from_circuit"), em vez de `Operator(t)` (que
+ignora `TranspileLayout` inteiramente). Confirmado que essa é exatamente a
+causa tanto do caso mínimo quanto do `qpe_5q` real de T2 (`Operator.
+from_circuit()` concorda com o alvo original em ambos; `Operator()` cru
+discorda em ambos).
+
+**Não é um issue conhecido a relatar** — é comportamento documentado e
+intencional, não um defeito. Não há bug a reportar upstream. A dissertação
+não ganha um achado lateral de "bug do Qiskit"; ganha, em vez disso, uma
+correção metodológica registrada aqui: `bench/validate_oracles.py`'s
+`_build_alternatives`/checks de equivalência usam `Operator()` cru, não
+`Operator.from_circuit()`, em TODO o módulo — o que é seguro hoje porque
+nenhuma comparação atual passa por `transpile()` com `optimization_level>=2`
+sem `coupling_map` sobre um circuito com SWAP interno (as tarefas de T4 que
+usam `coupling_map` não-nulo já forçam roteamento físico real, sem essa
+saída; T048's exclusão das 3 tarefas QPE de gate-set-restriction evita o
+caso justamente onde apareceria). Continua correto enquanto essa condição
+não for violada — registrado aqui para que quem adicionar uma futura
+restrição de gate set sobre um circuito com SWAP saiba trocar para
+`Operator.from_circuit()` em vez de reabrir esta investigação do zero.
+
+---
+
 ## D4 — Modelo de embedding [PENDENTE-PILOTO]
 
 **Decisão preliminar**: avaliar dois candidatos por `recall@8` nas 50 consultas
@@ -1576,6 +1962,156 @@ em ~1,5 GB de RSS.
   adiada: o script é descartável (`/tmp`, não faz parte da suíte), e o
   único caso confirmado por essa lacuna (`id`→`IGate`) já foi corrigido à
   mão; uma nova varredura completa não muda o veredito do portão M1.
+
+---
+
+## D18 — Cache persistente dos modelos fastembed e CA corporativa para redes que interceptam TLS
+
+**Achado**: `make index`/`ingest.py` falhou com um erro de verificação de
+certificado TLS ao baixar o modelo esparso `Qdrant/bm25` do HuggingFace Hub —
+a cadeia de certificados apresentada continha um certificado AUTOASSINADO.
+Isso é a assinatura característica de interceptação de TLS (proxy
+corporativo ou antivírus fazendo inspeção SSL man-in-the-middle), não um
+problema de configuração do HuggingFace ou do fastembed em si.
+
+**Duas coisas erradas, resolvidas separadamente**:
+
+### 1. A dependência de rede deveria ser de primeira execução, não por execução
+
+`FastEmbedEmbedder` (`src/qcagent/retrieval/embedding.py`) nunca passa
+`cache_dir` ao construir `TextEmbedding`/`SparseTextEmbedding` — verificado
+em `fastembed/common/utils.py::define_cache_dir`: sem `cache_dir` explícito
+nem a variável de ambiente `FASTEMBED_CACHE_PATH`, o default é
+`{tempfile.gettempdir()}/fastembed_cache`, ou seja `/tmp/fastembed_cache`
+dentro do container. `/tmp` não sobrevive a `docker compose down`/recriação
+do container — cada container novo é um download novo, e uma execução
+experimental que precisa de acesso à internet só para começar é frágil,
+exatamente o tipo de dependência que D15 (Ambiente de execução canônico)
+existe para eliminar.
+
+**Decisão**: volume nomeado `fastembed_cache` em `docker-compose.yml`,
+montado em `/root/.cache/fastembed` no serviço `app`, com
+`FASTEMBED_CACHE_PATH=/root/.cache/fastembed` setado via `environment:` no
+mesmo serviço (não em `.env` — é uma escolha de infraestrutura fixa, não
+algo que varie por máquina, então fica ao lado do volume que ela aponta, os
+dois não podem divergir por engano). Efeito: o download do modelo acontece
+uma vez, na primeira execução depois de um volume novo; toda execução
+seguinte reaproveita os pesos ONNX já em disco, sem tocar a rede.
+
+### 2. Como fornecer um bundle de CA corporativo — nunca `verify=False`
+
+`fastembed` baixa via `huggingface_hub.snapshot_download`, que usa
+`requests` por baixo (confirmado em
+`fastembed/common/model_management.py`). `requests` e `huggingface_hub`
+respeitam `REQUESTS_CA_BUNDLE` nativamente; a biblioteca padrão `ssl`/
+`urllib` (usada por outras partes do stack em chamadas HTTPS diretas)
+respeita `SSL_CERT_FILE`. Setar as duas para o caminho de um arquivo PEM
+com a CA raiz corporativa resolve a verificação SEM desabilitá-la —
+`verify=False`, `-k`, ou qualquer contexto SSL não verificado está
+proibido neste projeto: isso desabilitaria a verificação para TODA
+requisição, não só as interceptadas, e esconderia silenciosamente um
+ataque man-in-the-middle real caso um dia aconteça um.
+
+**Duas rotas documentadas, sem rebuild de imagem sempre que possível**:
+
+1. **Variáveis de ambiente** (`.env`, ver `.env.example`):
+   `REQUESTS_CA_BUNDLE`/`SSL_CERT_FILE` apontando para o PEM da CA. Cobre
+   `requests`/`httpx`/`huggingface_hub` — o caminho do download do
+   fastembed especificamente — sem precisar reconstruir a imagem. Exige que
+   o arquivo PEM esteja acessível DENTRO do container num caminho que essas
+   variáveis referenciem (bind mount do arquivo, ou copiado no build — ver
+   item 2).
+2. **`Dockerfile`** (bloco comentado, inativo por padrão): `COPY` do
+   arquivo `corporate-ca.crt` (gitignored — nunca um certificado real vai
+   para o controle de versão) para
+   `/usr/local/share/ca-certificates/corporate-ca.crt` seguido de `RUN
+   update-ca-certificates`, instalando a CA no trust store DO SISTEMA
+   (Ubuntu/OpenSSL) — necessário para qualquer ferramenta que ignore as
+   variáveis de ambiente acima e confie só no trust store do SO. Rota mais
+   pesada (exige rebuild), usada só se a rota 1 não cobrir alguma
+   ferramenta específica.
+
+**Por que a imagem já tinha o pré-requisito**: `ca-certificates` já está
+instalado no `Dockerfile` (base `nvidia/cuda:12.1.0-runtime-ubuntu22.04`) —
+`update-ca-certificates` já está disponível, não precisou de um pacote novo.
+
+**Verificado ao vivo, não só derivado da leitura do código-fonte**: o
+sandbox onde esta seção foi escrita tinha exatamente o mesmo sintoma —
+proxy de saída com uma CA autoassinada própria (`O=Docker Sandboxes, CN=
+Docker Sandboxes Proxy CA`), reproduzindo o erro relatado
+(`SSLCertVerificationError: self-signed certificate in certificate chain`
+ao baixar `Qdrant/bm25`). Testado: combinar o trust store do sistema com a
+CA interceptadora num único arquivo PEM e apontar `REQUESTS_CA_BUNDLE`/
+`SSL_CERT_FILE` para ele — sem tocar `verify=False` em lugar nenhum —
+completou o download com sucesso. O layout de cache resultante confirmou
+exatamente o descrito abaixo:
+`models--Qdrant--bm25/snapshots/22b8d2af71a76161e18dd432d2cee0eefa66e412/`
+— `<hash>` é o commit do repositório HF resolvido no momento do download,
+validando também a seção seguinte sobre onde recuperar essa informação.
+
+### Nome exato do modelo e versão — e um limite real do fastembed 0.3.6
+
+Por Princípio II, uma versão que baixa em tempo de execução sem pinagem é
+uma lacuna de reprodutibilidade. Registrado aqui com exatidão:
+
+- **Biblioteca**: `fastembed==0.3.6`, resolvido e travado por hash em
+  `uv.lock` (`pyproject.toml` declara `>=0.3,<0.4`; `uv sync --frozen` no
+  `Dockerfile` é o que de fato fixa a versão instalada).
+- **Modelo esparso (BM25, D5)**: `Qdrant/bm25` — único, sem alternativa
+  pendente de piloto.
+- **Modelo denso (D4, PENDENTE-PILOTO)**: `jinaai/jina-embeddings-v2-base-code`
+  (768 dim, candidato ativo por default —
+  `DEFAULT_DENSE_MODEL = DENSE_MODEL_CODE` em `embedding.py`) ou
+  `intfloat/multilingual-e5-large` (1024 dim, candidato alternativo) — qual
+  dos dois é usado na rodada final depende do piloto de recall@8 de D4,
+  ainda não executado (M1 passou sem precisar dele — D17-1).
+
+**Limite real, verificado no código-fonte, não contornado**: a versão
+0.3.6 de `fastembed` não expõe nenhum parâmetro `revision` no caminho de
+download — `download_files_from_huggingface` (`fastembed/common/
+model_management.py`) chama `snapshot_download(repo_id=..., cache_dir=...,
+local_files_only=...)` sem `revision`, e nem `TextEmbedding.__init__` nem
+`SparseTextEmbedding.__init__` repassam um `revision` até lá (confirmado
+lendo as assinaturas e o corpo da função, não assumido). Isso significa que
+`fastembed==0.3.6` sozinho NÃO garante baixar exatamente os mesmos pesos
+duas vezes em máquinas diferentes se o repositório upstream no HuggingFace
+Hub mudar entre uma execução e outra — um gap real de reprodutibilidade que
+pinar a biblioteca, por si só, não fecha.
+
+**Mitigação prática, já garantida pela decisão da seção 1 acima**: o cache
+persistente (`fastembed_cache`) congela os pesos ONNX EFETIVAMENTE baixados
+na primeira execução — todo run subsequente contra o mesmo volume reusa
+exatamente esse artefato, independente do que aconteça no HuggingFace Hub
+depois. A garantia de reprodutibilidade passa a ser "mesmo volume Docker",
+não "mesma revisão do repositório" — mais fraca do que uma pinagem de
+revisão de verdade, mas suficiente para as 5.400 execuções da matriz
+completa, que devem rodar contra o mesmo volume por construção (D15: mesmo
+ambiente canônico do início ao fim). **Para provenance**, o commit
+resolvido no momento do download fica gravado no próprio layout de cache
+do `huggingface_hub` — o diretório `models--<org>--<nome>/snapshots/<hash>/`
+dentro do volume tem `<hash>` como o commit SHA do repositório HF no
+momento do download; registrar esse hash manualmente (ex.: `ls
+/root/.cache/fastembed/models--Qdrant--bm25/snapshots/` dentro do
+container) antes da rodada experimental final é o jeito de recuperar essa
+informação hoje, já que a biblioteca não a expõe programaticamente.
+Trabalho futuro genuíno, não implementado agora: gravar esse hash
+automaticamente em `RunRecord.lib_versions` (mesmo padrão já usado para
+`ollama`, D15 item 3) exigiria ler o layout de cache diretamente, já que
+`fastembed` não expõe a revisão resolvida via sua própria API.
+
+**Alternativas rejeitadas**:
+- Desabilitar verificação de certificado (`verify=False`, variável
+  `PYTHONHTTPSVERIFY=0`, ou similar) — rejeitada categoricamente pelo
+  usuário e pela postura de segurança do projeto: esconde qualquer
+  interceptação real, não só a corporativa esperada.
+- Baixar o modelo manualmente e commitar os pesos ONNX no repositório —
+  rejeitada: pesos de modelo são binários grandes (multiplica o tamanho do
+  repositório Git por gigabytes) e uma cópia commitada ainda não resolve
+  QUAL revisão foi usada, só esconde a pergunta.
+- Fixar `HF_HUB_OFFLINE=1` como default do projeto — rejeitada: quebraria o
+  primeiro uso de qualquer ambiente novo (nenhum modelo ainda em cache);
+  correto como uma flag opcional que o usuário liga DEPOIS do primeiro
+  download bem-sucedido, não como comportamento padrão do projeto.
 
 ---
 
