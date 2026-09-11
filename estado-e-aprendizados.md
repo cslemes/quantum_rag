@@ -7,10 +7,10 @@ está pendente, riscos vivos no momento em que foi escrito. É reescrito
 conforme o projeto avança; seções ficam obsoletas e são atualizadas, não
 acumuladas. Para achados metodológicos, números a citar, limitações e
 material de apêndice — conteúdo que continua válido independente da fase
-do projeto — ver `specs/001-qcircuit-agent/dissertation-notes.md`, que é
+do projeto — ver `specs/001-qcircuit-agent/report-notes.md`, que é
 append-only e não é reescrito. Para o porquê de cada decisão de
 implementação, ver `specs/001-qcircuit-agent/research.md`. Onde o conteúdo
-deste documento se sobrepõe ao de `dissertation-notes.md`, a versão
+deste documento se sobrepõe ao de `report-notes.md`, a versão
 completa mora lá — aqui fica só um ponteiro, para as duas cópias não
 divergirem.
 
@@ -42,7 +42,7 @@ o conjunto canônico quanto o perturbado.
 | T4 hardware | Subconjuntos das famílias acima sob `coupling_map="linear_5"` | 12 |
 
 Teleportação foi removida do conjunto canônico e substituída por aritmética
-booleana reversível — razão completa em `dissertation-notes.md`, seção
+booleana reversível — razão completa em `report-notes.md`, seção
 "Threats to validity" (item "teleportação está ausente do conjunto
 canônico").
 
@@ -50,7 +50,7 @@ canônico").
 
 ## 2. Achados metodológicos
 
-Movido para `dissertation-notes.md` § Findings (F1–F5) e § Threats to
+Movido para `report-notes.md` § Findings (F1–F5) e § Threats to
 validity — esse é o material de redação, e este documento não o duplica
 mais. Resumo de uma linha de cada, para quem só quer saber o que existe:
 
@@ -70,7 +70,7 @@ mais. Resumo de uma linha de cada, para quem só quer saber o que existe:
 
 ## 3. Verificações que valeram o custo
 
-Movido para `dissertation-notes.md` § Findings, **F4**. A contagem mudou de
+Movido para `report-notes.md` § Findings, **F4**. A contagem mudou de
 quatro para **cinco** erros reais de método depois que este parágrafo foi
 escrito (um quinto apareceu construindo o conjunto PERTURBADO, T048/D3i) —
 outro motivo para este documento não guardar mais o número em duplicata:
@@ -81,7 +81,7 @@ uma cópia aqui teria ficado desatualizada.
 ## 4. Decisões medidas, não estimadas
 
 Índice rápido — números completos e as duas medições que quase enganaram
-(aquecimento do 7B, subestimação do recall) estão em `dissertation-notes.md`
+(aquecimento do 7B, subestimação do recall) estão em `report-notes.md`
 § Measured results, não duplicados aqui.
 
 | Decisão | Medição | Resultado |
@@ -97,7 +97,7 @@ uma cópia aqui teria ficado desatualizada.
 
 ## 5. Evidência empírica antecipada para H1
 
-Movido para `dissertation-notes.md` § Measured results ("Evidência
+Movido para `report-notes.md` § Measured results ("Evidência
 qualitativa antecipada para H1 — RAG antes/depois em `ghz_3q`"). Resumo:
 duas execuções da mesma tarefa (GHZ-3), antes e depois de a recuperação
 estar ativa — sem RAG, três de quatro falhas eram API inexistente
@@ -116,13 +116,13 @@ lacuna de corpus específica que foi corrigida.
 | Módulos sem cobertura de teste (auditoria feita, maioria dos gaps ainda sem teste) | `resource.py` ganhou `tests/unit/test_resource.py`; outros módulos identificados na auditoria seguem sem teste | escrever sob demanda, não em bloco |
 | Truncamento em 4.000 chars no chunking | implementação parcial do D6; corta exemplos de uso | cresce com o corpus |
 | `HallucinatedSymbol` para import faltando roteia para `retry_retrieval` | reconsultar não corrige esquecimento de import | cosmético |
-| VQE/QAOA com parâmetros fixos | medem construção de ansatz, não otimização (ver `dissertation-notes.md` § Threats to validity) | registrado; relevante para T064 |
+| VQE/QAOA com parâmetros fixos | medem construção de ansatz, não otimização (ver `report-notes.md` § Threats to validity) | registrado; relevante para T064 |
 
 ---
 
 ## 7. Riscos vivos
 
-As perguntas em si estão em `dissertation-notes.md` § Open questions for
+As perguntas em si estão em `report-notes.md` § Open questions for
 the advisor (título do projeto, reunião com o orientador, segundo anotador
 para κ, calibração de descarte das perturbadas D12) — aqui só o prazo em
 que cada uma vira bloqueio, que é informação de estado, não de redação:
@@ -151,7 +151,7 @@ que cada uma vira bloqueio, que é informação de estado, não de redação:
 
 Independentemente do resultado do experimento principal — o dataset (120
 tarefas, canônicas e perturbadas, com oráculos verificados
-independentemente) e os achados F1–F5 de `dissertation-notes.md` § Findings.
+independentemente) e os achados F1–F5 de `report-notes.md` § Findings.
 Nenhum depende do sinal do resultado principal, o que satisfaz o Princípio
 VI: o trabalho permanece defensável mesmo se a hipótese central for
 refutada.

@@ -348,6 +348,6 @@ Removido com a mudança de escopo: as cinco condições experimentais, a ablaç�
 as hipóteses H1–H5, o controle de contaminação como instrumento, a análise de
 concordância entre anotadores.
 
-Os achados metodológicos registrados em `dissertation-notes.md` permanecem
+Os achados metodológicos registrados em `report-notes.md` permanecem
 material do relatório — como lições de engenharia, não como resultados de
 pesquisa.
