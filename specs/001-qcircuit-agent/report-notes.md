@@ -539,10 +539,32 @@ Itens genuinamente em aberto, não decisões pendentes de implementação.
   (quantum-accelerated retrieval) — um risco de confusão que pesa contra
   essa opção. Fonte: `estado-e-aprendizados.md` §7.
 - **Reunião com o orientador.** Pendente desde o início do projeto (ver
-  `estado-e-aprendizados.md` §7). O congelamento de escopo M2 (dataset e
+  `estado-e-aprendizados.md` §7). ~~O congelamento de escopo M2 (dataset e
   conjunto de geradores imutáveis, ver `plan.md`) é o último ponto barato
   para incorporar qualquer mudança de direção — a reunião precisa
-  acontecer antes de M2, não depois.
+  acontecer antes de M2, não depois.~~ **SUPERADA em 2026-09-15** (migração
+  v1→v2): `plan.md` não fala mais em "conjunto de geradores imutáveis" —
+  M2, hoje, é só "`validate_oracles.py` 120/120 verde" mais uma nota de
+  estabilidade da suíte de referências, não um congelamento de escopo
+  contra o qual medir a urgência da reunião.
+
+  Isso não é só uma correção de referência cruzada — é uma inversão real,
+  e material de relatório por si só. Em v1, o conjunto de tarefas
+  PRECISAVA ficar congelado em M2 porque a matriz experimental comparava
+  geradores × condições sobre o MESMO instrumento de medida: adicionar uma
+  tarefa no meio do experimento mudaria o que estava sendo medido a meio
+  do caminho, invalidando a comparação entre braços que já tinham rodado
+  contra o conjunto antigo e os que rodariam contra o novo. Em v2 não há
+  mais braços a comparar — a suíte de regressão não está isolando o efeito
+  de nada contra um instrumento fixo, está checando se o sistema ainda
+  passa nas tarefas que já passava. Sob esse critério, **crescer a suíte
+  só pode aumentar a cobertura de regressão, nunca invalidar uma
+  comparação que não existe mais** — adicionar uma tarefa nova é
+  estritamente uma melhoria, não um risco a conter atrás de um
+  congelamento. A pressão que fazia M2 ser "o último ponto barato para
+  mudar de direção" em v1 não tem equivalente em v2: não há mais uma
+  janela que se fecha, porque não há mais um instrumento de medida
+  compartilhado para proteger.
 - **Segunda anotação independente para o cálculo de Cohen's κ (T064,
   FR-024, v1).** ~~A taxonomia qualitativa de erros exige dupla anotação em
   20% da amostra (150 falhas estratificadas), com discordâncias indo a um
