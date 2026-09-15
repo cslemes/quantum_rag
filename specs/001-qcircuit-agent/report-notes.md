@@ -521,6 +521,17 @@ Tudo que limita o que pode ser afirmado a partir deste desenho experimental.
 
 Itens genuinamente em aberto, não decisões pendentes de implementação.
 
+> **Nota datada, 2026-09-15** (migração v1→v2, ver `MIGRATION.md`): duas das
+> perguntas abaixo — o segundo anotador para κ e a calibração de descarte de
+> D12 — **deixaram de estar em aberto**, mas não porque alguém respondeu:
+> deixaram de existir como perguntas porque o trabalho que as fazia
+> perguntas (T064, o critério de descarte via piloto C5) foi removido do
+> escopo. É uma distinção que importa para o relatório — "resolvido por
+> remoção" não é o mesmo que "resolvido", e um leitor futuro não deve
+> confundir os dois. Os itens permanecem abaixo, marcados individualmente,
+> em vez de apagados — o mesmo padrão não-destrutivo de `research.md`
+> (D8/D9/D12).
+
 - **Título formal do projeto.** Três nomes em circulação:
   `qcircuit-agent`, "Quantum-RAG" (nome do diretório do repositório), "LLM
   Quantum Copilot". "Quantum RAG" colide com o termo já estabelecido na
@@ -533,17 +544,29 @@ Itens genuinamente em aberto, não decisões pendentes de implementação.
   para incorporar qualquer mudança de direção — a reunião precisa
   acontecer antes de M2, não depois.
 - **Segunda anotação independente para o cálculo de Cohen's κ (T064,
-  FR-024).** A taxonomia qualitativa de erros exige dupla anotação em 20%
-  da amostra (150 falhas estratificadas), com discordâncias indo a um
+  FR-024, v1).** ~~A taxonomia qualitativa de erros exige dupla anotação em
+  20% da amostra (150 falhas estratificadas), com discordâncias indo a um
   terceiro anotador que decide por maioria. Depende de disponibilidade de
-  um terceiro — sem isso resolvido, trava na semana 11 do cronograma.
-  Fonte: `spec.md` (κ ≥ 0,70), `tasks.md` T064.
-- **Calibração de descarte das perturbações (D12).** O critério —
+  um terceiro — sem isso resolvido, trava na semana 11 do cronograma.~~
+  **SUPERADA em 2026-09-15** (migração v1→v2): T064 foi removida do escopo
+  (`MIGRATION.md` §3 — "a remoção de T064 elimina o risco mais frágil do
+  projeto"). Não há mais taxonomia com dupla anotação, logo não há mais
+  segundo anotador a arranjar — a pergunta não foi respondida, deixou de
+  existir. Fonte original: `spec.md` v1 (κ ≥ 0,70), `tasks.md` v1 T064
+  (ambos reescritos em v2; a citação acima é histórica).
+- **Calibração de descarte das perturbações (D12, v1).** ~~O critério —
   descartar uma perturbação onde o gerador de fronteira, na condição
   completa (C5), não passe de 20% de acerto — exige RODAR geradores contra
   as 60 tarefas perturbadas. Essa decisão só pode ser tomada no piloto
   (T055), não antes; até lá, as 60 variantes perturbadas construídas em
-  T048 são candidatas, não confirmadas. Fonte: D12.
+  T048 são candidatas, não confirmadas.~~ **SUPERADA em 2026-09-15**
+  (migração v1→v2): o critério de descarte dependia da condição C5 e do
+  piloto T055, nenhum dos dois existe mais (`research.md` D12, marcada
+  SUPERADA na migração). As 60 variantes perturbadas de T048 permanecem
+  construídas e verificadas — mudam de função (controle de contaminação →
+  teste de robustez, `MIGRATION.md` §2), sem precisar de nenhuma calibração
+  de descarte para isso. De novo: resolvida por remoção do critério, não
+  por uma resposta à pergunta original.
 - **Nota, não pergunta em aberto**: "treinar ou ajustar fino qualquer
   gerador" já está explicitamente listado em Out of Scope (`spec.md`) —
   não é uma extensão a decidir, é uma exclusão já fixada. Registrado aqui
