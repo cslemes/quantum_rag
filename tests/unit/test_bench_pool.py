@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[2] / "scripts"))
 
-from bench_pool import interpret  # noqa: E402
+from bench_pool import SUITE_CALLS, interpret  # noqa: E402
 
 
 def test_reports_amortization_when_first_submit_is_much_slower() -> None:
@@ -18,7 +18,7 @@ def test_reports_amortization_when_first_submit_is_much_slower() -> None:
 
     assert "consistent with D1b" in text
     assert "WARNING" not in text
-    assert "27,000-call matrix" in text
+    assert f"{SUITE_CALLS:,} calls" in text
 
 
 def test_warns_plainly_when_every_submit_pays_the_same_overhead() -> None:

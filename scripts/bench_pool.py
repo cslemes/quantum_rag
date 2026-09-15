@@ -2,10 +2,12 @@
 
 D1b's claim: `import qiskit` costs ~1-2s, and a pool of pre-warmed workers
 pays that cost ONCE per worker (at startup) instead of once per submitted
-circuit. At D1b's ~27,000-call experimental matrix, 1.5s/call paid on every
-call instead of amortized once is ~11h against a 72h wall-clock budget —
-this script is the check that the pool actually delivers the amortization
-the budget assumes, not just the design rationale for it.
+circuit. Against a regression-suite run's worst case (v2: 120 tasks x 3
+seeds x up to 5 retries = ~1,800 calls, against SC-007's 3h budget — see
+`MIGRATION.md`, this replaced v1's 5,400-run/72h experimental matrix),
+1.5s/call paid on every call instead of amortized once is ~45min — this
+script is the check that the pool actually delivers the amortization the
+budget assumes, not just the design rationale for it.
 
 Uses a SINGLE worker (`--pool-size 1`, the default) on purpose: the question
 is binary — "is the import cost paid once or every time" — and a
@@ -16,7 +18,7 @@ on a different worker's queue. One worker means submit #1 is unambiguously
 "reused" — exactly the two cases the interpretation below distinguishes.
 
 Run inside the app container — Linux `fork`-based `multiprocessing`, the
-same start method the experimental matrix actually runs under (research.md
+same start method the regression suite actually runs under (research.md
 D15). A Windows-native run would exercise `spawn` instead, which re-executes
 the interpreter per process and would not test the same code path:
 
@@ -35,10 +37,13 @@ qc.h(0)
 qc.cx(0, 1)
 """
 
-# research.md D1b: ~5,400 base task executions, up to ~5 retries each ->
-# ~27,000 calls, against a 72h wall-clock target for the full matrix.
-MATRIX_CALLS = 27_000
-MATRIX_BUDGET_H = 72
+# research.md D1b / SC-007 (spec.md v2): worst case for one regression-suite
+# run is 120 tasks x 3 seeds x up to 5 retries (MAX_ITER default) -> ~1,800
+# calls, against a 3h wall-clock target for the whole suite. Replaces v1's
+# 5,400-execution/72h experimental matrix (see MIGRATION.md) — the same
+# amortization argument, rebased on the actual v2 scale.
+SUITE_CALLS = 1_800
+SUITE_BUDGET_H = 3
 
 # Below this, submit #1's extra overhead is noise, not evidence of
 # amortization — `import qiskit` alone is documented at 1-2s (D1b), so
@@ -86,17 +91,18 @@ def interpret(results: list[tuple[float, float]]) -> str:
     ]
 
     if delta >= AMORTIZATION_THRESHOLD_S:
-        saved_per_call_h = (MATRIX_CALLS * delta) / 3600
+        saved_per_call_h = (SUITE_CALLS * delta) / 3600
         lines.append(
             f"Submit #1 cost {delta:.4f}s more overhead than the mean of the rest "
             f"— consistent with D1b: the pool amortizes the `import qiskit` cost "
             f"once, at worker startup, not on every submit."
         )
         lines.append(
-            f"Extrapolated to D1b's ~{MATRIX_CALLS:,}-call matrix: paying "
+            f"Extrapolated to a regression-suite run's worst case "
+            f"(~{SUITE_CALLS:,} calls, SC-007): paying "
             f"{delta:.2f}s on every call instead of once would cost "
             f"~{saved_per_call_h:.1f}h of wall-clock against the "
-            f"{MATRIX_BUDGET_H}h target — this is exactly the cost the pool "
+            f"{SUITE_BUDGET_H}h target — this is exactly the cost the pool "
             f"design is meant to avoid, and this run confirms it does."
         )
     else:
@@ -111,7 +117,7 @@ def interpret(results: list[tuple[float, float]]) -> str:
             "rather than reused — the pool is providing NO amortization "
             "benefit, contrary to D1b's design assumption. Do not trust "
             "latency numbers gathered under this configuration; investigate "
-            "WorkerPool before running anything on the experimental matrix."
+            "WorkerPool before running anything against the regression suite."
         )
 
     return "\n".join(lines)

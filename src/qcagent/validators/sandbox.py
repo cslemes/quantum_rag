@@ -2,8 +2,10 @@
 
 A `WorkerPool` of pre-warmed subprocesses (qiskit already imported) replaces
 spawning a fresh subprocess per execution — see research.md D1b: with
-~27,000 calls across the experimental matrix, `import qiskit` alone
-(1-2s) would cost 8-15h if paid on every call.
+~1,800 calls in a regression suite run's worst case (120 tasks x 3 seeds x
+up to 5 retries — see MIGRATION.md, this replaced v1's 5,400-run/72h
+experimental matrix), `import qiskit` alone (1-2s) would cost 30min-1h if
+paid on every call, against SC-007's 3h budget for the whole suite.
 
 Isolation (FR-025) is preserved: each worker is still a process separate
 from the orchestrator. What changes is that it's reused instead of

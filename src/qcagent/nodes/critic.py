@@ -9,7 +9,10 @@ the human-readable rationale and the concrete hint for the next attempt,
 never to decide the action itself. For the "done" and "abort" terminal
 actions there is nothing to hint at, so no LLM call is made at all — this
 also avoids paying for a call on the common case (a successful attempt)
-across the ~5,400-run experimental matrix.
+across a regression-suite run (v2: up to 360 executions per run, 120 tasks
+x 3 seeds against a single generator/config — see MIGRATION.md; this
+replaced v1's 5,400-run experimental matrix across 3 generators x 5
+conditions).
 """
 
 import json
