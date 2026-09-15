@@ -3,7 +3,9 @@
 **Feature**: `001-qcircuit-agent` | **Data**: 2026-08-11
 **Módulos**: `src/qcagent/retrieval/index.py`, `src/qcagent/retrieval/hybrid.py`
 **Tarefas**: T034, T035, T035b, T036, T036b, T037, T038
-**Requisitos cobertos**: FR-011, FR-012, FR-013, FR-014, FR-015
+**Requisitos cobertos**: FR-006, FR-007, FR-008 (spec.md v2 — ver `MIGRATION.md`
+para a renumeração; as citações de FR abaixo foram corrigidas para v2, não
+carregam mais os números de v1)
 
 Este contrato é normativo. Assinaturas e nomes de campo são fixos; a
 implementação pode variar internamente, mas não a interface.
@@ -127,11 +129,13 @@ def snapshot(client: QdrantClient, out_dir: Path) -> SnapshotInfo:
     Cria snapshot da coleção e o baixa para `out_dir`. Retorna nome, caminho
     local e sha256 do arquivo.
 
-    T036b / Princípio II: o hash retornado entra no `run_id`. Permite
-    reconstruir na semana 11 exatamente o corpus recuperável na semana 4,
-    mesmo que a documentação upstream tenha mudado no intervalo.
+    T036b / Princípio III (Regressão verificável, constituição v2.0.0 — era
+    Princípio II em v1; o número mudou de sentido na emenda, não citar de
+    memória). O hash retornado entra no `run_id`. Permite reconstruir depois
+    exatamente o corpus recuperável no momento de uma rodada de regressão
+    anterior, mesmo que a documentação upstream tenha mudado no intervalo.
 
-    Chamar ao fim da ingestão e antes de cada rodada experimental.
+    Chamar ao fim da ingestão e antes de cada rodada da suíte de regressão.
     """
 ```
 
@@ -154,9 +158,9 @@ class SnapshotInfo(BaseModel):
 class RetrievalQuery(BaseModel):
     """Entrada de uma consulta. Construída pelo nó retriever."""
     text: str
-    target_version: str                      # ex.: "1.2.4" — FR-011
+    target_version: str                      # ex.: "1.2.4" — FR-006
     sources: list[str] | None = None         # None = todas as fontes
-    include_deprecated: bool = True          # FR-014: rotular, não omitir
+    include_deprecated: bool = True          # FR-007: rotular, não omitir
     limit: int = 8
     prefetch_limit: int = 40                 # candidatos por ramo antes da fusão
 ```
@@ -205,10 +209,12 @@ def build_filter(query: RetrievalQuery) -> Filter:
               source IN query.sources          (se não for None)
       must_not: deprecated == True             (se include_deprecated=False)
 
-    Nota sobre FR-014: o padrão é include_deprecated=True. Material obsoleto
+    Nota sobre FR-007: o padrão é include_deprecated=True. Material obsoleto
     DEVE chegar ao gerador rotulado como não utilizável, não ser filtrado fora
-    — ver D7 em research.md. O parâmetro existe para o braço de ablação e para
-    a avaliação isolada do retriever, não para o caminho normal.
+    — ver D7 em research.md. O parâmetro existe para a avaliação isolada do
+    retriever (T041, recall@8) e para testes de regressão que queiram isolar
+    o efeito da rotulagem de obsolescência — não para o caminho normal do
+    produto (v2: não há mais braço de ablação a comparar; ver `MIGRATION.md`).
     """
 ```
 
@@ -218,8 +224,9 @@ def build_filter(query: RetrievalQuery) -> Filter:
 def split_by_register(chunks: Sequence[Chunk]) -> RetrievalBundle:
     """
     Separa material de referência de API de material descritivo de algoritmo.
-    FR-015: os dois registros respondem a perguntas diferentes e chegam ao
-    gerador em blocos distinguíveis.
+    Os dois registros respondem a perguntas diferentes e chegam ao gerador
+    em blocos distinguíveis — detalhe de implementação que sustenta FR-006
+    (consulta a fontes versionadas), não amarrado a uma FR própria em v2.
 
       api_chunks:   source in {qiskit_api, pennylane_api, migration_guide}
       paper_chunks: source == arxiv
@@ -291,10 +298,10 @@ errado degrada recall de forma silenciosa — não há erro, só resultado pior.
 |---|---|---|
 | Índices de payload existem após `ensure_collection` | `tests/unit/test_index.py` | T035 |
 | Reingestão do mesmo corpus não altera `point_count` | `tests/unit/test_index.py` | T035b, idempotência |
-| Filtro por versão exclui a versão errada | `tests/unit/test_hybrid.py` | FR-011 |
-| Consulta por identificador exato recupera o símbolo no top-3 | `tests/unit/test_hybrid.py` | FR-013, caso `RZGate` vs `RXGate` |
-| `to_prompt_context` marca chunk obsoleto e mostra `replacement` | `tests/unit/test_hybrid.py` | FR-014 |
-| `split_by_register` separa arxiv de docs de API | `tests/unit/test_hybrid.py` | FR-015 |
+| Filtro por versão exclui a versão errada | `tests/unit/test_hybrid.py` | FR-006 |
+| Consulta por identificador exato recupera o símbolo no top-3 | `tests/unit/test_hybrid.py` | FR-008, caso `RZGate` vs `RXGate` |
+| `to_prompt_context` marca chunk obsoleto e mostra `replacement` | `tests/unit/test_hybrid.py` | FR-007 |
+| `split_by_register` separa arxiv de docs de API | `tests/unit/test_hybrid.py` | — (detalhe de implementação, não amarrado a uma FR específica de v2) |
 | `recall@8 ≥ 0.85` nas 50 consultas sintéticas | `analysis/eval_retrieval.py` | portão M1 |
 
 **Teste de caso crítico** (o que justifica o híbrido existir): consulta contendo

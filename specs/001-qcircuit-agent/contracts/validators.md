@@ -3,7 +3,9 @@
 **Feature**: `001-qcircuit-agent` | **Data**: 2026-08-11
 **Módulos**: `src/qcagent/validators/{sandbox,static,semantic,resource}.py`
 **Tarefas**: T013, T017–T023
-**Requisitos cobertos**: FR-002, FR-003, FR-004, FR-005, FR-006, FR-025
+**Requisitos cobertos**: FR-002, FR-014, FR-018, FR-021 (spec.md v2 — ver
+`MIGRATION.md` para a renumeração; as citações de FR abaixo foram corrigidas
+para v2, não carregam mais os números de v1)
 
 > **Princípio I — inegociável.** Nenhum módulo sob `validators/` importa de
 > `llm/`. `tests/contract/test_architecture.py` falha se isso ocorrer. Todo
@@ -22,8 +24,8 @@ def make_simulator(n_qubits: int, seed: int) -> AerSimulator:
     CPU por padrão. GPU só acima do limiar — ver D1.
 
     Abaixo de ~18 qubits a GPU perde para a CPU (overhead de kernel e
-    transferência host↔device dominam), e disputaria VRAM com o Ollama durante
-    a condição C5 com gerador local.
+    transferência host↔device dominam), e disputaria VRAM com o Ollama quando
+    o gerador local está em uso (D10c).
 
     max_parallel_experiments=1 é DELIBERADO: o paralelismo vive no
     bench/runner.py. Deixar Aer paralelizar internamente E o runner paralelizar
@@ -35,7 +37,7 @@ def make_simulator(n_qubits: int, seed: int) -> AerSimulator:
         device="GPU" if n_qubits >= GPU_THRESHOLD_QUBITS else "CPU",
         max_parallel_threads=8,          # 5700X: 8 núcleos físicos
         max_parallel_experiments=1,
-        seed_simulator=seed,             # obrigatório — Princípio II
+        seed_simulator=seed,             # obrigatório — Princípio III (era II em v1)
     )
 ```
 
@@ -52,10 +54,12 @@ class WorkerPool:
     por execução — ver D1b.
 
     Justificativa: circuitos de 2–10 qubits simulam em milissegundos; o custo
-    dominante é spawn + `import qiskit` (1–2 s). Com ~27.000 chamadas isso são
-    8–15 h só em imports, contra a meta de 72 h da matriz inteira.
+    dominante é spawn + `import qiskit` (1–2 s). Numa rodada de regressão no
+    pior caso (120 tarefas × 3 seeds × até 5 tentativas = ~1.800 chamadas),
+    isso é 30 min–1 h só em imports, contra a meta de 3 h da suíte inteira
+    (SC-007).
 
-    O isolamento de FR-025 é preservado: o worker continua sendo processo
+    O isolamento de FR-021 é preservado: o worker continua sendo processo
     separado do orquestrador. Muda apenas que é reutilizado em vez de recriado.
     """
 
@@ -129,9 +133,11 @@ def check_static(code: str, coupling_map: CouplingMap | None,
       3. pool.submit                 → produz QPY
       4. transpile(coupling_map)     → error_type="TranspilationFailure"
 
-    O scan roda ANTES da execução e é o que distingue H1 de H2: `DeprecatedAPI`
-    é a única categoria que o critic roteia para `retry_retrieval`. Sem essa
-    separação, a hipótese sobre valor da recuperação não é testável.
+    O scan roda ANTES da execução para que `DeprecatedAPI` seja a única
+    categoria que o critic roteia para `retry_retrieval` — sem essa
+    separação, símbolo obsoleto e erro de código genuíno ficam
+    indistinguíveis para o roteamento, e a recuperação nunca é reconsultada
+    exatamente onde ajudaria.
     """
 ```
 
@@ -168,7 +174,7 @@ def _check_exact(generated, reference) -> UnitaryVerdict:
     ARMADILHA 1 — fase global. Duas implementações corretas do mesmo circuito
     diferem rotineiramente por e^{iθ}. `Operator.equiv()` já trata isso;
     comparação direta de matrizes as marcaria como erradas. NUNCA usar
-    np.allclose sobre as matrizes (FR-004).
+    np.allclose sobre as matrizes (ver D3, research.md).
 
     Quando equiv() é falso, calcular fidelidade contínua:
         |Tr(U_ref† @ U_gen)| / dim
@@ -193,10 +199,10 @@ def _check_by_composition(generated, reference, n_qubits,
     retorna inalterado a menos de fase global.
 
     O abs() do produto interno dá tolerância a fase global de graça — mesma
-    garantia de FR-004, sem materializar matriz.
+    garantia do caminho exato (D3), sem materializar matriz.
 
     Probabilístico: com 5 estados Haar-aleatórios a chance de falso positivo é
-    desprezível, mas NÃO é zero. Declarar isso na dissertação.
+    desprezível, mas NÃO é zero. Declarar isso no relatório.
     """
     composed = generated.compose(reference.inverse())
     worst = 1.0
@@ -215,7 +221,7 @@ def _check_by_composition(generated, reference, n_qubits,
 ```python
 def check_with_endianness(generated, reference, n_qubits) -> SemanticResult:
     """
-    ARMADILHA 2 — convenção de ordenação (FR-005).
+    ARMADILHA 2 — convenção de ordenação (ver D3, research.md).
 
     Qiskit é little-endian. Referências portadas de artigos ou do PennyLane
     usam com frequência a convenção oposta. Verificar contra a referência
@@ -305,7 +311,8 @@ def check_resources(generated, reference, coupling_map_name,
     ARMADILHA 3 — transpilação assimétrica. Transpilar AMBOS com parâmetros
     IDÊNTICOS (mesmo opt_level, mesmo coupling_map, mesmo seed_transpiler).
     Comparar circuito transpilado contra referência não-transpilada é erro
-    metodológico e produziria depth_ratio sem significado (FR-006).
+    metodológico e produziria depth_ratio sem significado (FR-002 — viabilidade
+    na topologia alvo, reportada separadamente da execução).
 
     seed_transpiler é obrigatório: os passes de roteamento são estocásticos, e
     sem seed o depth_ratio varia entre execuções da mesma entrada.
@@ -338,12 +345,12 @@ como `status="infrastructure_error"` e excluir do denominador.
 | Teste | Arquivo | Verifica |
 |---|---|---|
 | `validators/` não importa de `llm/` | `tests/contract/test_architecture.py` | Princípio I |
-| Circuitos idênticos a menos de fase global → equivalente | `tests/unit/test_semantic.py` | FR-004 |
+| Circuitos idênticos a menos de fase global → equivalente | `tests/unit/test_semantic.py` | D3 |
 | Caminhos exato e por composição concordam em 8 qubits | `tests/unit/test_semantic.py` | D3b |
-| Referência com bits invertidos → `EndiannessSwap`, não falha genérica | `tests/unit/test_semantic.py` | FR-005 |
+| Referência com bits invertidos → `EndiannessSwap`, não falha genérica | `tests/unit/test_semantic.py` | D3 |
 | Dimensões incompatíveis não levantam exceção | `tests/unit/test_semantic.py` | contrato de erros |
 | Mesmo circuito transpilado duas vezes com a mesma seed → mesmo depth | `tests/unit/test_resource.py` | reprodutibilidade |
-| Denylist bloqueia antes de invocar o worker | `tests/unit/test_sandbox.py` | FR-025 |
+| Denylist bloqueia antes de invocar o worker | `tests/unit/test_sandbox.py` | FR-021 |
 | Worker reciclado após N execuções não vaza estado | `tests/unit/test_sandbox.py` | D1b |
 | Timeout mata e substitui o worker | `tests/unit/test_sandbox.py` | D1b |
 
