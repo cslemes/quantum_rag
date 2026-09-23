@@ -15,8 +15,18 @@ import httpx
 import pytest
 from qdrant_client import QdrantClient
 
+from qcagent.retrieval import index as index_module
 from qcagent.retrieval.index import COLLECTION, ensure_collection, point_id, upsert_chunks
 from qcagent.state import Chunk
+
+# These tests CREATE, RECREATE and DELETE a collection on the live server, so
+# they must never touch the one real work depends on. They used to run against
+# `COLLECTION` itself: every `pytest` run silently destroyed the ingested index,
+# and the next `make eval` measured a system with no retrieval at all. The
+# preflight in bench/runner.py now refuses to start in that state, but refusing
+# is a second line of defence — the tests should not be doing the damage.
+TEST_COLLECTION = "qdocs_test_index"
+assert TEST_COLLECTION != COLLECTION
 
 QDRANT_URL = "http://localhost:6333"
 
@@ -61,18 +71,27 @@ def _fake_sparse_vectors() -> list:
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    """A live client pointed at a THROWAWAY collection.
+
+    `index.py` reads its collection name from a module global, so redirecting
+    that global is what makes every function under test operate on the
+    disposable name. Both the setup and the teardown then act only on it.
+    """
+    monkeypatch.setattr(index_module, "COLLECTION", TEST_COLLECTION)
     c = QdrantClient(url=QDRANT_URL)
+    if c.collection_exists(TEST_COLLECTION):
+        c.delete_collection(TEST_COLLECTION)
     yield c
-    if c.collection_exists(COLLECTION):
-        c.delete_collection(COLLECTION)
+    if c.collection_exists(TEST_COLLECTION):
+        c.delete_collection(TEST_COLLECTION)
 
 
 @requires_qdrant
 def test_payload_indexes_exist_after_ensure_collection(client: QdrantClient) -> None:
     ensure_collection(client, _DENSE_DIM, recreate=True)
 
-    info = client.get_collection(COLLECTION)
+    info = client.get_collection(TEST_COLLECTION)
 
     assert "library_version" in info.payload_schema
     assert "deprecated" in info.payload_schema
@@ -87,12 +106,12 @@ def test_reingesting_the_same_corpus_does_not_change_point_count(client: QdrantC
     ensure_collection(client, _DENSE_DIM, recreate=True)
 
     upsert_chunks(client, _SAMPLE_CHUNKS, _FAKE_DENSE, _fake_sparse_vectors())
-    first_count = client.get_collection(COLLECTION).points_count
+    first_count = client.get_collection(TEST_COLLECTION).points_count
 
     # Re-ingest the identical corpus — point_id() is deterministic (uuid5 of
     # doc_id), so this must overwrite the same points, not duplicate them.
     upsert_chunks(client, _SAMPLE_CHUNKS, _FAKE_DENSE, _fake_sparse_vectors())
-    second_count = client.get_collection(COLLECTION).points_count
+    second_count = client.get_collection(TEST_COLLECTION).points_count
 
     assert first_count == second_count == len(_SAMPLE_CHUNKS)
 

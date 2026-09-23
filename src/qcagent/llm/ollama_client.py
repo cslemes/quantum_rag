@@ -146,13 +146,20 @@ def ollama_version(base_url: str) -> str:
 
 class OllamaClient(BaseLLMClient):
     def __init__(
-        self, base_url: str, model_id: str = "qwen2.5-coder:7b", num_ctx: int = 16384
+        self,
+        base_url: str,
+        model_id: str = "qwen2.5-coder:7b",
+        num_ctx: int = 16384,
+        temperature: float = 0.0,
+        keep_alive: str = "60m",
     ) -> None:
         self.model_id = model_id
         self.base_url = base_url.rstrip("/")
         # Set explicitly on every request body below — never relies on the
         # Ollama server's own default context length (D10b).
         self.num_ctx = num_ctx
+        self.temperature = temperature
+        self.keep_alive = keep_alive
         self._client = httpx.Client(base_url=self.base_url, timeout=300.0)
 
     def count_tokens(self, text: str) -> int:
@@ -186,10 +193,33 @@ class OllamaClient(BaseLLMClient):
                         {"role": "user", "content": prompt},
                     ],
                     "stream": False,
+                    # Hold the model resident for the whole suite. Ollama's
+                    # default unloads it after ~5 min idle, and a mid-run
+                    # reload changes the engine state that generation turns
+                    # out to depend on (F19). Explicit for the same reason
+                    # `num_ctx` and `temperature` are: an inherited default
+                    # that alters the measurement must never be inherited.
+                    "keep_alive": self.keep_alive,
                     "options": {
                         "num_ctx": self.num_ctx,
                         "seed": seed,
                         "num_predict": max_tokens,
+                        # Pinned for the same reason D10b pins `num_ctx`:
+                        # never inherit a sampling parameter from the server
+                        # or the model's Modelfile, because the default is
+                        # invisible and changes the measurement.
+                        #
+                        # A seed ALONE does not make Ollama deterministic.
+                        # Measured directly: same prompt, same seed, four
+                        # calls -> two distinct outputs; adding
+                        # temperature=0 -> four identical. Across the first
+                        # two full suite runs this produced DIFFERENT
+                        # attempt-1 output for 26.1% of (task, seed) pairs,
+                        # which made a before/after comparison impossible:
+                        # `compila@1` moved 10.9% -> 15.6% between two runs
+                        # whose difference cannot affect attempt 1 at all.
+                        # See F15.
+                        "temperature": self.temperature,
                     },
                 },
             )

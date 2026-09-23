@@ -23,27 +23,19 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import cast
 
+from pydantic import BaseModel
 from qdrant_client import QdrantClient
 from qiskit import qpy
 from qiskit.quantum_info import SparsePauliOp
 
 from bench.schema import TaskSpec
 from qcagent.config import settings
-from qcagent.graph import (
-    Oracle,
-    StatePreparationOracle,
-    build_graph,
-    make_resource_check_node,
-    make_semantic_check_node,
-    make_static_check_node,
-    recursion_limit_for,
-)
+from qcagent.graph import Oracle, StatePreparationOracle, recursion_limit_for
+from qcagent.live import LiveServices, build_live_graph, initial_state
 from qcagent.llm.ollama_client import OllamaClient
-from qcagent.nodes.critic import make_critic_node
-from qcagent.nodes.generator import make_generator_node, render_structural_diff
-from qcagent.nodes.planner import make_planner_node
-from qcagent.nodes.retriever import make_retriever_node
+from qcagent.nodes.generator import render_structural_diff
 from qcagent.retrieval.embedding import FastEmbedEmbedder
 from qcagent.state import AgentState
 from qcagent.validators.sandbox import WorkerPool
@@ -76,42 +68,61 @@ def _load_oracle(task: TaskSpec) -> Oracle:
     )
 
 
-def run_task(task_path: Path, *, max_iter: int | None = None) -> AgentState:
-    """Runs one TaskSpec through the graph to a terminal status."""
+def run_task(task_path: Path, *, seed: int, max_iter: int | None = None) -> AgentState:
+    """Runs one TaskSpec through the graph to a terminal status.
+
+    `seed` is REQUIRED and is the whole point of T104. This tool used to pass
+    none at all, so every by-hand run silently used the node defaults (42)
+    while the suite ran 1/2/3 — and there was no flag to change it. An
+    observation made here was therefore NOT comparable to the suite's numbers
+    for the same task, which nothing said out loud (F20).
+
+    It matters concretely: in the last clean suite run `ghz_3q` succeeds on
+    seed 2 and fails on 1 and 3. A demo without a stated seed is a coin flip.
+    """
     task = TaskSpec.model_validate_json(task_path.read_text())
     oracle = _load_oracle(task)
-
-    def oracle_loader(_ref: str) -> Oracle:
-        return oracle
-
-    llm = OllamaClient(settings.ollama_base_url, settings.ollama_model, settings.ollama_num_ctx)
+    # Every generation parameter stated explicitly, none inherited: this tool
+    # and the suite agreed on temperature only because both happened to take
+    # the client's default, which is the accident T104 exists to remove.
+    llm = OllamaClient(
+        settings.ollama_base_url,
+        settings.ollama_model,
+        settings.ollama_num_ctx,
+        settings.ollama_temperature,
+    )
     resolved_max_iter = max_iter or settings.max_iter
 
     qdrant_client = QdrantClient(url=settings.qdrant_url)
     embedder = FastEmbedEmbedder()
 
-    with WorkerPool(size=2, recycle_after=50) as pool:
-        graph = build_graph(
-            planner_node=make_planner_node(llm, max_qubits=20),
-            retriever_node=make_retriever_node(qdrant_client, embedder),
-            generator_node=make_generator_node(llm),
-            static_check_node=make_static_check_node(pool),
-            semantic_check_node=make_semantic_check_node(
-                oracle_loader, distribution_tolerance=task.tolerance
-            ),
-            resource_check_node=make_resource_check_node(oracle_loader),
-            critic_node=make_critic_node(llm, max_iter=resolved_max_iter),
+    with WorkerPool(
+        size=settings.worker_pool_size, recycle_after=settings.worker_recycle_after
+    ) as pool:
+        graph = build_live_graph(
+            LiveServices(llm=llm, qdrant=qdrant_client, embedder=embedder, pool=pool),
+            seed=seed,
+            max_iter=resolved_max_iter,
+            oracle=oracle,
+            distribution_tolerance=task.tolerance,
         )
-        return graph.invoke(
-            {
-                "task_id": task.task_id,
-                "spec": task.prompt,
-                "oracle_ref": task.oracle_path,
-                "coupling_map_name": task.coupling_map,
-                "max_depth_ratio": task.max_depth_ratio,
-                "iteration": 0,
-            },
-            config={"recursion_limit": recursion_limit_for(resolved_max_iter)},
+        # LangGraph's CompiledStateGraph.invoke() is typed to return a plain
+        # dict (it has no way to know the state is our AgentState TypedDict
+        # at the type level) — the cast documents what's actually true at
+        # runtime: this graph was built with StateGraph(AgentState), so
+        # every key it returns is one of AgentState's.
+        return cast(
+            AgentState,
+            graph.invoke(
+                initial_state(
+                    task_id=task.task_id,
+                    spec=task.prompt,
+                    oracle_ref=task.oracle_path,
+                    coupling_map_name=task.coupling_map,
+                    max_depth_ratio=task.max_depth_ratio,
+                ),
+                config={"recursion_limit": recursion_limit_for(resolved_max_iter)},
+            ),
         )
 
 
@@ -123,7 +134,11 @@ def _print_report(state: AgentState) -> None:
     print(state.get("code") or "<no code generated>")
 
     for layer in ("static", "semantic", "resource"):
-        result = state.get(layer)
+        # `layer` is a plain str, not a Literal, so AgentState.get(layer)
+        # widens to the union of every value type AgentState declares — cast
+        # back to what these three keys are actually declared as
+        # (StaticResult | SemanticResult | ResourceResult | None).
+        result = cast("BaseModel | None", state.get(layer))
         print(f"\n-- {layer}_check " + "-" * (60 - len(layer)))
         if result is None:
             print("<not run>")
@@ -149,13 +164,24 @@ def _print_report(state: AgentState) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("task", type=Path, help="Path to a TaskSpec JSON file")
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=1,
+        help=(
+            "Generator seed. Defaults to 1, which is a SUITE seed, so a run here is "
+            "comparable to the suite's record for the same task. Outcomes differ by "
+            "seed (ghz_3q succeeds on 2, fails on 1 and 3), so state it when reporting."
+        ),
+    )
     args = parser.parse_args()
 
     if not args.task.exists():
         print(f"error: task file not found: {args.task}", file=sys.stderr)
         raise SystemExit(1)
 
-    state = run_task(args.task)
+    print(f"seed={args.seed}  (outcomes are seed-dependent — see --seed)", file=sys.stderr)
+    state = run_task(args.task, seed=args.seed)
     _print_report(state)
 
 

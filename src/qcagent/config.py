@@ -7,6 +7,7 @@ import hashlib
 import importlib.metadata
 import json
 import logging
+import os
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -33,6 +34,11 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5-coder:7b"
     ollama_num_ctx: int = 16384
+    # Pinned, never inherited from the model's Modelfile (F15, generalizing
+    # D10b's rule for num_ctx). A seed alone does NOT make Ollama
+    # deterministic: two full suite runs disagreed on attempt 1 for 26.1% of
+    # (task, seed) pairs, which made before/after comparison impossible.
+    ollama_temperature: float = 0.0
 
     # Qdrant (D5b)
     qdrant_url: str = "http://localhost:6333"
@@ -138,4 +144,12 @@ def collect_lib_versions(*, ollama_base_url: str | None = None) -> dict[str, str
         except importlib.metadata.PackageNotFoundError:
             versions[package] = "unknown"
     versions["ollama"] = ollama_version(ollama_base_url or settings.ollama_base_url)
+    # The GPU stack (driver + CUDA runtime) changes generation output across an
+    # upgrade or another machine, and NOTHING here can observe it: the GPU
+    # belongs to the host, `nvidia-smi` is not in this container, and Ollama's
+    # API exposes neither. So it is declared by the operator rather than
+    # detected, and its absence is recorded as absence instead of being
+    # silently omitted — a field that is missing from the record cannot be
+    # distinguished later from a field that was checked and matched.
+    versions["gpu_stack"] = os.environ.get("QCAGENT_GPU_STACK", "unrecorded")
     return versions

@@ -1,0 +1,29 @@
+# Regression-suite configuration (US7, T098b) — the source of truth for one
+# run of `make eval` / `uv run python -m bench.runner --config config.yaml`.
+#
+# One configuration per run: v2's suite compares a change against the SAME
+# configuration before and after (FR-027, SC-008), it is not v1's experimental
+# matrix of conditions. To compare two generators, run the suite twice and
+# compare the two result files.
+#
+# Before any task runs, every reference named here is re-validated; one
+# unverified reference aborts the entire run (Principle IV, FR-028).
+# `--verify-only` performs just that check.
+
+# Generator under test. Any model the configured Ollama server serves.
+model: qwen2.5-coder:7b
+
+# One run per (task, seed). Three seeds is what SC-007's 3h budget was sized
+# for at 120 tasks; fewer seeds is the first lever if a run overruns (T102).
+seeds: [1, 2, 3]
+
+# "all" = every task under bench/tasks/ (120: 60 canonical + 60 perturbed).
+# A list of task_ids runs exactly those, and an unknown id is an error rather
+# than a silently smaller suite.
+tasks: all
+
+# Retry ceiling per task (D8). Raising it changes what the suite measures, so
+# it belongs in the configuration recorded alongside the results.
+max_iter: 5
+
+results_dir: results

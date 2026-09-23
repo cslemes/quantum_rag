@@ -66,6 +66,19 @@ def search(client: QdrantClient, query: RetrievalQuery, embedder: Embedder) -> l
 
     Returns Chunks ordered by descending score, with `deprecated` and
     `replacement` populated from the payload.
+
+    **The order is made DETERMINISTIC here, and that is not cosmetic.** RRF
+    fusion produces exact ties routinely (two chunks at 0.50000 is the norm,
+    not the exception), and Qdrant breaks those ties in whatever order the
+    segments happened to yield. The SET of chunks was stable across repeated
+    identical queries; the ORDER was not — which is enough, because the
+    order is the order they appear in the generator's prompt, so a reordered
+    tie is a different prompt and therefore a different generation.
+
+    This was the second source of the SC-008 failure. Pinning `temperature`
+    (F15) made the model deterministic and left divergence at 28.3%, because
+    a deterministic model fed a reordered prompt still answers differently.
+    See F17.
     """
     if not client.collection_exists(COLLECTION):
         raise CollectionNotFound(
@@ -92,7 +105,11 @@ def search(client: QdrantClient, query: RetrievalQuery, embedder: Embedder) -> l
         collection_name=COLLECTION,
         prefetch=prefetch,
         query=FusionQuery(fusion=Fusion.RRF),
-        limit=query.limit,
+        # Over-fetch, then cut deterministically below. Asking for exactly
+        # `limit` would let the server resolve a tie that STRADDLES the
+        # cutoff, and no client-side sort can undo a chunk that was never
+        # returned.
+        limit=query.limit * _TIE_BREAK_OVERFETCH,
         with_payload=True,
     )
     chunks = []
@@ -113,7 +130,17 @@ def search(client: QdrantClient, query: RetrievalQuery, embedder: Embedder) -> l
                 score=point.score,
             )
         )
-    return chunks
+    # (-score, doc_id): score first so ranking is unchanged, doc_id second
+    # so equal scores resolve the same way every time. doc_id is unique per
+    # chunk (index.py derives the point id from it), so the order is total —
+    # no residual ambiguity for the segment layout to fill in.
+    chunks.sort(key=lambda c: (-c.score, c.doc_id))
+    return chunks[: query.limit]
+
+
+# How many times `limit` to fetch before the deterministic cut. 3x is
+# generous for ties at the boundary and still one round-trip.
+_TIE_BREAK_OVERFETCH = 3
 
 
 _API_SOURCES = {"qiskit_api", "pennylane_api", "migration_guide"}
