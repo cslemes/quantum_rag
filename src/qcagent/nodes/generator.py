@@ -9,7 +9,8 @@ from collections.abc import Callable
 
 from qcagent.llm.base import BaseLLMClient, InfrastructureError
 from qcagent.retrieval.hybrid import split_by_register
-from qcagent.state import AgentState, ErrorRecord, Requirement
+from qcagent.state import AgentState, Assertion, ErrorRecord, Requirement
+from qcagent.validators.assertions import render_assertion
 
 GENERATOR_SYSTEM_PROMPT = """You are the code-generation stage of a quantum \
 circuit synthesis pipeline. Given a list of verifiable requirements, retrieved \
@@ -116,6 +117,39 @@ def _extract_code(text: str) -> str:
     return match.group(1).strip() if match is not None else text.strip()
 
 
+def _render_assertions(assertions: list[Assertion]) -> str:
+    """The user's assertions, shown from the FIRST attempt. Before this the
+    generator saw them only after one was violated, guessing at what the
+    user wanted while the exact specification sat unused. This is not
+    oracle leakage: it is the user restating their own request.
+
+    Two things the text below deliberately does:
+      - states the ordering convention, because `PROBABILITY(|01>)` read
+        the other way round is a different basis state, and a generator
+        that guesses the convention wrong fails every assertion it can see;
+      - says the assertions are PART of the request, not all of it. The
+        risk of showing them is a circuit that satisfies what was asserted
+        and ignores the rest; that risk is to be measured against the
+        reference oracle, not assumed away (see tasks.md T090b).
+
+    Only present when assertions were declared, so every prompt without
+    them is byte-identical to before — pinned by
+    tests/unit/test_generator_rendering.py.
+    """
+    lines = "\n".join(f"- {render_assertion(a)}" for a in assertions)
+    return (
+        "## Assertions the circuit must satisfy\n"
+        "Declared by the user. They state SOME properties the finished circuit must "
+        "have; they do not replace the requirements above, which still describe the "
+        "whole circuit to build.\n"
+        "Convention: in every ket and Pauli string the leftmost character is the "
+        "highest-indexed qubit and the rightmost is qubit 0 (Qiskit's own ordering). "
+        "MEASURES([q, ...]) is the exception: its bitstring lists those qubits in the "
+        "order written. Final measurements are ignored when these are checked.\n"
+        f"{lines}"
+    )
+
+
 def _build_prompt(
     requirements: list[Requirement], state: AgentState, last_errors: list[ErrorRecord]
 ) -> str:
@@ -124,6 +158,9 @@ def _build_prompt(
         "## Requirements",
         _render_requirements(requirements),
     ]
+    assertions = state.get("assertions") or []
+    if assertions:
+        sections.append(_render_assertions(assertions))
     context = bundle.to_prompt_context()
     if context:
         sections.append("## Retrieved context")
@@ -175,6 +212,14 @@ def make_generator_node(llm: BaseLLMClient, *, seed: int = 42) -> Callable[[Agen
             "semantic": None,
             "resource": None,
             "decision": None,
+            # Added later than the four above, and missed when they were:
+            # without these, attempt N's assertion/requirement verdicts
+            # survived into attempt N+1 whenever N+1 never reached
+            # assertion_check. End to end (T092) that produced a report
+            # saying "FUNCTIONAL CORRECTNESS: VERIFIED" about code that had
+            # failed to execute, next to status="failed_static".
+            "assertion_results": None,
+            "requirement_results": None,
             "trace": [{"node": "generator", "iteration": iteration}],
         }
 

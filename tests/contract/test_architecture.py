@@ -44,3 +44,12 @@ def test_validators_directory_exists_and_is_non_empty() -> None:
     # ever emptied or renamed.
     assert VALIDATORS_DIR.is_dir()
     assert list(VALIDATORS_DIR.glob("*.py"))
+
+
+def test_assertions_module_is_covered_by_the_scan() -> None:
+    # US3's assertion evaluator is the module the no-LLM guarantee matters
+    # most for (it's what FR-009-013's "verification without a reference"
+    # is built on) — pin that it's actually inside VALIDATORS_DIR and thus
+    # in scope for test_validators_do_not_import_llm above, rather than
+    # trusting that unstated.
+    assert (VALIDATORS_DIR / "assertions.py").is_file()

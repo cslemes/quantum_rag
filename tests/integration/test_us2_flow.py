@@ -21,6 +21,7 @@ from qiskit import QuantumCircuit
 
 from qcagent.graph import (
     build_graph,
+    make_assertion_check_node,
     make_resource_check_node,
     make_semantic_check_node,
     make_static_check_node,
@@ -218,6 +219,7 @@ def _build(
         retriever_node=make_retriever_node(proxy, embedder, limit=8),  # type: ignore[arg-type]
         generator_node=make_generator_node(generator_llm),
         static_check_node=make_static_check_node(pool),
+        assertion_check_node=make_assertion_check_node(),
         semantic_check_node=make_semantic_check_node(_oracle_loader),
         resource_check_node=make_resource_check_node(_oracle_loader, opt_level=resource_opt_level),
         critic_node=make_critic_node(critic_llm, max_iter=max_iter),

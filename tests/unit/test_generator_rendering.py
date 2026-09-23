@@ -154,3 +154,61 @@ def test_count_mismatch_surfaces_clearly_with_no_positional_noise() -> None:
     # "decomposition" legitimately contains "position" as a substring (it's
     # the error_type) — check for the phrase, not the bare substring.
     assert "position: expected vs actual" not in rendered.lower()
+
+
+# ---------------------------------------------------------------------------
+# Assertions shown to the generator from the first attempt (T090b)
+# ---------------------------------------------------------------------------
+
+import hashlib  # noqa: E402
+
+from qcagent.nodes.generator import GENERATOR_SYSTEM_PROMPT, _build_prompt  # noqa: E402
+from qcagent.state import CriticDecision, Requirement  # noqa: E402
+from qcagent.validators.assertions import parse_assertions  # noqa: E402
+
+_REQS = [
+    Requirement(id="r1", kind="n_qubits", description="2 qubits", value=2),
+    Requirement(id="r2", kind="property", description="produce a Bell state", value=None),
+]
+
+
+def test_prompts_without_assertions_are_byte_identical_to_before_the_change() -> None:
+    """Golden strings captured from the generator BEFORE assertions were
+    shown to it. None of the 120 regression-suite tasks declares an
+    assertion, so as long as this holds, the change cannot move a single
+    suite result — and a suite before/after comparison could not measure
+    its risk either (it would be identical by construction). If this fails,
+    every suite prompt changed and that must be a deliberate, re-measured
+    decision."""
+    first = _build_prompt(_REQS, {"chunks": []}, [])
+    assert (
+        first == "## Requirements\n\n- (n_qubits) 2 qubits = 2\n- (property) produce a Bell state"
+    )
+
+    err = ErrorRecord(iteration=1, stage="static", error_type="SyntaxError", message="boom")
+    hint = CriticDecision(action="retry_generation", rationale="r", generation_hint="fix it")
+    retry = _build_prompt(_REQS, {"chunks": [], "decision": hint}, [err])
+    assert retry == (
+        "## Requirements\n\n- (n_qubits) 2 qubits = 2\n- (property) produce a Bell state"
+        "\n\n## Previous failed attempts\n\nAttempt 1 failed at stage=static, "
+        "error_type=SyntaxError:\nboom\n\n## Hint for this attempt\nfix it"
+    )
+
+    assert (
+        hashlib.sha256(GENERATOR_SYSTEM_PROMPT.encode()).hexdigest()
+        == "cd5e21a48a9ba9f36f54fc6f98e5d0a7f3ef285156c1102d239b4b797762abc0"
+    ), "the system prompt changed: every regression-suite prompt changed with it"
+
+
+def test_declared_assertions_reach_the_generator_on_the_first_attempt() -> None:
+    assertions = parse_assertions('PROBABILITY(|11>) ~= 0.5\nGATES_SUBSET_OF({"h", "cx"})', 2)
+    prompt = _build_prompt(_REQS, {"chunks": [], "assertions": assertions}, [])
+
+    assert "## Assertions the circuit must satisfy" in prompt
+    assert "- PROBABILITY(|11>) ~= 0.5" in prompt
+    assert '- GATES_SUBSET_OF({"cx", "h"})' in prompt
+    # The two guards the section exists to carry.
+    assert "do not replace the requirements above" in prompt
+    assert "leftmost character is the highest-indexed qubit" in prompt
+    # Requirements still come first: the assertions are part of the request.
+    assert prompt.index("## Requirements") < prompt.index("## Assertions")

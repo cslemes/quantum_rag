@@ -8,6 +8,7 @@ from typing import Literal
 import numpy as np
 from pydantic import BaseModel
 from qiskit import QuantumCircuit
+from qiskit.exceptions import QiskitError
 from qiskit.quantum_info import (
     Operator,
     SparsePauliOp,
@@ -17,9 +18,23 @@ from qiskit.quantum_info import (
 )
 
 from qcagent.state import ErrorRecord, SemanticResult
+from qcagent.validators.circuits import (
+    NotEvaluable,
+    no_pure_state_reason,
+    prepared_operator,
+    prepared_statevector,
+    unitary_part,
+)
 from qcagent.validators.simulator import make_simulator
 
 EXACT_UNITARY_MAX_QUBITS = 12
+
+# `reason` marking a verdict that could not be computed at all, because the
+# generated circuit has no pure output state to compare (a NON-FINAL
+# measurement or reset). Final measurements are stripped first and never
+# reach this — `measure_all()` at the end of generated code is the norm, not
+# an error. See validators/circuits.py for why that rule lives in one place.
+NOT_EVALUABLE = "not_evaluable"
 
 
 class UnitaryVerdict(BaseModel):
@@ -33,6 +48,16 @@ class StateVerdict(BaseModel):
     equivalent: bool
     fidelity: float
     reason: str | None = None
+
+    @property
+    def not_evaluable(self) -> bool:
+        """True when the check could not speak at all, as opposed to having
+        compared the circuits and found them different. Both are
+        `equivalent=False` — a verdict that cannot be produced must never
+        read as a pass (Principle II) — but only this one means the
+        `fidelity=0.0` beside it is a placeholder rather than a measurement,
+        so nothing may report it as a similarity score."""
+        return self.reason == NOT_EVALUABLE
 
 
 class DistributionVerdict(BaseModel):
@@ -74,7 +99,10 @@ def _check_exact(generated: QuantumCircuit, reference: QuantumCircuit) -> Unitar
     reporting failure:
         |Tr(U_ref† @ U_gen)| / dim
     """
-    op_gen, op_ref = Operator(generated), Operator(reference)
+    gen = prepared_operator(generated)
+    if isinstance(gen, NotEvaluable):
+        return UnitaryVerdict(equivalent=False, fidelity=0.0, method="exact", reason=NOT_EVALUABLE)
+    op_gen, op_ref = gen, Operator(reference)
     if op_gen.dim != op_ref.dim:
         return UnitaryVerdict(equivalent=False, fidelity=0.0, method="exact", reason="dim_mismatch")
     if op_gen.equiv(op_ref):
@@ -99,11 +127,24 @@ def _check_by_composition(
     Probabilistic: with 5 Haar-random states the false-positive chance is
     negligible, but NOT zero. This must be stated in the dissertation.
     """
-    composed = generated.compose(reference.inverse())
+    # Same rule as `_check_exact`, but via the STRUCTURAL check: this path
+    # exists to avoid the 4^n operator, so it must not build one just to
+    # learn it cannot. The try/except below is the backstop for anything the
+    # structural check doesn't name.
+    unevaluable = UnitaryVerdict(
+        equivalent=False, fidelity=0.0, method="composition", reason=NOT_EVALUABLE
+    )
+    if no_pure_state_reason(generated) is not None:
+        return unevaluable
+
+    composed = unitary_part(generated).compose(reference.inverse())
     worst = 1.0
     for seed in range(k_samples):
         psi = random_statevector(2**n_qubits, seed=seed)
-        overlap = abs(psi.evolve(composed).inner(psi))
+        try:
+            overlap = abs(psi.evolve(composed).inner(psi))
+        except QiskitError:
+            return unevaluable
         worst = min(worst, overlap)
         if not np.isclose(overlap, 1.0, atol=atol):
             return UnitaryVerdict(equivalent=False, fidelity=float(worst), method="composition")
@@ -174,6 +215,43 @@ def _structural_diff(generated: QuantumCircuit, reference: QuantumCircuit) -> di
     }
 
 
+def _not_evaluable_result(
+    generated: QuantumCircuit, method: Literal["exact", "composition", "statevector"]
+) -> SemanticResult:
+    """The reference check could not be computed, so it reports nothing —
+    `passed=False`, and `unitary_equiv`/`state_equiv` left None rather than
+    set to False.
+
+    False would claim a comparison was made and came out negative; None says
+    no comparison happened. The distinction matters because `report.py`
+    reads these to decide whether functional correctness was verified, and a
+    check that never ran must not be able to look like one that ran and
+    failed — nor, in the other direction, like one that passed (F10: verdict
+    and actual verification diverge whenever anything but the check itself
+    gets to set the verdict).
+
+    No fidelity is reported at all here, for the same reason: there is no
+    number to report, and printing 0.0000 would read as "we measured, and it
+    was as wrong as possible".
+    """
+    return SemanticResult(
+        verification_method=method,
+        endianness_swapped=False,
+        passed=False,
+        error=ErrorRecord(
+            iteration=0,
+            stage="semantic",
+            error_type="NonUnitaryCircuit",
+            message=(
+                "circuito não tem estado de saída puro para comparar com a referência "
+                f"({no_pure_state_reason(generated)}) — a verificação não pôde ser "
+                "executada; isto NÃO é uma divergência medida"
+            ),
+            payload={"not_evaluable": True},
+        ),
+    )
+
+
 def check_with_endianness(
     generated: QuantumCircuit, reference: QuantumCircuit, n_qubits: int
 ) -> SemanticResult:
@@ -189,6 +267,8 @@ def check_with_endianness(
     the error rate and erase an interesting finding from the taxonomy.
     """
     direct = check_unitary(generated, reference, n_qubits)
+    if direct.reason == NOT_EVALUABLE:
+        return _not_evaluable_result(generated, direct.method)
     if direct.equivalent:
         return SemanticResult(
             unitary_equiv=True,
@@ -263,7 +343,10 @@ def check_statevector(generated: QuantumCircuit, reference: QuantumCircuit) -> S
     already accounts for it, same guarantee `Operator.equiv()` gives
     `check_unitary`.
     """
-    psi_gen, psi_ref = Statevector(generated), Statevector(reference)
+    gen = prepared_statevector(generated)
+    if isinstance(gen, NotEvaluable):
+        return StateVerdict(equivalent=False, fidelity=0.0, reason=NOT_EVALUABLE)
+    psi_gen, psi_ref = gen, Statevector(reference)
     if psi_gen.dim != psi_ref.dim:
         return StateVerdict(equivalent=False, fidelity=0.0, reason="dim_mismatch")
     if psi_gen.equiv(psi_ref):
@@ -284,6 +367,8 @@ def check_statevector_with_endianness(
     identical diagnostic regardless of which oracle kind the task uses.
     """
     direct = check_statevector(generated, reference)
+    if direct.not_evaluable:
+        return _not_evaluable_result(generated, "statevector")
     if direct.equivalent:
         return SemanticResult(
             state_equiv=True,

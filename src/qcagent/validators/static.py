@@ -4,8 +4,13 @@ See contracts/validators.md and data-model.md's closed error taxonomy.
 """
 
 import ast
+import hashlib
+import importlib
 import io
+import re
+from functools import lru_cache
 
+from qiskit import __version__ as qiskit_version
 from qiskit import qpy
 from qiskit.compiler import transpile
 from qiskit.transpiler import CouplingMap
@@ -31,11 +36,73 @@ DEPRECATED_SYMBOLS = {
 # more API context, not a rewrite from scratch.
 _HALLUCINATION_EXCEPTIONS = ("ImportError", "AttributeError", "ModuleNotFoundError", "NameError")
 
+# Modules whose public names the generator may legitimately use. A NameError
+# naming something that lives in one of these is a MISSING IMPORT, not an
+# invented symbol — the model wrote correct code and omitted the import line.
+_IMPORTABLE_MODULES = (
+    "qiskit",
+    "qiskit.circuit",
+    "qiskit.circuit.library",
+    "qiskit.quantum_info",
+    "qiskit.transpiler",
+    "qiskit.primitives",
+    "numpy",
+)
+
+# Conventional aliases: `np.sqrt(...)` raises `NameError: name 'np' is not
+# defined`, and "np" is not a public name of any module, so the lookup below
+# would misclassify it as invented.
+_ALIAS_IMPORTS = {"np": "import numpy as np", "plt": "import matplotlib.pyplot as plt"}
+
+_NAME_ERROR_RE = re.compile(r"^NameError: name '([^']+)' is not defined")
+
+
+@lru_cache(maxsize=1)
+def _importable_symbols() -> dict[str, str]:
+    """name -> the module it can be imported from. Built once, by importing
+    the modules and reading their public namespace, so it can never drift
+    from the installed Qiskit the way a hand-written list would."""
+    index: dict[str, str] = {}
+    for module_name in _IMPORTABLE_MODULES:
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError:  # pragma: no cover - a missing optional dependency
+            continue
+        for name in dir(module):
+            if not name.startswith("_"):
+                index.setdefault(name, module_name)
+    return index
+
+
+def missing_import_for(stderr: str) -> str | None:
+    """The import statement that would fix `stderr`, or None when this is not
+    a missing import.
+
+    The distinction this draws is the whole point (F14, F3): a `NameError`
+    naming a symbol that EXISTS is a missing import line, and no amount of
+    retrieved documentation adds one — `retry_retrieval` is structurally
+    incapable of fixing it. A `NameError` (or `ImportError`) naming something
+    that does not exist anywhere IS a hallucination, and retrieval is the
+    right response there. Both used to be `HallucinatedSymbol`.
+    """
+    match = _NAME_ERROR_RE.match(stderr)
+    if match is None:
+        return None
+    symbol = match.group(1)
+    if symbol in _ALIAS_IMPORTS:
+        return _ALIAS_IMPORTS[symbol]
+    module = _importable_symbols().get(symbol)
+    return f"from {module} import {symbol}" if module else None
+
 
 def _classify_sandbox_failure(stderr: str) -> str:
     """Maps a sandbox execution failure to the closed error taxonomy
     (data-model.md), grounded in plan.md's critic routing table.
 
+    - A NameError naming a symbol that EXISTS in Qiskit/numpy ->
+      MissingImport. Checked FIRST, because it is a strict subset of the
+      NameError case below and routes to a different action: no amount of
+      retrieved documentation adds an import line (F14, F3).
     - ImportError/AttributeError/... -> HallucinatedSymbol.
     - A qubit-index CircuitError (e.g. "Index 5 out of range for size 2")
       -> QubitIndexError. Routes identically to SyntaxError in the critic
@@ -48,6 +115,8 @@ def _classify_sandbox_failure(stderr: str) -> str:
       "the sandbox rejected this code" already maps to SyntaxError by the
       contract's own convention.
     """
+    if missing_import_for(stderr) is not None:
+        return "MissingImport"
     if stderr.startswith(_HALLUCINATION_EXCEPTIONS):
         return "HallucinatedSymbol"
     if "CircuitError" in stderr and "out of range" in stderr:
@@ -108,8 +177,45 @@ def check_static(code: str, coupling_map: CouplingMap | None, pool: WorkerPool) 
         )
 
     assert sandbox_result.circuit_qpy is not None  # ok=True guarantees this
-    with io.BytesIO(sandbox_result.circuit_qpy) as buf:
-        (qc,) = qpy.load(buf)
+    try:
+        with io.BytesIO(sandbox_result.circuit_qpy) as buf:
+            (qc,) = qpy.load(buf)
+    except Exception as exc:  # noqa: BLE001 — a third-party reader, not our logic
+        # Bug 21. The sandbox BUILT and SERIALIZED a circuit that Qiskit's own
+        # QPY reader then refused: `IndexError: list assignment index out of
+        # range` from `read_circuit`'s register reconstruction, on a QAOA task.
+        # Unguarded, this escaped the graph and cost a whole run.
+        #
+        # The trigger is not reproduced — a dozen register- and
+        # ParameterVector-shaped circuits round-trip fine — so this is not an
+        # explanation, it is containment plus the evidence needed to diagnose
+        # the next occurrence. What makes the next one diagnosable is that the
+        # run now terminates normally, which means `final_code` is RECORDED;
+        # as a harness error it was lost, because that path has no code to
+        # report.
+        #
+        # The fingerprint below identifies the exact bytes without persisting
+        # them: QPY is binary and would break JSON serialization (bug 14).
+        digest = hashlib.sha256(sandbox_result.circuit_qpy).hexdigest()[:16]
+        return StaticResult(
+            parsed=True,
+            executed=True,
+            transpiled=False,
+            error=ErrorRecord(
+                iteration=0,
+                stage="static",
+                error_type="CircuitSerializationFailure",
+                message=(
+                    f"o circuito foi construído mas não sobreviveu ao round-trip QPY: "
+                    f"{type(exc).__name__}: {exc}"
+                ),
+                payload={
+                    "qpy_sha256_16": digest,
+                    "qpy_bytes": len(sandbox_result.circuit_qpy),
+                    "qiskit_version": qiskit_version,
+                },
+            ),
+        )
 
     try:
         transpile(qc, coupling_map=coupling_map)

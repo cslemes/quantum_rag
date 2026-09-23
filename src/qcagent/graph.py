@@ -30,6 +30,7 @@ from qiskit.quantum_info import SparsePauliOp
 
 from qcagent.nodes.routing import (
     finalize,
+    route_after_assertion_check,
     route_after_critic,
     route_after_generator,
     route_after_planner,
@@ -37,6 +38,8 @@ from qcagent.nodes.routing import (
     route_after_static,
 )
 from qcagent.state import AgentState, ErrorRecord, SemanticResult
+from qcagent.validators.assertions import evaluate_assertions, render_assertion
+from qcagent.validators.requirements import check_requirements
 from qcagent.validators.resource import COUPLING_MAPS, check_resources
 from qcagent.validators.sandbox import WorkerPool
 from qcagent.validators.semantic import (
@@ -125,6 +128,92 @@ def make_static_check_node(pool: WorkerPool) -> Callable[[AgentState], dict]:
         }
 
     return static_check
+
+
+def make_assertion_check_node() -> Callable[[AgentState], dict]:
+    """T087 — US3. Runs right after `static_check` approves (plan.md's
+    graph diagram), before `semantic_check`/`resource_check` — verification
+    against what the USER declared happens before verification against a
+    reference, since the former applies unconditionally and the latter only
+    when `oracle_ref` is present at all. No LLM (Principle I): `evaluate_
+    assertions` is pure `qiskit.quantum_info`.
+
+    Produces an EMPTY list, not an error, when `assertions` is empty — no
+    assertions declared is not a failure of this node (see report.py/US4
+    for what it means for the final guarantee). One `ErrorRecord` per
+    violated (`passed=False`) or not-evaluable (`passed=None`) outcome,
+    never for a passing one — `critic.py`'s `_latest_error_type` reads
+    `assertion_results` directly for THIS iteration's routing decision, but
+    `_is_repeated_not_evaluable` needs the not-evaluable ones to persist in
+    `error_history` across iterations too, keyed by the assertion's own
+    serialized form (FR-012: the assertion is NAMED, not folded into a
+    generic message).
+    """
+
+    def assertion_check(state: AgentState) -> dict:
+        assertions = state.get("assertions") or []
+        requirements = state.get("requirements") or []
+        iteration = state.get("iteration", 0)
+
+        # T091 runs here rather than in a node of its own: both are
+        # reference-free checks over the same generated circuit, in the same
+        # cascade position, and splitting them would add a graph node (and a
+        # `_NODES_PER_ITERATION` bump) for no behavioral difference. Unlike
+        # assertions, requirement checks run even when the user declared
+        # nothing — that is the whole point of FR-009, and why the circuit is
+        # loaded before the early return below.
+        circuit = _load_generated_circuit(state)
+        requirement_results = check_requirements(requirements, circuit)
+
+        if not assertions:
+            return {
+                "assertion_results": [],
+                "requirement_results": requirement_results,
+                "trace": [
+                    {
+                        "node": "assertion_check",
+                        "declared": 0,
+                        "requirements_checked": len(requirement_results),
+                    }
+                ],
+            }
+
+        outcomes = evaluate_assertions(assertions, circuit)
+
+        error_history: list[ErrorRecord] = []
+        for outcome in outcomes:
+            if outcome.passed is True:
+                continue
+            error_type = "AssertionNotEvaluable" if outcome.passed is None else "AssertionViolated"
+            error_history.append(
+                ErrorRecord(
+                    iteration=iteration,
+                    stage="semantic",
+                    error_type=error_type,
+                    # FR-012: the generator's retry prompt renders `message`, and
+                    # never the payload — so the assertion's own text goes HERE,
+                    # or the model sees only numbers and can't tell which
+                    # assertion failed (found end to end, T092).
+                    message=f"{render_assertion(outcome.assertion)} — {outcome.detail}",
+                    payload={"assertion": outcome.assertion.model_dump(mode="json")},
+                )
+            )
+
+        return {
+            "assertion_results": outcomes,
+            "requirement_results": requirement_results,
+            "error_history": error_history,
+            "trace": [
+                {
+                    "node": "assertion_check",
+                    "declared": len(assertions),
+                    "passed": sum(1 for o in outcomes if o.passed is True),
+                    "requirements_checked": len(requirement_results),
+                }
+            ],
+        }
+
+    return assertion_check
 
 
 def make_semantic_check_node(
@@ -294,6 +383,7 @@ def build_graph(
     retriever_node: Callable[[AgentState], dict],
     generator_node: Callable[[AgentState], dict],
     static_check_node: Callable[[AgentState], dict],
+    assertion_check_node: Callable[[AgentState], dict],
     semantic_check_node: Callable[[AgentState], dict],
     resource_check_node: Callable[[AgentState], dict],
     critic_node: Callable[[AgentState], dict],
@@ -315,6 +405,7 @@ def build_graph(
     graph.add_node("retriever", retriever_node)
     graph.add_node("generator", generator_node)
     graph.add_node("static_check", static_check_node)
+    graph.add_node("assertion_check", assertion_check_node)
     graph.add_node("semantic_check", semantic_check_node)
     graph.add_node("resource_check", resource_check_node)
     graph.add_node("critic", critic_node)
@@ -333,7 +424,14 @@ def build_graph(
         {"static_check": "static_check", "infrastructure_error": END},
     )
     graph.add_conditional_edges(
-        "static_check", route_after_static, {"semantic_check": "semantic_check", "critic": "critic"}
+        "static_check",
+        route_after_static,
+        {"assertion_check": "assertion_check", "critic": "critic"},
+    )
+    graph.add_conditional_edges(
+        "assertion_check",
+        route_after_assertion_check,
+        {"semantic_check": "semantic_check", "critic": "critic"},
     )
     graph.add_conditional_edges(
         "semantic_check",
@@ -352,10 +450,13 @@ def build_graph(
 
 
 # One retry iteration's worst-case path: retriever -> generator ->
-# static_check -> semantic_check -> resource_check -> critic. Failing early
-# (e.g. at static_check) costs fewer steps, but the limit has to cover the
-# worst case, not the common one.
-_NODES_PER_ITERATION = 6
+# static_check -> assertion_check -> semantic_check -> resource_check ->
+# critic. Failing early (e.g. at static_check) costs fewer steps, but the
+# limit has to cover the worst case, not the common one. Was 6 before US3
+# added assertion_check to the cascade (T089) — bumped to 7, not left
+# stale, since an undercount here fails as a confusing GraphRecursionError
+# rather than a clean terminal status.
+_NODES_PER_ITERATION = 7
 # planner + finalize, plus headroom for LangGraph's own step bookkeeping —
 # deliberately generous rather than exact, since undercounting turns into a
 # GraphRecursionError mid-experiment instead of a clean terminal status.
@@ -368,7 +469,7 @@ def recursion_limit_for(max_iter: int) -> int:
     25 is invoke-time, not something `build_graph`/`compile()` can set once
     on the caller's behalf, and it silently caps out well before a run with
     several retries at the default `MAX_ITER=5` finishes (confirmed: a
-    resource_check-cascade retry loop needs 6 steps/iteration, so 5 retries
-    alone can need 30+ steps against a 25-step default).
+    resource_check-cascade retry loop needs 7 steps/iteration, so 5 retries
+    alone can need 35+ steps against a 25-step default).
     """
     return max_iter * _NODES_PER_ITERATION + _GRAPH_OVERHEAD_STEPS
