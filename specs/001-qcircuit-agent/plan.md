@@ -200,11 +200,22 @@ nada.**
 | `retriever` | `spec`, `requirements`, `retrieval_hint` | `chunks` | não |
 | `generator` | `requirements`, `chunks`, últimos 2 erros | `code` | sim |
 | `static_check` | `code` | `StaticResult` | não |
-| `assertion_check` **novo** | `code`, `assertions` (parseadas) | `list[AssertionOutcome]` | não |
+| `assertion_check` **novo, implementado (T087/T091)** | `code`, `assertions` (parseadas), `requirements` | `list[AssertionOutcome]`, `list[RequirementOutcome]` | não |
 | `semantic_check` (condicional — só se `oracle_ref`) | `code`, `oracle` | `SemanticResult` | não |
-| `resource_check` (condicional — só se `coupling_map`) | `code`, `coupling_map` | `ResourceResult` | não |
+| `resource_check` (condicional — só se `oracle_ref`, não `coupling_map` — ver nota abaixo) | `code`, `coupling_map` | `ResourceResult` | não |
 | `critic` | estado | `CriticDecision` | sim |
-| `finalize` | estado terminal | `GuaranteeReport` **novo** | não |
+| `finalize` | estado terminal | `GuaranteeReport` **novo, implementado (T096)** | não |
+
+**Correção ao rascunho original desta tabela**: `resource_check` sempre exigiu
+`oracle_ref` (carrega o circuito de referência via `oracle_loader`,
+`graph.py`) — nunca rodou apenas por `coupling_map` estar presente, mesmo
+antes de US3. A condição "só se `coupling_map`" nunca esteve correta; T088
+(`route_after_assertion_check`) foi escrito contra o comportamento real, não
+contra este rascunho — ver §Verificação sem referência e
+`nodes/routing.py::route_after_assertion_check`'s docstring para o porquê
+disso importa especificamente no caminho sem `oracle_ref` (US3/US4): nesse
+caminho, respeito à topologia é reportado a partir de `static.transpiled`
+diretamente, não por rodar `resource_check`.
 
 ### Roteamento do critic (adiciona uma linha a v1)
 
@@ -214,6 +225,8 @@ nada.**
 | Falha de sintaxe, transpilação, qubit fora de faixa | `retry_generation` | erro local → regerar com traceback |
 | Unitária diverge, fidelidade < tolerância | `retry_generation` | erro conceitual → regerar com diff |
 | **Asserção violada** | `retry_generation` | erro conceitual nomeado — mesma classe de `WrongGateDecomposition`, mas contra o que o USUÁRIO declarou, não contra uma referência interna |
+| **Asserção não avaliável (1ª ocorrência)** | `retry_generation` | regenerar pode produzir um circuito onde a amplitude referenciada deixa de ser ~0 |
+| **Asserção não avaliável (2ª ocorrência CONSECUTIVA, mesma asserção)** | `abort` | regenerar não convergiu — encerra antes de `MAX_ITER`, `status="assertion_not_evaluable"` (não `"aborted"` genérico). Implementado em `critic.py::_is_repeated_not_evaluable`, checado antes do corte por `MAX_ITER` |
 | Correto, `depth_ratio > max_depth_ratio` | `optimize` | regerar pedindo redução de CX |
 | `iteration >= MAX_ITER` | `abort` | registrar falha; não mascarar com força bruta |
 
@@ -222,49 +235,72 @@ Falha transitória do provedor externo continua fora do `critic` — tratada em
 
 ### Verificação sem referência — linguagem de asserção (US3)
 
-**Decisão de desenho**: gramática mínima, quatro categorias (não uma
-linguagem geral de propriedades) — cobre exatamente os quatro exemplos do
-`spec.md`, nada além disso nesta fase. Parseada por um parser determinístico
-próprio (não por um LLM) — é o que torna FR-013 ("asserção mal formada
-recusada explicitamente") uma checagem de gramática, não uma interpretação
-sujeita a ambiguidade de modelo.
+**Status**: entidades (T082), parser e avaliador (T083–T084b) implementados
+e testados (`tests/unit/test_assertions.py`, 46 casos) — ver
+`data-model.md` §Linguagem de asserção para a sintaxe textual completa e o
+código exato das entidades, e research.md D19 para o racional completo e o
+histórico de revisão. Esta seção registra só a DECISÃO e o PORQUÊ; a forma
+foi fixada em duas rodadas de revisão do usuário antes da implementação, não
+na primeira proposta.
 
-```python
-# src/qcagent/state.py — T082
+**Decisão de desenho**: gramática mínima — quatro categorias de avaliação
+(mais um açúcar sintático e um prefixo opcional, nenhum dos dois um `kind`
+de runtime novo), não uma linguagem geral de propriedades. Parseada por um
+parser determinístico próprio (não por um LLM) — é o que torna FR-013
+("asserção mal formada recusada explicitamente") uma checagem de gramática,
+não uma interpretação sujeita a ambiguidade de modelo.
 
-class AmplitudeEquality(BaseModel):
-    kind: Literal["amplitude_equality"] = "amplitude_equality"
-    basis_state_a: str            # ex.: "000" — comprimento deve bater com n_qubits
-    basis_state_b: str
-    # Magnitude apenas, por padrão — mesma lição de D3c/F1 (report-notes.md):
-    # fase global não é comparável entre implementações corretas distintas.
-    # Comparar fase RELATIVA é opt-in, nunca o default.
-    relative_phase_rad: float | None = None
+**A gramática mudou em quatro pontos entre a primeira proposta e a versão
+implementada**, cada um resolvendo um problema de usabilidade ou de
+corretude encontrado em revisão — não polimento cosmético:
 
-class MeasurementDeterminism(BaseModel):
-    kind: Literal["measurement_determinism"] = "measurement_determinism"
-    qubits: list[int]
-    expected_value: str            # bitstring, mesmo comprimento de `qubits`
-
-class OperatorEigenstate(BaseModel):
-    kind: Literal["operator_eigenstate"] = "operator_eigenstate"
-    pauli_string: str              # um caractere I/X/Y/Z por qubit
-    eigenvalue: Literal[1, -1]
-
-class GateRestriction(BaseModel):
-    kind: Literal["gate_restriction"] = "gate_restriction"
-    allowed_gates: list[str]
-
-Assertion = Annotated[
-    AmplitudeEquality | MeasurementDeterminism | OperatorEigenstate | GateRestriction,
-    Field(discriminator="kind"),
-]
-
-class AssertionOutcome(BaseModel):
-    assertion: Assertion
-    passed: bool
-    detail: str
-```
+1. **Açúcar `QUBIT(q) == "|label>"`** para os seis estados cardeais de um
+   único qubit (`0`, `1`, `+`, `-`, `i`, `-i`). `EIGENSTATE_OF("XIII", -1)`
+   para expressar "a ancilla está em `|-⟩`" falhou o teste de usabilidade
+   que a própria US3 exige (escrevível por quem sabe o que quer, não como
+   implementar) — exige saber que `|-⟩` é o autoestado `-1` de `X`, e
+   escrever `N-1` caracteres `I` corretamente posicionados. `QUBIT`
+   desabaçucara para `EigenstateAssertion` em tempo de PARSE; `EIGENSTATE_OF`
+   continua sendo o único caminho de avaliação real, para o caso geral
+   multi-qubit.
+2. **`MEASURES` com duas formas sintaticamente distintas** (nua = registro
+   inteiro, convenção compartilhada; com lista = subconjunto, convenção
+   posicional) em vez de uma forma só. A gramática original tinha
+   `MEASURES([0,1,2]) == "101"` e `EIGENSTATE_OF("XII", -1)` lidas em
+   direções OPOSTAS sem nenhum sinal visível disso — um erro silencioso de
+   usuário exatamente da forma que este projeto já pagou o custo de três
+   vezes antes (D3c/D3d/D3f). Unificar as duas convenções não era possível
+   sem perder uma delas; a mitigação escolhida foi tornar as duas formas de
+   `MEASURES` sintaticamente distintas, de modo que a colisão nunca ocorre
+   dentro de uma asserção escrita.
+3. **Resultado tri-estado** (`AssertionOutcome.passed: bool | None`) para
+   `PHASE_DIFF` contra uma amplitude ~0 — e, desde o primeiro teste ponta a
+   ponta (T092), também para qualquer asserção sobre estado contra um
+   circuito com medição NÃO final ou reset (não há estado puro de saída;
+   medições finais são removidas antes e não contam). São os dois únicos
+   casos em que "não avaliável" é uma resposta genuína, não um erro de
+   sintaxe. Isto
+   refina o Cenário de Aceitação 4 (spec.md), que agrupa "mal formada" e
+   "impossível de avaliar" sob a mesma recusa — a refusal continua exata
+   para tudo malformado em tempo de parse (`rejected_input`); o tri-estado é
+   um mecanismo adicional, só em tempo de avaliação, para uma asserção BEM
+   formada que se revela mal posta para o circuito específico gerado. Ver
+   `AgentState.status="assertion_not_evaluable"` (data-model.md) para o que
+   acontece quando isso se repete em duas tentativas seguidas — pendente de
+   fiação no `critic` (T086).
+4. **Prefixo `INPUT(|ket>) THEN <asserção>`**, tratado como núcleo da
+   gramática, não extensão. Sem ele, toda asserção só testa comportamento a
+   partir de `|0...0⟩` — insuficiente para qualquer tarefa cujo conteúdo
+   seja uma TRANSFORMAÇÃO geral (o exercício de validação a frio contra
+   `qft_5q`, abaixo, mostrou que uma QFT mal implementada pode passar em
+   toda asserção anexada só a `|0...0⟩`, porque a saída nesse caso é
+   indistinguível de uma simples superposição uniforme). Várias asserções
+   `INPUT` sobre entradas não-triviais distintas dão cobertura evidencial
+   real — mesma lógica de `_check_by_composition` (D3b) — mas SEM a mesma
+   garantia formal: lá, k estados Haar-aleatórios testam uma proposição
+   universal contra uma referência CONHECIDA; aqui não há referência
+   nenhuma, cada `INPUT` só testa o que o usuário escreveu, para aquela
+   entrada.
 
 **Avaliação — `src/qcagent/validators/assertions.py` (T083–T084b)**: pura
 `qiskit.quantum_info`, sem amostragem/shots (é simulação exata, não o
@@ -272,12 +308,28 @@ regime de ruído estatístico de `check_sanity_seeds` em `bench/
 validate_oracles.py` — as duas tolerâncias não devem ser confundidas, a
 mesma distinção que `PEAKEDNESS_THRESHOLD` já fazia em v1).
 
-- `AmplitudeEquality`: `abs(psi[a]) ≈ abs(psi[b])`.
-- `MeasurementDeterminism`: `Statevector.probabilities(qargs=qubits)` tem
-  massa ≈1 no `expected_value`.
-- `GateRestriction`: puramente estrutural sobre `circuit.data` — não precisa
-  de simulação.
-- `OperatorEigenstate`: **o único ponto de risco de desenho desta seção**.
+- `AmplitudeAssertion` (`PROBABILITY`/`AMPLITUDE`/`PHASE_DIFF`):
+  `abs(psi[ket])**2`/`abs(psi[ket])`/diferença de fase relativa.
+- `MeasuresAssertion`: massa de probabilidade ≈1 no valor esperado —
+  **não** via `Statevector.probabilities_dict(qargs=...)` para a forma com
+  lista, cujas chaves renderizadas colocam o PRIMEIRO qarg listado na
+  posição MAIS À DIREITA (verificado empiricamente, o oposto do que esta
+  gramática promete) — implementado contra o array bruto
+  `probabilities(qargs=...)` com um índice derivado à mão, verificado
+  contra um circuito deliberadamente assimétrico (não só um caso
+  coincidentemente palindrômico).
+- `GateRestrictionAssertion`: puramente estrutural sobre `circuit.data` —
+  não precisa de simulação. Nome de gate validado contra o vocabulário do
+  próprio Qiskit (`get_standard_gate_name_mapping()` + o punhado de nomes
+  de aridade variável que este projeto usa, ex. `mcx`) — **correção**: a
+  razão original para validar (nome digitado errado tornaria a asserção
+  vacuamente verdadeira, mesma direção de falha de D3c/D3d/D3f) estava
+  ERRADA — uma checagem de subconjunto é fail-closed por construção, nunca
+  passa vacuamente num nome digitado errado. A razão real, mais modesta: dá
+  um erro de parse preciso em vez de uma falha de asserção confusa que
+  parece defeito do CIRCUITO. Ver F6 (report-notes.md) para como essa
+  alegação incorreta foi endossada antes de ser corrigida.
+- `EigenstateAssertion`: **o único ponto de risco de desenho desta seção**.
   Checar `‖H\|ψ⟩ − λ\|ψ⟩‖ ≈ 0` (norma do resíduo), **nunca** só `⟨ψ\|H\|ψ⟩ ≈ λ`
   (valor esperado). Um valor esperado correto NÃO implica que o estado seja
   um autoestado — uma superposição de autoestados cujos autovalores
@@ -285,16 +337,44 @@ mesma distinção que `PEAKEDNESS_THRESHOLD` já fazia em v1).
   esperado. Esta é exatamente a estrutura do achado F2 (`report-notes.md`:
   "checks por medição podem ser estruturalmente cegos, não só frouxos") —
   aplicada aqui ao próprio verificador novo, antes de ele existir em
-  produção, não depois de um bug real forçar a correção. T084b exige um
-  teste de regressão com um estado deliberadamente NÃO-autoestado mas de
-  valor esperado correto, que deve REPROVAR, escrito antes de aceitar a
-  implementação.
+  produção, não depois de um bug real forçar a correção. `test_assertions.py`
+  inclui um teste de regressão com um estado deliberadamente NÃO-autoestado
+  mas de valor esperado correto (população `p=1e-10` na autoclasse errada,
+  ⟨Z⟩ a `2e-10` de +1 — dentro do `DEFAULT_TOL` do próprio código — mas
+  norma do resíduo ~2e-5, muito acima do limiar 1e-6), que REPROVA
+  corretamente.
 
 **Malformação** (FR-013): comprimento de bitstring/Pauli-string incompatível
 com `n_qubits`, índice de qubit fora de faixa, categoria desconhecida —
 todos detectados na etapa de parsing, ANTES de qualquer geração (T090
 estende o mecanismo de `status="rejected_input"` que T024b já implementa em
-v1, em vez de criar um segundo caminho de recusa).
+v1, em vez de criar um segundo caminho de recusa). Lista completa em
+`data-model.md` §Linguagem de asserção.
+
+**Largura do registro — a asserção do usuário é a fonte de verdade**: o
+número de qubits vem das próprias asserções (kets, `MEASURES ==`, Pauli,
+`INPUT`), não do `n_qubits` extraído pelo planner. Asserções que discordam
+entre si são recusadas (erro do usuário). Uma divergência com a contagem
+extraída é resolvida pela força da evidência: duas ou mais asserções
+concordando corrigem o requisito (e a correção aparece no relatório de
+garantia); uma única asserção contra a leitura do planner é recusada como
+ambígua e pergunta, porque nada desempata entre extração errada e erro de
+digitação. Nunca é tratada como asserção malformada (F3, F9). Na avaliação, circuito de
+largura diferente da asserção é violação nomeada, nunca avaliado mesmo
+assim. As asserções também chegam ao gerador desde a primeira tentativa
+(T090b); sem asserções, o prompt é idêntico ao anterior.
+
+**Escopo real da gramática — achado do exercício de validação a frio, não
+de desenho**: forte para preparação de estado e propriedades qualitativas
+(autoestado coletivo, restrição de gate set); fraca para tarefas cujo
+conteúdo inteiro é uma derivação numérica (QUBO→Ising — a asserção não-vazia
+exige a mesma álgebra que construir o circuito); cega para tarefas de
+transformação geral sem `INPUT` (mitigado, não eliminado, pelo item 4
+acima — `INPUT` dá cobertura evidencial, não uma garantia formal). Ver F7
+(report-notes.md) e o achado equivalente em "Threats to validity". A
+gramática NÃO foi alargada para cobrir o caso QUBO — alargá-la para aceitar
+uma derivação pronta equivaleria a aceitar uma referência disfarçada, que
+anularia o ponto de US3.
 
 **Escopo explicitamente fora desta fase**: os `Requirement`s de
 `kind="property"`/`kind="output_format"` que o `planner` já extrai (FR-009)
@@ -304,12 +384,44 @@ formal, que só pode ser feita hoje por um LLM. Isso é permitido pelo
 Princípio I (papel de "gerador de hipótese"), mas é escopo genuinamente
 novo, não pedido por nenhuma FR de v2 explicitamente, e arriscaria
 reintroduzir a mesma ambiguidade que a gramática formal existe para evitar.
-Só `kind="n_qubits"` e `kind="gate_set"` (checáveis sem tradução nenhuma,
-T091) ganham verificação automática nesta fase. Registrado como decisão de
-escopo, não como lacuna esquecida — mesmo padrão de honestidade que D3d
-(v1) usou para deixar teleporte fora do conjunto canônico.
+Só `kind="n_qubits"` e `kind="gate_set"` (checáveis sem tradução nenhuma)
+ganham verificação automática nesta fase — implementado em
+`validators/requirements.py` (T091), rodando dentro de `assertion_check`
+porque é a mesma camada sem-referência sobre o mesmo circuito gerado, e
+rodando MESMO quando o usuário não declarou asserção nenhuma, que é
+precisamente o ponto da FR-009. Um `kind` não tratado não produz saída
+nenhuma — nunca uma saída "passou", que alegaria uma checagem que não
+rodou. Registrado como decisão de escopo, não como lacuna esquecida — mesmo
+padrão de honestidade que D3d (v1) usou para deixar teleporte fora do
+conjunto canônico.
+
+**Requisitos são checados deterministicamente, mas sua PREMISSA vem de um
+LLM** — e isso muda o que um resultado significa em cada direção. Um
+requisito que PASSA diz apenas "o circuito concorda com o que o planner leu
+da descrição"; não é evidência de corretude, e por isso não pode
+estabelecer `functional_correctness_verified`. Um que REPROVA é
+assimetricamente mais forte — circuito e descrição discordam sobre algo
+diretamente checável — e por isso VETA a alegação. Um valor que o checador
+não consegue avaliar (um `n_qubits` não inteiro, um `gate_set` nomeando
+instruções que o Qiskit não tem) vira `passed=None`, "não checável", nunca
+uma reprovação: culpar o circuito gerado por um problema de extração acima
+dele seria a mesma classe de erro de F3 (diagnóstico incorreto é pior que
+nenhum). **Decisão de escopo deixada em aberto de propósito**: uma violação
+de requisito NÃO entra hoje na taxonomia fechada de `error_type` nem dispara
+`retry_generation` — fazer isso colocaria uma premissa extraída por LLM
+dentro do laço de reparo, o que é uma emenda à taxonomia fechada e uma
+tensão real com o Princípio I, não uma consequência óbvia de T091. Hoje a
+violação é reportada e bloqueia `success`; se deve também retroalimentar o
+gerador é decisão a tomar explicitamente.
 
 ### Relatório de garantia (US4)
+
+**Status**: implementado e testado (`src/qcagent/report.py`, T093–T096;
+`tests/unit/test_report.py`, 23 casos incluindo T095's teste obrigatório).
+A forma abaixo é a final — ver data-model.md §GuaranteeReport para os campos
+exatos e o texto renderizado das três formas canônicas de relatório (todas
+as asserções passando, uma violada, nenhuma declarada), revisadas com o
+usuário antes de implementar.
 
 ```python
 # src/qcagent/report.py — T093
@@ -319,16 +431,89 @@ class GuaranteeReport(BaseModel):
 
     executed: bool
     transpiled: bool
-    requirements_checked: list[str]          # n_qubits/gate_set — T091
+    requirements: list[RequirementOutcome]    # T091 — um por requisito CHECÁVEL
+    reference: SemanticResult | None          # semantic_check, sse oracle_ref (T098)
     assertions: list[AssertionOutcome]        # vazia se nenhuma foi declarada
-    resource: ResourceResult | None
+    coupling_map_name: str | None
+    topology_respected: bool | None           # None sse coupling_map_name é None
+    resource: ResourceResult | None           # None a menos que oracle_ref esteja presente
     hardware_note: str | None                 # US5 — "comportamento sob ruído", nunca "verificação"
 
     @computed_field
     @property
     def functional_correctness_verified(self) -> bool:
-        return bool(self.assertions) and all(a.passed for a in self.assertions)
+        if not (self.executed and self.transpiled):
+            return False
+        if any(a.passed is not True for a in self.assertions):
+            return False
+        if self.reference is not None:            # referência: reprovada veta, aprovada verifica
+            return self.reference.passed
+        if any(r.passed is False for r in self.requirements):   # requisitos VETAM (T091)
+            return False
+        return bool(self.assertions)
+
+    @computed_field
+    @property
+    def only_trivial_input_tested(self) -> bool:
+        input_capable = [o.assertion for o in self.assertions if hasattr(o.assertion, "input_state")]
+        return bool(input_capable) and not any(a.input_state is not None for a in input_capable)
 ```
+
+**O status terminal carrega a distinção, não a convenção**: `status=
+"success"` significa "ALGO REAL sobre corretude funcional foi verificado e
+passou" — comparação com referência (caminho da suíte) OU toda asserção
+declarada (caminho de produto). Um run limpo que não verificou nada termina
+como `"completed_unverified"`. A alternativa descartada era uma regra de
+consumo ("nenhum consumidor lê `status` sem ler também o relatório"), e uma
+invariante que depende de cooperação de consumidores é quebrada pela
+primeira coisa que agregue `status` sozinha (T059, um resumo de CI).
+
+**Onde "verificado" é decidido — uma vez, e só uma**: em
+`GuaranteeReport.functional_correctness_verified`, na ordem acima (não
+rodou → não verificado; asserção do usuário que não passou veta; referência
+reprovada veta, aprovada verifica e não é vetada por requisito; senão
+requisito reprovado veta e é preciso ao menos uma asserção).
+`terminal_status()` apenas LÊ esse campo. **Correção a uma versão anterior
+deste parágrafo**: ela dizia que status e texto "nunca podem discordar"
+porque `terminal_status()` recebia o objeto de relatório — mas a função
+ainda checava `semantic.passed` por conta própria enquanto o relatório
+ignorava `semantic` inteiramente. Todo run da suíte que passava sua
+comparação com referência saía com `status="success"` e um texto dizendo
+"nothing about its behavior was checked". A alegação só passou a ser
+verdadeira quando a referência entrou no relatório e a decisão foi
+centralizada, e só foi descoberta pelos testes ponta a ponta (T098), não
+pelos unitários. **A métrica da suíte não muda** — as sete asserções
+`status == "success"` de `tests/integration/test_us1_flow.py` continuam
+passando, e um requisito reprovado não veta uma referência aprovada
+(oráculo é verdade-terreno, Princípio IV; quando discordam, errou o planner).
+
+**O relatório diz o que cada tipo de referência de fato provou**: exato
+("unitariamente equivalente, até fase global"), composição ("probabilístico,
+não exato", D3b), statevector ("a partir de |0...0> somente", D3c),
+distribuição ("fidelidade de Hellinger", não equivalência de estado) e
+energia. Um "bate com a referência" único superestimaria em todos menos o
+exato.
+
+**`topology_respected`/`resource` — a decisão "recursos para o relatório,
+não para a gramática" (round 2, item 2), implementada**: `topology_respected`
+vem direto de `static.transpiled` (`nodes/routing.py::
+_build_guarantee_report`) — evidência sem referência, disponível
+independentemente de `oracle_ref`. `resource` permanece `None` a menos que
+`oracle_ref` esteja presente, porque `resource_check` (graph.py) sempre
+carregou um circuito de referência incondicionalmente — nunca rodou só por
+`coupling_map` estar declarado (ver correção à tabela de contratos dos nós,
+acima). Quando `coupling_map_name` foi declarado mas não há referência,
+`render_guarantee_report()` diz explicitamente que `depth_ratio` não tem
+significado sem uma, em vez de omitir o campo em silêncio.
+
+**`only_trivial_input_tested` — a decisão "sempre mostrar, nunca tentar
+adivinhar a forma da tarefa" (aprovada por pergunta direta ao usuário antes
+de implementar)**: um fato puramente estrutural (nenhuma asserção usou
+`INPUT`), renderizado sempre que verdadeiro, mesmo em relatórios de tarefas
+de preparação de estado onde `|0...0⟩` é o único input relevante por
+desenho — a alternativa (tentar detectar se a tarefa "é" uma transformação
+geral) exigiria julgamento sobre a intenção da tarefa, que o Princípio I
+proíbe neste caminho.
 
 **A decisão de desenho que carrega o Princípio II inteiro**:
 `functional_correctness_verified` é um `@computed_field`, não um campo
@@ -338,10 +523,12 @@ comum — não pode ser passado ao construtor. Com
 levanta `ValidationError` em vez de silenciosamente aceitar um relatório que
 mente. **A invariante de SC-004 é estruturalmente impossível de violar por
 construção**, não apenas coberta por um teste que alguém poderia esquecer
-de rodar. T095 (abaixo, em tasks.md) é o teste obrigatório que confirma isso
-— tanto o caso direto (relatório vazio não afirma corretude) quanto o caso
-adversário (tentar construir o relatório mentiroso é rejeitado pela própria
-classe).
+de rodar. T095 (`tests/unit/test_report.py::
+test_no_correctness_claim_without_verified_assertion` +
+`test_cannot_construct_a_lying_report`) é o teste obrigatório que confirma
+isso — tanto o caso direto (relatório vazio não afirma corretude) quanto o
+caso adversário (tentar construir o relatório mentiroso é rejeitado pela
+própria classe).
 
 `render_guarantee_report()` (T094) enumera cada asserção com veredito
 individual (FR-011, FR-015), inclui a frase de não-verificação explícita
@@ -350,13 +537,27 @@ linguagem que equipare "executa e respeita restrições" a "está correto"
 (FR-017) — essa é uma checagem de VOCABULÁRIO no renderizador, testada
 diretamente (T095), não uma convenção de estilo.
 
+**Nota de implementação (`AgentState.guarantee_report`)**: tipado `Any` em
+`state.py`, não `GuaranteeReport | None` — `report.py` importa `Assertion`/
+`AssertionOutcome`/`ResourceResult` de `state.py`, então um import no
+sentido contrário seria circular, e um import guardado por `TYPE_CHECKING`
+quebra em runtime: `StateGraph(AgentState)` do LangGraph chama
+`typing.get_type_hints()` sobre o `TypedDict`, que tenta resolver toda
+referência textual contra o namespace do próprio módulo e falha
+(`NameError`) num nome nunca importado de fato em runtime — confirmado ao
+tentar essa rota antes de revertê-la para `Any`. O valor real em tempo de
+execução continua sendo sempre um `GuaranteeReport` de verdade; a perda de
+precisão de tipo fica confinada a esta única anotação.
+
 ### Armadilhas endereçadas no desenho
 
 Preservadas de v1 (continuam verdadeiras, nenhuma invalidada pela migração):
 
 - **Fase global**: usar `Operator.equiv()`/comparação de magnitude, nunca
   comparação direta de amplitudes complexas. Aplica-se também a
-  `AmplitudeEquality` (acima) — mesma lição, novo lugar.
+  `AmplitudeAssertion`'s `PROBABILITY`/`AMPLITUDE` (acima) — mesma lição,
+  novo lugar; `PHASE_DIFF` é a única exceção deliberada, por ser uma
+  diferença relativa, não uma fase absoluta.
 - **Teto de `Operator()`**: matriz densa 4ⁿ — acima de ~12–13 qubits, usar
   verificação por composição. Ver D3b.
 - **Endianness**: Qiskit é little-endian; verificar também contra bits
@@ -375,10 +576,19 @@ Preservadas de v1 (continuam verdadeiras, nenhuma invalidada pela migração):
 
 - **Checador estruturalmente cego ao próprio erro que existe para pegar**:
   um valor esperado correto não implica ausência de erro (F2, acima,
-  `OperatorEigenstate`). Testar o verificador contra um caso adversário
+  `EigenstateAssertion`). Testar o verificador contra um caso adversário
   ANTES de confiar nele — não depois de um bug real forçar a correção,
   diferente de como F2 foi descoberto originalmente em v1 (um bug real de
-  QFT). A lição de v1 se paga aplicada preventivamente em v2.
+  QFT). A lição de v1 se paga aplicada preventivamente em v2 — entregue:
+  `test_eigenstate_residual_norm_rejects_near_miss_that_expectation_alone_
+  would_pass` (`tests/unit/test_assertions.py`).
+- **Reconhecer um padrão de falha conhecido não confirma que ele se
+  aplica**: a justificativa original para validar nomes de gate em
+  `GATES_SUBSET_OF` ("mesma direção de falha de D3c/D3d/D3f") foi endossada
+  antes de ser derivada com cuidado, e estava errada — ver F6
+  (report-notes.md) e `research.md` D19. Registrada aqui como uma classe de
+  erro distinta de F1-F5: não um defeito no artefato verificado, mas no
+  raciocínio de desenho que justificou uma decisão de implementação.
 
 ### Suíte de regressão (substitui "Matriz experimental")
 

@@ -2185,6 +2185,349 @@ automaticamente em `RunRecord.lib_versions` (mesmo padrão já usado para
 
 ---
 
+## D18b — Modelos fixados em revisão, carregados só offline; suíte de testes sem rede
+
+**Decisão**: (1) as revisões exatas (commit do HuggingFace) dos dois modelos
+carregados ficam fixadas no código (`PINNED_MODEL_REVISIONS`,
+`src/qcagent/retrieval/embedding.py`: jina `516f4baf…`, bm25 `22b8d2af…`);
+(2) `scripts/fetch_models.py` (`make models`) é o ÚNICO código que baixa pesos,
+e baixa exatamente essas revisões; (3) todo carregamento usa
+`local_files_only=True` a partir do cache fixado, precedido de uma checagem
+que falha na hora, nomeando o problema e a correção, se o cache não tiver a
+revisão fixada ou se faltar qualquer arquivo; (4) a imagem traz os modelos
+embutidos em `/opt/fastembed` (baixados no build), o que substitui o volume
+nomeado de D18; (5) `tests/conftest.py` faz qualquer conexão não-loopback
+durante os testes falhar na hora com `NetworkAccessInTests`, e grava ids das
+falhas, revisão git e duração em `.pytest_cache/failures.log`.
+
+**Razão**: uma execução da suíte levou 99 s e terminou com uma falha e cinco
+erros que ninguém conseguiu nomear e que não se reproduziram em três
+execuções seguintes. A causa, lida no fonte do fastembed 0.3.6 e não
+presumida: `download_files_from_huggingface` chama
+`snapshot_download(local_files_only=False)`, que CONSULTA o Hub a cada
+construção, mesmo com o modelo inteiro em cache; se a chamada falha,
+`download_model` dorme 3 s e depois 9 s entre tentativas. Os testes de
+integração da US2 constroem modelos reais, então a suíte dependia da rede
+em tempo de execução. O cache também ficava no padrão do fastembed,
+`/tmp/fastembed_cache`, que não sobrevive. Uma suíte que falha às vezes por
+motivos fora do código ensina a ignorar falhas; é o mesmo raciocínio do
+ambiente canônico de D15.
+
+**Fecha a lacuna que D18 deixou aberta**: D18 registrou que o fastembed 0.3.6
+não aceita revisão, e que a reprodutibilidade dependia de "mesmo volume
+Docker". Agora a revisão está no código e é conferida em todo carregamento;
+um cache com outra revisão é recusado.
+
+**Achados ao implementar, cada um com evidência**:
+- **A primeira checagem do cache era insuficiente.** Verificava `refs/main` e
+  o diretório do snapshot, e aprovou um cache cujos arquivos não existiam; o
+  carregamento falhou dentro do onnxruntime com `NO_SUCHFILE`, exatamente o
+  tipo de falha sem nome que se queria eliminar. Agora confere cada arquivo
+  que o fastembed abre (`model_file` + `additional_files`). A exceção é o
+  `mock.file` do `Qdrant/bm25`, placeholder do próprio fastembed ("bm25 does
+  not require a model, so we just use a mock"), que não existe no upstream.
+- **O repositório está num mount virtiofs sem suporte a symlink.** O cache do
+  HuggingFace é feito de symlinks (`snapshots/<commit>/arquivo ->
+  ../../blobs/<hash>`); uma cópia com `cp -a` produziu links que não
+  resolvem. O `huggingface_hub` detecta a falta de suporte e grava arquivos
+  reais, então `make models` funciona nesse mount; copiar um cache à mão
+  exige desreferenciar (`cp -rL`).
+- **A interceptação de TLS era intermitente, e o interceptador foi
+  identificado.** `snapshot_download` falhava com "self-signed certificate in
+  certificate chain" enquanto a MESMA URL respondia 200 via `requests` — não
+  era flakiness de rede: repetindo o handshake através do proxy, cerca de uma
+  conexão em cinco chega assinada por um **"Kaspersky Anti-Virus Personal
+  Root Certificate"** (antivírus fazendo inspeção SSL na máquina host), e as
+  demais chegam com a cadeia real da Amazon. O CA do proxy do sandbox já
+  estava no trust store; o da Kaspersky não. Resolvido como D18 manda —
+  fornecendo o CA, nunca `verify=False`: o certificado foi extraído da
+  cadeia interceptada para `./corporate-ca.crt` (gitignored) e instalado no
+  trust store do sistema; depois disso, 11 de 11 conexões interceptadas
+  verificam OK.
+- **Trust store do sistema e bundle do `certifi` são rotas COMPLEMENTARES,
+  não alternativas.** O primeiro build da imagem instalou o CA no trust
+  store do sistema e ainda assim falhou: `requests` (logo `huggingface_hub`,
+  logo o download) verifica contra o bundle do `certifi`, não contra o do
+  sistema. A imagem agora também define `REQUESTS_CA_BUNDLE`/`SSL_CERT_FILE`
+  apontando para o bundle do sistema, no qual `update-ca-certificates` já
+  fundiu qualquer CA corporativo. O `COPY corporate-ca.crt*` usa glob: nada
+  a descomentar, no-op quando o arquivo não existe.
+- **O cache fixado NÃO pode ficar dentro do repositório.** Primeiro
+  `make models` limpo baixou os 641 MB de blobs e deixou todos os diretórios
+  de snapshot VAZIOS: o layout do HuggingFace liga `snapshots/<commit>/
+  arquivo` a `blobs/<hash>` por symlink, e no mount virtiofs do repositório
+  `symlink()` retorna sucesso sem criar nada. O default passou a ser
+  `$XDG_CACHE_HOME/qcircuit-agent/fastembed` (fora do mount), e
+  `fetch_models.py` sonda suporte a symlink ANTES de baixar, recusando com
+  a instrução de apontar `FASTEMBED_CACHE_PATH` para um sistema de arquivos
+  local.
+
+**Verificado de ponta a ponta (depois das correções acima)**: `make models`
+a partir de cache limpo baixa as duas revisões fixadas e confirma o
+carregamento offline; `docker compose build app` conclui, baixando os modelos
+no build; `docker run --network none` carrega os modelos e produz embeddings
+dentro do contêiner — prova de que nada em tempo de execução precisa de rede.
+Além disso: suíte completa verde com o guarda ativo (nenhum teste precisava
+de rede além deste); a construção antiga, sem `local_files_only`, é recusada
+pelo guarda em 0,00 s, em vez de consultar o Hub e dormir; cache vazio falha
+em menos de 2 s com a instrução `make models`; uma falha deliberada ficou
+registrada em `failures.log` com nome, revisão git e duração.
+
+**Alternativas rejeitadas**:
+- **Só `HF_HUB_OFFLINE=1`** — insuficiente sozinho: com o modelo ausente o
+  fastembed ainda cai no laço de tentativas com sleep, e a proteção dependeria
+  de uma variável de ambiente estar setada em todo contexto. Mantido no
+  conftest como camada extra, não como a garantia.
+- **Pular (`skip`) os testes que precisam do modelo quando o cache falta** —
+  esconderia a lacuna; um cache ausente é uma precondição de ambiente e deve
+  falhar com nome e correção.
+- **Manter o volume nomeado de D18** — torna o download um custo de primeira
+  execução, mas um volume novo ainda precisa de rede em tempo de execução.
+
+---
+
+## D19 — Gramática da linguagem de asserção (US3): forma final e limites de escopo
+
+**Decisão**: gramática textual mínima e fechada — quatro formas de
+avaliação (`PROBABILITY`/`AMPLITUDE`/`PHASE_DIFF` sob um `AmplitudeAssertion`
+comum, `MEASURES`, `EIGENSTATE_OF`, `GATES_SUBSET_OF`), mais um açúcar
+sintático (`QUBIT(q) == "|label>"`, desabaçucarado para `EIGENSTATE_OF` em
+tempo de parse) e um prefixo opcional (`INPUT(\|ket>) THEN <asserção>`),
+parseada e avaliada por código Python determinístico
+(`src/qcagent/validators/assertions.py`), nunca por um LLM. Resultado de
+cada avaliação é TRI-ESTADO (`True`/`False`/`None`="não avaliável"), não
+binário. Ver `data-model.md` §Linguagem de asserção para a sintaxe completa
+e `plan.md` §Verificação sem referência para a decisão registrada junto do
+código.
+
+**Razão**: FR-010 exige que o usuário consiga declarar propriedades do
+comportamento esperado sem fornecer um circuito de referência, e FR-013
+exige que uma asserção mal formada seja recusada explicitamente — as duas
+juntas só são satisfeitas por uma gramática pequena e fechada com parser
+próprio, nunca por "deixar o LLM interpretar linguagem natural como
+asserção" (isso reintroduziria exatamente a ambiguidade de julgamento que o
+Princípio I existe para excluir do caminho de veredito). A forma final não
+saiu da primeira proposta — chegou depois de duas rodadas de revisão do
+usuário, cada uma resolvendo um problema concreto, não polimento:
+
+1. **Açúcar `QUBIT`**: a forma geral (`EIGENSTATE_OF("XIII", -1)` para "a
+   ancilla está em `|-⟩`") falha o próprio teste de usabilidade que US3
+   define — exige saber que `|-⟩` é o autoestado `-1` de `X` e posicionar
+   `N-1` caracteres `I` corretamente. Resolvido com açúcar de um qubit para
+   os seis estados cardeais da esfera de Bloch, desabaçucarado em tempo de
+   parse (nunca um segundo caminho de avaliação).
+2. **`MEASURES` com duas formas sintaticamente distintas**: a proposta
+   original tinha uma forma só, e `MEASURES([0,1,2]) == "101"` /
+   `EIGENSTATE_OF("XII", -1)` liam a MESMA posição em direções OPOSTAS sem
+   nenhum sinal visível — o mesmo erro silencioso de convenção que este
+   projeto já pagou três vezes (D3c endianness, D3d somador, D3f sinal
+   QUBO→Ising). As duas alternativas de mitigação eram: (a) avisar em tempo
+   de execução quando a lista de `MEASURES` cobre o registro inteiro (onde
+   as duas convenções divergem visivelmente), ou (b) dar a `MEASURES` uma
+   forma nua (registro inteiro, convenção compartilhada) e uma forma com
+   lista (subconjunto, convenção posicional), sintaticamente distintas.
+   Escolhida (b) — resolve a colisão por CONSTRUÇÃO da gramática, não por
+   um aviso que o usuário pode ignorar.
+3. **Resultado tri-estado**: `PHASE_DIFF` entre duas amplitudes é
+   estruturalmente indefinido quando uma delas é ~0. A terceira saída
+   (`passed=None`, "não avaliável") foi decidida ANTES da implementação, não
+   deixada para T084b — porque muda o contrato de `GuaranteeReport` (US4,
+   `None` nunca conta como aprovação) e porque o loop de correção precisa de
+   um comportamento definido quando a mesma asserção volta não-avaliável
+   repetidamente. Decisão: duas ocorrências CONSECUTIVAS da mesma asserção
+   (casada estruturalmente) não-avaliável encerram com
+   `status="assertion_not_evaluable"`, distinto de `aborted` (esgotamento de
+   `MAX_ITER`) e de `failed_semantic` (checagem bem posta que não passou) —
+   regenerar não ajudou duas vezes seguidas, evidência de que o problema
+   pode estar na declaração, não na geração.
+4. **`INPUT(...) THEN <asserção>`, núcleo não extensão**: toda asserção sem
+   este prefixo só testa comportamento a partir de `|0...0⟩`. Isso é
+   suficiente para tarefas de preparação de estado, mas insuficiente — na
+   verdade CEGO — para qualquer tarefa cujo conteúdo seja uma TRANSFORMAÇÃO
+   geral (achado do exercício de validação a frio contra `qft_5q`, abaixo).
+   `INPUT` prepara o registro num estado de base computacional (`X` por bit
+   `'1'`, mesma convenção de ket já em uso) antes de evoluir o circuito sob
+   teste. Várias asserções `INPUT` sobre entradas não-triviais distintas dão
+   cobertura evidencial real de uma transformação — mesma lógica de
+   `_check_by_composition` (D3b), com uma diferença que precisa ficar
+   explícita: D3b testa uma proposição universal (equivalência unitária)
+   contra uma referência CONHECIDA com k estados Haar-aleatórios, o que dá
+   uma cota de probabilidade de falso positivo genuína; `INPUT` não tem
+   referência nenhuma — cada asserção só testa a propriedade específica que
+   o usuário escreveu, para aquela entrada específica. É cobertura maior,
+   não uma garantia formal equivalente.
+
+**Achados empíricos verificados antes de confiar na gramática** (não
+assumidos a partir da documentação do Qiskit):
+
+- **Convenção de ket = índice direto**: `int(ket_string, 2)` indexando
+  `Statevector.data` bate exatamente com as chaves de
+  `Statevector.probabilities_dict()` — confirmado construindo
+  `qc.x(0);qc.x(2)` em 3 qubits e comparando `sv.data[5]` contra
+  `probabilities_dict()["101"]`.
+- **`probabilities_dict(qargs=...)` usa a convenção OPOSTA à prometida pela
+  forma com lista de `MEASURES`**: o primeiro qarg listado aparece na
+  posição MAIS À DIREITA da chave renderizada, não na mais à esquerda. Uma
+  primeira implementação usando essa forma passou no primeiro teste
+  (`bv_4q`, cujo segredo é coincidentemente palindrômico) e só falhou num
+  segundo teste deliberadamente assimétrico — a diferença entre "parece
+  certo" e "está certo" foi exatamente não confiar no primeiro caso de
+  teste. Corrigido usando o array bruto `probabilities(qargs=...)` com um
+  índice `j = sum(int(bit) << i for i, bit in enumerate(expected))`
+  derivado e verificado à mão, nunca as chaves de `probabilities_dict`.
+- **Nomes de gate de aridade variável fora de `get_standard_gate_name_mapping()`**:
+  `mcx`, `barrier`, `mcphase`, `mcrx`, `mcry`, `mcrz` são nomes de instrução
+  reais e usados neste projeto (`mcx` confirmado por `grep` no código de
+  construção de oráculos) mas ausentes do mapeamento "padrão" de 54 gates do
+  próprio Qiskit — teria produzido um `unknown gate name` falso-positivo em
+  `GATES_SUBSET_OF` contra um circuito legítimo. Estendido explicitamente,
+  não coberto por acidente.
+
+**Correção registrada durante a implementação, não silenciosamente**: a
+razão original para validar nomes de gate em `GATES_SUBSET_OF` ("nome
+digitado errado torna a asserção vacuamente verdadeira, mesma direção de
+falha de D3c/D3d/D3f") foi endossada pelo usuário e estava ERRADA — uma
+checagem de subconjunto é fail-closed por construção, nunca passa
+vacuamente num nome digitado errado. Corrigida para a razão real, mais
+modesta (erro de parse preciso em vez de falha de asserção confusa). Ver F6
+(report-notes.md) para a análise completa de por que a alegação errada foi
+convincente antes de ser derivada com cuidado.
+
+**Escopo real da gramática — achado do exercício de validação a frio, não
+de revisão de desenho**: antes de implementar, três tarefas de tiers
+diferentes (`qft_5q`/T2, `qubo_ising_3var`/T3, `ghz_linear5_full`/T4) foram
+escritas à mão, sem consultar a especificação da gramática, para revelar
+onde um usuário real tropeçaria. Um quarto exercício, depois da decisão de
+dividir `MEASURES` em duas formas, usou `reversible_half_adder_4q`
+especificamente para testar essa divisão contra um oráculo real antes de
+implementar. Achados, todos verificados computacionalmente contra oráculos
+reais, não hipotéticos:
+
+- **Forte** para preparação de estado e propriedades qualitativas —
+  `ghz_linear5_full`: nenhuma derivação numérica, só conhecimento
+  conceitual do que a tarefa pede (autoestado coletivo, restrição de gate
+  set).
+- **Fraca** para tarefas cujo conteúdo inteiro é uma derivação numérica —
+  `qubo_ising_3var`: a única asserção não-vazia possível (`PHASE_DIFF` entre
+  dois estados de base) exigiu expandir a substituição QUBO→Ising à mão
+  antes de saber o que escrever (`PHASE_DIFF(|000>, |111>) ~= -0.5`,
+  verificado obtendo H(+++)=-0.25, H(---)=0.75, γ=0.5) — a mesma conta que
+  CONSTRUIR o circuito exige, contradizendo a premissa central de US3. Ver
+  "Threats to validity" em report-notes.md. **Registrado como limitação de
+  cobertura, não alargada**: aceitar uma derivação pronta na gramática
+  equivaleria a aceitar uma referência disfarçada.
+- **Cega** (sem `INPUT`) para tarefas de transformação geral —
+  `qft_5q`: uma QFT mal implementada pode passar em toda asserção ancorada
+  só em `|0...0⟩`, porque a saída da QFT nesse caso específico é
+  indistinguível de uma simples superposição uniforme (`H` em cada qubit,
+  sem a estrutura de fase que distingue QFT de qualquer outra preparação de
+  superposição uniforme). Este achado especificamente motivou o item 4
+  acima (`INPUT`) — mitigado, não eliminado: o relatório de garantia (US4,
+  ainda não implementado) precisa nomear esse ponto cego explicitamente
+  quando uma tarefa de transformação geral só tem asserções ancoradas em
+  `|0...0⟩`, em vez de passar em silêncio.
+- Fora da gramática por desenho, não por omissão: recursos e topologia
+  (`depth_ratio`, respeito ao `coupling_map`) são propriedades do
+  CIRCUITO, não do estado — não pertencem a uma linguagem de asserção sobre
+  estados. Uma transpilação bem-sucedida contra o `coupling_map` (já
+  computada por `static_check`) É evidência sem referência de que a
+  topologia foi respeitada; a decisão é surfar isso no relatório de
+  garantia como verificado, não adicionar uma quinta forma de asserção
+  sobre topologia.
+
+Ver F7 (report-notes.md) para o relato completo do exercício como achado
+metodológico por si só — ele definiu o escopo real do produto mais do que
+qualquer quantidade de revisão de desenho teria.
+
+**Alternativas rejeitadas**:
+- **Unificar as convenções de `MEASURES` e `EIGENSTATE_OF`/`QUBIT`** — não
+  há uma convenção única que sirva às duas (uma lista arbitrária de qubits
+  não tem uma noção natural de "esquerda = maior índice"); rejeitada em
+  favor de duas formas sintaticamente distintas (item 2 acima).
+- **Alargar a gramática para aceitar um estado-alvo arbitrário** (ex.: "o
+  estado final é aproximadamente X") — rejeitada categoricamente: isso É
+  fornecer uma referência, só que disfarçada de asserção, o que anularia o
+  ponto inteiro de US3 (verificação SEM referência).
+- **Tradução automática de `Requirement`s `kind="property"`/
+  `kind="output_format"` (já extraídos pelo `planner`, FR-009) para esta
+  gramática via LLM** — permitida pelo Princípio I como "gerador de
+  hipótese", mas rejeitada nesta fase: escopo genuinamente novo, não
+  pedido por nenhuma FR de v2 explicitamente, e arriscaria reintroduzir a
+  mesma ambiguidade que a gramática formal existe para evitar. Só
+  `kind="n_qubits"`/`kind="gate_set"` (checáveis sem tradução nenhuma)
+  ganham verificação automática nesta fase (T091).
+- **Checar `EIGENSTATE_OF` por valor esperado (`⟨ψ|H|ψ⟩ == λ`) em vez de
+  norma do resíduo** — rejeitada por F2 (report-notes.md): um valor
+  esperado correto não implica autoestado. Verificado numericamente que a
+  norma do resíduo detecta um caso em que um cheque de valor esperado, à
+  mesma tolerância numérica usada em outra parte deste código
+  (`DEFAULT_TOL=1e-9`), teria deixado passar — ver `plan.md`
+  §Verificação sem referência para os números exatos.
+
+---
+
+## D20 — Critério de reprodutibilidade em duas camadas (emenda a SC-008)
+
+**Decisão**: SC-008 deixa de ser um limiar único de 5% e passa a ter duas
+camadas com critérios de naturezas diferentes: **igualdade exata (0%)** para o
+que controlamos, e **piso de ruído medido e reportado** para o que não
+controlamos. A medição exige cache de respostas frio entre as execuções.
+
+**Razão**: o limiar de 5% foi escrito supondo ruído irredutível, sem que
+ninguém soubesse se ele existia nem de onde vinha — SC-008 nunca havia sido
+medido, porque até T102 nunca houve duas execuções completas para comparar.
+Medido, o resultado foi 50,0% e depois 36,7% de divergência por tarefa, e a
+investigação separou as causas em duas naturezas incompatíveis com um limiar
+único:
+
+1. **Defeitos nossos, corrigíveis, com divergência que DEVE ser zero**:
+   `temperature` herdada do Modelfile (F15) e empates da fusão RRF resolvidos
+   pela ordem dos segmentos do Qdrant (F17). Ambos corrigidos. Para esta
+   camada, 5% é um critério errado em espécie, não em número: um sistema com
+   4% de divergência aqui PASSA no limiar enquanto carrega um defeito, e é
+   exatamente esse defeito que um critério de reprodutibilidade existe para
+   pegar. Tolerar ruído residual não testa reprodutibilidade; testa que o
+   ruído é pequeno, que é uma afirmação muito mais fraca.
+
+2. **Estado interno do servidor de inferência, não corrigível por
+   configuração** (F19): um prompt idêntico, mesmo seed, `temperature=0`,
+   devolve uma resposta calculada do zero e outra servida do cache de
+   prefixo/KV do próprio Ollama. Aparece em dois pontos de chamada (planner e
+   gerador) com assinatura idêntica — é UMA fonte vista duas vezes, não duas.
+   Para esta camada, exigir 0% seria um critério que o sistema não pode
+   satisfazer por razões fora do código: uma luz vermelha permanente, que é
+   o mesmo defeito social de um gate que sempre falha (ensina a ignorá-lo).
+
+**Por que não escolher um número menor em vez de medir**: qualquer número
+escolhido a priori herda o problema do 5% — é arbitrário e não distingue
+"ruído do serving stack" de "defeito nosso ainda não achado". O piso MEDIDO
+faz as duas coisas que um número escolhido não faz: dá a barra que um efeito
+alegado precisa exceder para ser efeito, e muda quando o ambiente muda, em vez
+de continuar afirmando um limite que deixou de valer.
+
+**Alternativas consideradas**:
+
+- *Manter 5% e seguir*: rejeitado. Não é falsificável na prática (qualquer
+  resultado entre 0 e 5% "passa") e já mascarou três defeitos reais.
+- *Exigir 0% em tudo*: foi minha recomendação inicial, revertida ao medir. A
+  premissa era que toda fonte encontrada fosse defeito nosso; a terceira não
+  é. Um SC inatingível por razões externas não é um gate.
+- *Eliminar a fonte trocando o serving stack* (vLLM, llama.cpp direto, ou
+  execução determinística forçada): não descartado, mas fora de escopo agora
+  — mudaria D10 (o gerador local canônico) e exigiria reconstruir todo o
+  baseline. Registrado como caminho, não como decisão.
+- *Usar o cache de respostas deliberadamente como mecanismo de
+  reprodutibilidade*: legítimo para REPLAY (reanálise de uma execução
+  registrada), inútil para medir estabilidade do harness — um teste contra o
+  cache devolve 0% por construção (F18).
+
+**Consequência imediata**: `analysis/compare.py` não pode continuar tratando
+qualquer mudança por tarefa como regressão (exit 1). Com um piso na camada do
+gerador, o gate dispararia por azar em toda comparação. O redesenho está em
+tasks.md T101b.
+
+---
+
 ## Referências a levantar (Phase 0, continuação)
 
 - Benchmarks existentes de geração de código quântico e suas limitações de oráculo

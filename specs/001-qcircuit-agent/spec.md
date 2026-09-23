@@ -307,9 +307,29 @@ transforma as 120 tarefas já construídas no ativo de qualidade do produto.
 - **SC-005**: Um usuário sem familiaridade com o sistema consegue gerar um
   circuito com asserção verificada em menos de 5 minutos pela interface.
 - **SC-006**: A mediana de tentativas até sucesso é igual ou inferior a 3.
-- **SC-007**: A suíte de regressão executa completa em menos de 3 horas.
-- **SC-008**: Duas execuções da suíte sobre o mesmo código e versões divergem em
-  menos de 5% das tarefas.
+- **SC-007** (emendado 2026-09-22 — ver report-notes.md): a suíte de regressão
+  executa completa em menos de **4 horas**, com cache de respostas FRIO. O teto
+  anterior de 3 h era estimativa anterior a qualquer medição; as execuções que
+  pareciam cumpri-lo (2 h 45 min) tinham ~18% das chamadas servidas de cache
+  (F18). Medido a frio: 3 h 26 min, em duas execuções independentes (205m47s e
+  205m45s). Cortar seeds para caber em 3 h foi testado e rejeitado: custaria 50%
+  das tarefas com sucesso, porque sob `temperature=0` o seed ainda altera a
+  saída e os 3 seeds são cobertura real, não redundância.
+- **SC-008** (emendado — ver research.md D20 e report-notes.md F15/F17/F19):
+  duas execuções da suíte sobre o mesmo código, corpus e configuração são
+  comparadas em DUAS camadas, porque só uma delas está sob nosso controle:
+  - **SC-008a (camada determinística — igualdade EXATA, 0%)**: requisitos
+    extraídos, ordem e conjunto dos chunks recuperados, classificação de erro,
+    ação de roteamento e veredito dado um mesmo código devem ser IDÊNTICOS.
+    Qualquer divergência aqui é defeito nosso — as três encontradas até agora
+    eram (F15, F17) — e é o que esta camada existe para pegar.
+  - **SC-008b (camada do gerador — piso de ruído MEDIDO e reportado)**: a
+    divergência de resultado por tarefa é uma propriedade empírica do
+    servidor de inferência, não um limite que escolhemos. É medida por duas
+    execuções completas com cache frio, reportada com intervalo de confiança,
+    e **todo efeito alegado tem de exceder esse piso**.
+  - A medição de SC-008 EXIGE limpar `.cache/llm` entre as duas execuções
+    (F18) — sem isso o resultado é 0% por construção.
 - **SC-009**: 100% das referências da suíte passam pela verificação
   independente.
 
