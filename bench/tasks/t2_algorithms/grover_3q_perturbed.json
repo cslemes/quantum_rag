@@ -1,0 +1,13 @@
+{
+  "task_id": "grover_3q_perturbed",
+  "tier": "t2",
+  "prompt": "Implement Grover's search algorithm on 3 qubits to find the single marked basis state |101>, using EXACTLY 2 Grover iterations (the optimal count for this problem size) — the SAME target as the standard grover_3q task. Use a pure PHASE oracle with no ancilla qubit: it must flip the sign (apply a -1 phase) of |101> and leave every other basis state unchanged. Each iteration is (oracle; diffuser), where the diffuser is the standard 'inversion about the mean' operator 2|s><s| - I. Start from Hadamard on all 3 qubits, then apply 2 iterations. IMPORTANT constraint: use ONLY the gates RZ, SX (square-root-X), X, and CX. Do NOT use H, Toffoli/MCX, or any other gate directly — decompose everything (including the phase oracle and the diffuser's multi-controlled gate) into this gate set. Return the resulting 3-qubit state; no measurement.",
+  "n_qubits": 3,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/grover_3q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "gate_set_restriction",
+  "base_task_id": "grover_3q"
+}

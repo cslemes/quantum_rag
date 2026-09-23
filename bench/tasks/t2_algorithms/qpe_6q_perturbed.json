@@ -1,0 +1,13 @@
+{
+  "task_id": "qpe_6q_perturbed",
+  "tier": "t2",
+  "prompt": "Build the state produced by: (1) the standard Quantum Phase Estimation circuit as in the qpe_6q task (5-qubit counting register on qubits 0-4, 1-qubit eigenstate register on qubit 5, eigenstate |1> of P(11*pi/16), counting register lands exactly on the binary representation of 11), followed by (2) the 6-qubit Quantum Fourier Transform (standard textbook definition: Hadamard and controlled-phase gates, followed by the final SWAP-reversal layer) applied to all 6 qubits. Return the final 6-qubit state; no measurement.",
+  "n_qubits": 6,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/qpe_6q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "composition",
+  "base_task_id": "qpe_6q"
+}

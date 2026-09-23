@@ -1,0 +1,13 @@
+{
+  "task_id": "qaoa_maxcut_5q_perturbed",
+  "tier": "t2",
+  "prompt": "Build the state produced by: (1) the standard p=1 QAOA circuit for MaxCut on the 5-node cycle graph as in the qaoa_maxcut_5q task (edges (0,1), (1,2), (2,3), (3,4), (4,0), gamma = 0.7, beta = 0.35: Hadamard on all 5 qubits, cost layer CNOT(i,j)-RZ(2*gamma,j)-CNOT(i,j) per edge in that order, mixer layer RX(2*beta) on every qubit), followed by (2) the 5-qubit Quantum Fourier Transform (standard textbook definition: Hadamard and controlled-phase gates, followed by the final SWAP-reversal layer) applied to all 5 qubits. Return the final 5-qubit state; no measurement.",
+  "n_qubits": 5,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/qaoa_maxcut_5q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "composition",
+  "base_task_id": "qaoa_maxcut_5q"
+}

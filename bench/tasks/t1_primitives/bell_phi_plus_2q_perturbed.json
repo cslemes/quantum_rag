@@ -1,0 +1,13 @@
+{
+  "task_id": "bell_phi_plus_2q_perturbed",
+  "tier": "t1",
+  "prompt": "Build a 2-qubit circuit that prepares the phase-generalized Bell state (|00> + e^{i*pi/3}*|11>) / sqrt(2), up to global phase (pi/3 radians is the relative phase between the |00> and |11> terms — this is NOT the standard Bell state, the |11> term carries an extra e^{i*pi/3} phase factor relative to |00>).",
+  "n_qubits": 2,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/bell_phi_plus_2q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "relative_phase",
+  "base_task_id": "bell_phi_plus_2q"
+}

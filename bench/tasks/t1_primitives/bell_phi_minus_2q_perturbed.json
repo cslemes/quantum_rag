@@ -1,0 +1,13 @@
+{
+  "task_id": "bell_phi_minus_2q_perturbed",
+  "tier": "t1",
+  "prompt": "Build a 2-qubit circuit that prepares the Bell state |Phi-> = (|00> - |11>) / sqrt(2), up to global phase — the SAME target as the standard Bell |Phi-> state. IMPORTANT constraint: use ONLY the gates RZ, SX (square-root-X), X, and CX. Do NOT use H, Z, or any other gate directly — decompose them into this gate set (e.g. H can be built from RZ and SX).",
+  "n_qubits": 2,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/bell_phi_minus_2q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "gate_set_restriction",
+  "base_task_id": "bell_phi_minus_2q"
+}

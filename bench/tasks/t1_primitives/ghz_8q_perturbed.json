@@ -1,0 +1,13 @@
+{
+  "task_id": "ghz_8q_perturbed",
+  "tier": "t1",
+  "prompt": "Build an 8-qubit circuit that prepares the phase-generalized GHZ state (|00000000> + e^{i*pi/6}*|11111111>) / sqrt(2), up to global phase (pi/6 radians is the relative phase between the |0^8> and |1^8> terms — this is NOT the standard GHZ state, the |1^8> term carries an extra e^{i*pi/6} phase factor relative to |0^8>).",
+  "n_qubits": 8,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/ghz_8q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "relative_phase",
+  "base_task_id": "ghz_8q"
+}

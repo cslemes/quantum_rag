@@ -1,0 +1,13 @@
+{
+  "task_id": "grover_4q_perturbed",
+  "tier": "t2",
+  "prompt": "Build the state produced by: (1) the standard Grover's search circuit on 4 qubits as in the grover_4q task (marked basis state |1001>, a pure phase oracle with no ancilla, EXACTLY 3 Grover iterations of (oracle; diffuser), diffuser = 2|s><s| - I, starting from Hadamard on all 4 qubits), followed by (2) an additional RZ(pi/4) gate applied to qubit 0. Return the resulting 4-qubit state; no measurement.",
+  "n_qubits": 4,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/grover_4q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "relative_phase",
+  "base_task_id": "grover_4q"
+}

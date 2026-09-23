@@ -1,0 +1,13 @@
+{
+  "task_id": "simon_8q_perturbed",
+  "tier": "t2",
+  "prompt": "Implement Simon's algorithm circuit for the same hidden 4-bit period s = 1010 as the standard simon_8q task (satisfying f(x) = f(x XOR s) for every x), but using a REVERSED qubit-ordering convention: here the INPUT register is qubits 4-7 (not 0-3) and the OUTPUT register is qubits 0-3 (not 4-7) — i.e. every qubit index i in the standard task's construction is now at qubit (7-i), so the two registers swap physical sides entirely. Concretely, build the oracle with exactly these gates (in this order): CNOT(control=qubit 7, target=qubit 3), CNOT(control=qubit 6, target=qubit 2), CNOT(control=qubit 5, target=qubit 1), CNOT(control=qubit 4, target=qubit 0), CNOT(control=qubit 6, target=qubit 2), CNOT(control=qubit 6, target=qubit 0). Full circuit: Hadamard on qubits 4-7, then the oracle exactly as described, then Hadamard on qubits 4-7 again (not on qubits 0-3). Return the resulting 8-qubit state; no measurement.",
+  "n_qubits": 8,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/simon_8q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "qubit_ordering",
+  "base_task_id": "simon_8q"
+}

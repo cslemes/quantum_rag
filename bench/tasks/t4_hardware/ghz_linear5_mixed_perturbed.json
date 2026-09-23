@@ -1,0 +1,14 @@
+{
+  "task_id": "ghz_linear5_mixed_perturbed",
+  "tier": "t4",
+  "prompt": "Build a 5-qubit circuit that prepares a GHZ state across qubits 0, 3, and 4 only: (|00000> + |11001>) / sqrt(2), up to global phase (qubits 1 and 2 remain |0>). This is the standard ghz_linear5_mixed task's subset {0,1,4} with a REVERSED qubit-ordering convention applied: relabel every qubit index i there as (4-i) here (so qubit 0 becomes qubit 4, qubit 1 becomes qubit 3, qubit 4 becomes qubit 0 — giving subset {4,3,0} = {0,3,4}). This circuit will be transpiled for a 5-qubit LINEAR coupling map (qubit i is only physically adjacent to qubit i-1 and i+1) — qubits 3 and 4 are adjacent on this line, but qubit 0 is far from both, so some routing overhead is expected. Any correct implementation is accepted.",
+  "n_qubits": 5,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/ghz_linear5_mixed_perturbed.qpy",
+  "coupling_map": "linear_5",
+  "tolerance": 0.99,
+  "max_depth_ratio": 2.0,
+  "perturbed": true,
+  "perturbation_family": "qubit_ordering",
+  "base_task_id": "ghz_linear5_mixed"
+}

@@ -1,0 +1,14 @@
+{
+  "task_id": "ghz_linear5_full_perturbed",
+  "tier": "t4",
+  "prompt": "Build the state produced by: (1) the standard circuit as in the ghz_linear5_full task (a 5-qubit GHZ state, (|00000> + |11111>) / sqrt(2), up to global phase), followed by (2) the 5-qubit Quantum Fourier Transform (standard textbook definition: Hadamard and controlled-phase gates, followed by the final SWAP-reversal layer) applied to all 5 qubits. This circuit will be transpiled for a 5-qubit LINEAR coupling map (qubit i is only physically adjacent to qubit i-1 and i+1). Any correct implementation reaching this final state is accepted. No measurement.",
+  "n_qubits": 5,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/ghz_linear5_full_perturbed.qpy",
+  "coupling_map": "linear_5",
+  "tolerance": 0.99,
+  "max_depth_ratio": 2.0,
+  "perturbed": true,
+  "perturbation_family": "composition",
+  "base_task_id": "ghz_linear5_full"
+}

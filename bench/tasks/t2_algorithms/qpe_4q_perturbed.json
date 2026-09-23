@@ -1,0 +1,13 @@
+{
+  "task_id": "qpe_4q_perturbed",
+  "tier": "t2",
+  "prompt": "Implement Quantum Phase Estimation for the SAME eigenstate/phase as the standard qpe_4q task (eigenstate |1> of the phase gate P(3*pi/4), theta = 3*pi/4), but using a REVERSED qubit-ordering convention: relabel every qubit index i used in the standard task's construction (i = 0, 1, 2, 3) as qubit (3-i) instead. Concretely: the eigenstate register is now qubit 0 (not qubit 3, so initialize qubit 0 to |1> with an X gate); the counting register is now qubits 1, 2, 3, where the standard task's qubit 0 (least significant) is now qubit 3, the standard task's qubit 1 is now qubit 2, and the standard task's qubit 2 (most significant) is now qubit 1. Apply EVERY gate of the standard construction — the initial Hadamards, the controlled-P rotations from each counting qubit onto the eigenstate qubit, and the internal SWAP/controlled-phase/Hadamard gates of the inverse QFT stage on the counting register — to the relabeled qubit (3-i) wherever the standard task applies it to qubit i. Because of this relabeling, the counting register lands EXACTLY on qubit 3 = |1>, qubit 2 = |1>, qubit 1 = |0> (the same bit pattern as the standard task's qubit 0 = |1>, qubit 1 = |1>, qubit 2 = |0>, just relocated) with certainty. Return the resulting 4-qubit state; no measurement.",
+  "n_qubits": 4,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/qpe_4q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "qubit_ordering",
+  "base_task_id": "qpe_4q"
+}

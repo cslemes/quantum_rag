@@ -1,0 +1,13 @@
+{
+  "task_id": "ising_weighted_maxcut_3q_perturbed",
+  "tier": "t3",
+  "prompt": "Build the state produced by: (1) the standard circuit as in the ising_weighted_maxcut_3q task (Hadamard on all 3 qubits, then the phase exp(-i*gamma*H) where H = sum over weighted edges of w_ij*Z_i*Z_j, graph: edge (0,1) weight 0.6, edge (1,2) weight -0.4, edge (0,2) weight 0.9, gamma = 0.5), followed by (2) an additional RZ(pi/4) gate applied to qubit 0. This is a general-purpose circuit block, not a fixed starting state — it must be correct for an arbitrary input, since it's specified as a unitary transformation. No measurement.",
+  "n_qubits": 3,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/ising_weighted_maxcut_3q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "relative_phase",
+  "base_task_id": "ising_weighted_maxcut_3q"
+}

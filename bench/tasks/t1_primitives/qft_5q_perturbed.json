@@ -1,0 +1,13 @@
+{
+  "task_id": "qft_5q_perturbed",
+  "tier": "t1",
+  "prompt": "Implement the 5-qubit Quantum Fourier Transform as a general-purpose circuit block (it must correctly transform an ARBITRARY input state, not just |00000> — do not build a circuit that only works from a fixed starting state). This is the SAME transform as the standard qft_5q task, but specified symbolically instead of with pre-evaluated numbers: for qubit j (0-indexed, j=0..4) apply a Hadamard, then for every qubit k < j apply a controlled-phase gate with angle 2*pi / 2^(j-k+1), control=qubit k, target=qubit j. After all Hadamard/controlled-phase stages, apply the final SWAP-reversal layer (swap qubit i with qubit 4-i, for i=0..1) to match the standard Qiskit QFT ordering convention. No measurement.",
+  "n_qubits": 5,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/qft_5q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "symbolic_parameterization",
+  "base_task_id": "qft_5q"
+}

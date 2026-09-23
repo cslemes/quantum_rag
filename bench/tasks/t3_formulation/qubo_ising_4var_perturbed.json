@@ -1,0 +1,13 @@
+{
+  "task_id": "qubo_ising_4var_perturbed",
+  "tier": "t3",
+  "prompt": "You are given the SAME QUBO cost function as the standard qubo_ising_4var task, over binary variables x0, x1, x2, x3 in {0,1}: C(x) = 1.5*x0 - 2.0*x1 + 1.0*x2 + 0.5*x3 - 0.8*x0*x1 + 0.6*x0*x2 + 0.4*x1*x2 + 0.9*x1*x3 - 0.7*x2*x3 (there is no x0*x3 term). Convert this to an Ising Hamiltonian using EXACTLY the substitution x_i = (1 - z_i) / 2 (z_i in {-1,+1}, mapped to variable i via z_i = Z_i). Expand C(x) fully in terms of z0..z3, drop the constant. This gives you the SAME Hamiltonian as the standard task's derivation, in terms of a variable index i running 0..3. Now build the circuit using a REVERSED qubit-ordering convention: place the term(s) associated with variable index i on qubit (3-i) instead of qubit i (so variable 0's field term goes on qubit 3, variable 3's field term goes on qubit 0, and a coupling term originally between variables i and j goes between qubits (3-i) and (3-j)). Build a 4-qubit circuit implementing, as a general-purpose circuit block: Hadamard on all 4 qubits, then the phase exp(-i*gamma*H) using your relabeled coefficients, with gamma = 0.45. Any correct implementation of the phase terms is accepted, as long as the derived coefficients (correctly relabeled) and resulting unitary are correct. No measurement.",
+  "n_qubits": 4,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/qubo_ising_4var_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "qubit_ordering",
+  "base_task_id": "qubo_ising_4var"
+}

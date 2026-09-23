@@ -1,0 +1,13 @@
+{
+  "task_id": "w_state_8q_perturbed",
+  "tier": "t1",
+  "prompt": "Build an 8-qubit circuit that prepares the state produced by: (1) preparing the W state — an equal superposition of every computational basis state with exactly one qubit in |1> and the rest in |0>, the same target as the standard w_state_8q task — starting from |00000000>, then (2) applying the 8-qubit Quantum Fourier Transform (standard textbook definition: Hadamard and controlled-phase gates, followed by the final SWAP-reversal layer) to the resulting 8-qubit state. Return the final 8-qubit state; no measurement.",
+  "n_qubits": 8,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/w_state_8q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "composition",
+  "base_task_id": "w_state_8q"
+}

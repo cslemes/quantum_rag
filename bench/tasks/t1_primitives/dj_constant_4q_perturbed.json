@@ -1,0 +1,13 @@
+{
+  "task_id": "dj_constant_4q_perturbed",
+  "tier": "t1",
+  "prompt": "Implement the Deutsch-Jozsa circuit for the constant oracle f(x) = 0 for every 3-bit input x, using a REVERSED qubit-ordering convention compared to the standard task: here the ANCILLA is qubit 0 (not the highest-index qubit), and the input register is qubits 1, 2, 3 (not 0, 1, 2). State explicitly: this is the opposite convention from the unperturbed dj_constant_4q task, where the ancilla is the highest-indexed qubit. Steps: initialize qubit 0 (ancilla) to |1> with an X gate, apply Hadamard to all 4 qubits, apply the oracle (for this constant-zero function, no gates at all — the oracle does nothing), then apply Hadamard to qubits 1, 2, 3 only (not the ancilla). Return the resulting 4-qubit state; no measurement.",
+  "n_qubits": 4,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/dj_constant_4q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "qubit_ordering",
+  "base_task_id": "dj_constant_4q"
+}

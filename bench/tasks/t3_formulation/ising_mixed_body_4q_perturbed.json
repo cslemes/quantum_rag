@@ -1,0 +1,13 @@
+{
+  "task_id": "ising_mixed_body_4q_perturbed",
+  "tier": "t3",
+  "prompt": "Build a 4-qubit circuit implementing, as a general-purpose circuit block: Hadamard on all 4 qubits, then the phase exp(-i*gamma*H) where H = 0.4 * Z0 * Z1 + 0.6 * Z1 * Z2 * Z3 (one two-body term plus one three-body term). gamma = 0.5 — the SAME target as the standard ising_mixed_body_4q task. IMPORTANT constraint: use ONLY the gates RZ, SX (square-root-X), X, and CX. Do NOT use H directly — decompose it into this gate set. No measurement.",
+  "n_qubits": 4,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/ising_mixed_body_4q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "gate_set_restriction",
+  "base_task_id": "ising_mixed_body_4q"
+}

@@ -1,0 +1,13 @@
+{
+  "task_id": "ising_field_coupling_4q_perturbed",
+  "tier": "t3",
+  "prompt": "Build the unitary produced by: (1) the standard circuit as in the ising_field_coupling_4q task (Hadamard on all 4 qubits, then the phase exp(-i*gamma*H) where H = 0.2*Z0 - 0.4*Z1 + 0.3*Z2 + 0.1*Z3 + 0.5*Z0*Z1 + 0.3*Z2*Z3, gamma = 0.45), followed by (2) an additional RZ(pi/4) gate applied to qubit 0. This is a general-purpose circuit block, not a fixed starting state. No measurement.",
+  "n_qubits": 4,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/ising_field_coupling_4q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "relative_phase",
+  "base_task_id": "ising_field_coupling_4q"
+}

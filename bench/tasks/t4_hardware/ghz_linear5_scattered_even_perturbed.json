@@ -1,0 +1,14 @@
+{
+  "task_id": "ghz_linear5_scattered_even_perturbed",
+  "tier": "t4",
+  "prompt": "Build a 5-qubit circuit that prepares a GHZ state across every EVEN-indexed qubit of the 5-qubit register (qubits 0, 2, 4 — i.e. qubit i for every i where i mod 2 == 0), up to global phase: qubits 1 and 3 remain |0>. This is the SAME target as the standard ghz_linear5_scattered_even task, stated via the even-index rule instead of an explicit list. This circuit will be transpiled for a 5-qubit LINEAR coupling map (qubit i is only physically adjacent to qubit i-1 and i+1) — qubits 0, 2, and 4 are not adjacent on this line, so routing overhead is expected. Any correct implementation is accepted.",
+  "n_qubits": 5,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/ghz_linear5_scattered_even_perturbed.qpy",
+  "coupling_map": "linear_5",
+  "tolerance": 0.99,
+  "max_depth_ratio": 2.0,
+  "perturbed": true,
+  "perturbation_family": "symbolic_parameterization",
+  "base_task_id": "ghz_linear5_scattered_even"
+}

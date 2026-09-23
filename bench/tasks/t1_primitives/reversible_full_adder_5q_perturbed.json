@@ -1,0 +1,13 @@
+{
+  "task_id": "reversible_full_adder_5q_perturbed",
+  "tier": "t1",
+  "prompt": "Build a reversible (no measurement, no classical bits) 5-qubit full-adder circuit computing the SAME function as the standard reversible_full_adder_5q task, but using a REVERSED qubit-ordering convention: here the inputs a, b, cin are qubits 4, 3, 2 (not 0, 1, 2), and the outputs are qubit 1 = sum = a XOR b XOR cin (not qubit 3), qubit 0 = cout = majority(a,b,cin) = (a AND b) XOR (b AND cin) XOR (a AND cin) (not qubit 4). Both output qubits start at |0>. IMPORTANT constraint: compute each output using ONLY qubits 4, 3, 2 (the original inputs) as controls. Do not use qubit 1 or qubit 0 as a control for computing the other output, and do not let one output's gates depend on the other output's qubit in any way.",
+  "n_qubits": 5,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/reversible_full_adder_5q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "qubit_ordering",
+  "base_task_id": "reversible_full_adder_5q"
+}

@@ -1,0 +1,13 @@
+{
+  "task_id": "simon_6q_perturbed",
+  "tier": "t2",
+  "prompt": "Build the state produced by: (1) the standard Simon's algorithm circuit for hidden 3-bit period s = 101 as in the simon_6q task (input register qubits 0-2, output register qubits 3-5, oracle built as CNOT(control=qubit i, target=qubit 3+i) for i=0,1,2 then CNOT(control=qubit 0, target=qubit 3+i) for i=0,2 — i.e. bits 0 and 2 of s=101 are set — then Hadamard on qubits 0-2 twice, before and after the oracle), followed by (2) an additional RZ(pi/4) gate applied to qubit 0. Return the resulting 6-qubit state; no measurement.",
+  "n_qubits": 6,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/simon_6q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "relative_phase",
+  "base_task_id": "simon_6q"
+}

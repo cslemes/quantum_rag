@@ -1,0 +1,14 @@
+{
+  "task_id": "zstring_linear5_full_chain_perturbed",
+  "tier": "t4",
+  "prompt": "Build a 5-qubit circuit implementing, as a general-purpose circuit block: Hadamard on all 5 qubits, then the phase exp(-i*gamma*H) where H = c * Z0 * Z1 * Z2 * Z3 * Z4 (a single five-body interaction term over all 5 qubits, in index order), with c and gamma both given via the formula value = 1/2 instead of the already-evaluated decimal (1/2 = 0.5, the SAME value as the standard zstring_linear5_full_chain task's coefficient and gamma). This circuit will be transpiled for a 5-qubit LINEAR coupling map (qubit i only physically adjacent to qubit i-1 and i+1) — the qubits are listed in adjacent order, so a low-overhead implementation exists. Any correct implementation is accepted (the term is diagonal, so any gate sequence producing the correct phase per computational basis state is correct). No measurement.",
+  "n_qubits": 5,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/zstring_linear5_full_chain_perturbed.qpy",
+  "coupling_map": "linear_5",
+  "tolerance": 0.99,
+  "max_depth_ratio": 2.0,
+  "perturbed": true,
+  "perturbation_family": "symbolic_parameterization",
+  "base_task_id": "zstring_linear5_full_chain"
+}

@@ -1,0 +1,13 @@
+{
+  "task_id": "w_state_3q_perturbed",
+  "tier": "t1",
+  "prompt": "Build a 3-qubit circuit that prepares the phase-generalized W state (|001> + |010> + i*|100>) / sqrt(3), up to global phase (the |100> term — qubit 2 is the |1> — carries an extra factor of i = e^{i*pi/2} relative to the other two terms, which have no extra phase).",
+  "n_qubits": 3,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/w_state_3q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "relative_phase",
+  "base_task_id": "w_state_3q"
+}

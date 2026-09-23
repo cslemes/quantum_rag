@@ -1,0 +1,14 @@
+{
+  "task_id": "ising_linear5_endpoints_perturbed",
+  "tier": "t4",
+  "prompt": "Build a 5-qubit circuit implementing, as a general-purpose circuit block: Hadamard on all 5 qubits, then the phase exp(-i*gamma*H) where H = 0.6*Z0*Z4 (a single interaction term between the two most distant qubits). gamma = 0.5 — the SAME target as the standard ising_linear5_endpoints task. This circuit will be transpiled for a 5-qubit LINEAR coupling map (qubit i only physically adjacent to qubit i-1 and i+1) — qubits 0 and 4 are the two endpoints, maximum distance apart, so routing overhead is expected. IMPORTANT constraint: use ONLY the gates RZ, SX (square-root-X), X, and CX. Do NOT use H directly — decompose it into this gate set. No measurement.",
+  "n_qubits": 5,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/ising_linear5_endpoints_perturbed.qpy",
+  "coupling_map": "linear_5",
+  "tolerance": 0.99,
+  "max_depth_ratio": 2.0,
+  "perturbed": true,
+  "perturbation_family": "gate_set_restriction",
+  "base_task_id": "ising_linear5_endpoints"
+}

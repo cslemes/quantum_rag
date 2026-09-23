@@ -1,0 +1,13 @@
+{
+  "task_id": "dj_balanced_6q_perturbed",
+  "tier": "t1",
+  "prompt": "Implement the Deutsch-Jozsa circuit for the same balanced oracle as the standard dj_balanced_6q task (f(x) = x1 XOR x2 XOR x4 of a 5-bit input), but using a REVERSED qubit-ordering convention: here the ANCILLA is qubit 0 (not qubit 5), and the input register is qubits 1-5 (not 0-4), with input qubit i of the standard task now at qubit (5-i). Concretely, restate the oracle in this new ordering: input original-qubit-1 is now qubit 4, original-qubit-2 is now qubit 3, and original-qubit-4 is now qubit 1. Steps: initialize qubit 0 (ancilla) to |1> with an X gate, apply Hadamard to all 6 qubits, apply the oracle as CNOT(control=qubit 4, target=qubit 0), CNOT(control=qubit 3, target=qubit 0), and CNOT(control=qubit 1, target=qubit 0), then apply Hadamard to qubits 1-5 only (not the ancilla). Return the resulting 6-qubit state; no measurement.",
+  "n_qubits": 6,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/dj_balanced_6q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "qubit_ordering",
+  "base_task_id": "dj_balanced_6q"
+}

@@ -1,0 +1,13 @@
+{
+  "task_id": "simon_10q_perturbed",
+  "tier": "t2",
+  "prompt": "Implement Simon's algorithm circuit for a hidden 5-bit period s, given not as an already-expanded bit list but via the formula: s is the 5-bit binary representation of the integer secret=22 (satisfying f(x) = f(x XOR s) for every x) — this is the SAME period as the standard simon_10q task (secret=22=0b10110, i.e. s = 10110). Use qubits 0-4 as the input register x and qubits 5-9 as the output register y (y_i is at qubit 5+i). Build the oracle generically from the formula: let j be the position of the lowest set bit of secret (j=1 for secret=22). First copy the input register to the output register with CNOT(control=qubit i, target=qubit 5+i) for every i = 0..4. Then, using qubit j as an extra control, apply CNOT(control=qubit j, target=qubit 5+i) for every i where bit i of secret is 1. Full circuit: Hadamard on qubits 0-4, then the oracle exactly as described, then Hadamard on qubits 0-4 again (not on qubits 5-9). Return the resulting 10-qubit state; no measurement.",
+  "n_qubits": 10,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/simon_10q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "symbolic_parameterization",
+  "base_task_id": "simon_10q"
+}

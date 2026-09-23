@@ -1,0 +1,13 @@
+{
+  "task_id": "ising_zzz_3q_perturbed",
+  "tier": "t3",
+  "prompt": "Build a 3-qubit circuit implementing, as a general-purpose circuit block: Hadamard on all 3 qubits, then the phase exp(-i*gamma*H) where H = 0.7 * Z0 * Z1 * Z2 (a single three-body interaction term) — the SAME target as the standard ising_zzz_3q task, but with gamma given via the formula gamma = 3/5 instead of the already-evaluated decimal (3/5 = 0.6, the same value as the standard task's gamma). Any correct implementation is accepted. No measurement.",
+  "n_qubits": 3,
+  "oracle_kind": "unitary",
+  "oracle_path": "bench/oracles/ising_zzz_3q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "symbolic_parameterization",
+  "base_task_id": "ising_zzz_3q"
+}

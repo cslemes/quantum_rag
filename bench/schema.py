@@ -38,21 +38,39 @@ class RunRecord(BaseModel):
     run_id: str
     task_id: str
     model_id: str
-    condition: Literal["C1", "C2", "C3", "C4", "C5"]
     seed: int
+    # Mirrors AgentState.status (src/qcagent/state.py) — a value the graph can
+    # terminate with but this Literal doesn't list would fail validation at
+    # the moment of persistence, after the run's compute was already spent.
+    # "success" means functional correctness was verified and passed;
+    # "completed_unverified" means the run finished clean but nothing verified
+    # it (US4). Metrics MUST NOT collapse the two — see data-model.md.
+    # "assertion_not_evaluable" is reachable here for the same reason.
     status: Literal[
         "success",
+        "completed_unverified",
         "failed_semantic",
         "failed_static",
         "aborted",
         "infrastructure_error",
         "rejected_input",
+        "assertion_not_evaluable",
+        # NOT produced by the graph: the runner writes this when a run raised
+        # an unexpected exception, i.e. when WE have a bug (runner.py::
+        # _run_one). Deliberately distinct from "infrastructure_error", which
+        # is excluded from the metrics denominator — filing our own defects
+        # under a status nothing counts against us is how a suite learns to
+        # look healthy while being broken.
+        "harness_error",
     ]
     iterations: int
     final_code: str
     static: dict | None
     semantic: dict | None
     resource: dict | None
+    # T054/US4 — the rendered guarantee is part of the record, so a stored run
+    # can be audited for what it claimed, not only for its status.
+    guarantee_report: dict | None = None
     error_history: list[dict]
     input_tokens: int
     output_tokens: int

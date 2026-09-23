@@ -1,0 +1,13 @@
+{
+  "task_id": "w_state_5q_perturbed",
+  "tier": "t1",
+  "prompt": "Build a 5-qubit circuit that prepares the W state: an equal superposition of every computational basis state with exactly one qubit in |1> and the rest in |0> — the SAME target as the standard 5-qubit W state. IMPORTANT constraint: use ONLY the gates RY, CX, and X. Do NOT use a controlled-RY (CRY) gate directly — decompose any controlled rotation into RY and CX (the standard identity CRY(theta) = RY(theta/2), CX, RY(-theta/2), CX applies).",
+  "n_qubits": 5,
+  "oracle_kind": "statevector",
+  "oracle_path": "bench/oracles/w_state_5q_perturbed.qpy",
+  "coupling_map": null,
+  "tolerance": 0.99,
+  "perturbed": true,
+  "perturbation_family": "gate_set_restriction",
+  "base_task_id": "w_state_5q"
+}

@@ -57,7 +57,7 @@ from pathlib import Path
 
 import numpy as np
 from qiskit import QuantumCircuit, qpy, transpile
-from qiskit.circuit.library import Diagonal, QFTGate, StatePreparation, UnitaryGate
+from qiskit.circuit.library import Diagonal, QFTGate, RZGate, StatePreparation, UnitaryGate
 from qiskit.quantum_info import Operator, SparsePauliOp, Statevector, hellinger_fidelity
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import eigsh
@@ -223,6 +223,82 @@ def _alt_boolean4() -> QuantumCircuit:
         return {4: a ^ b ^ c ^ d, 5: a & b & c & d, 6: a & b, 7: c & d}
 
     return _closed_form_permutation(8, delta_fn)
+
+
+# -- T1 perturbed (T048) independent constructions — deliberately NOT
+# imported from bench/oracles/build_t1_perturbed.py. Gate-set-restriction and
+# symbolic-parameterization families reuse the CANONICAL alternatives above
+# unchanged (same target as canonical, verified — see that module's
+# docstring); only relative-phase, qubit-ordering and composition need new
+# constructions, built below.
+
+
+def _alt_phase_bell(phi: float) -> Statevector:
+    """Relative-phase family: the canonical Bell alternative plus a single
+    RZ on qubit 0. RZ(phi) on either qubit of a 2-branch superposition
+    (|00>, |11>) multiplies the two branches by e^{-i*phi/2} and e^{i*phi/2}
+    respectively — exactly a relative phase of `phi` between them, up to
+    overall global phase. Verified against the primary before use."""
+    qc = _alt_bell("phi_plus")
+    qc.rz(phi, 0)
+    return Statevector(qc)
+
+
+def _alt_phase_ghz(n: int, phi: float) -> Statevector:
+    """Same RZ-on-one-qubit trick as `_alt_phase_bell`, generalized: GHZ's
+    target is also exactly two branches (|0...0>, |1...1>), so RZ on ANY
+    single qubit adds the same relative phase between them."""
+    qc = _alt_ghz(n)
+    qc.rz(phi, 0)
+    return Statevector(qc)
+
+
+def _alt_phase_w_state(n: int, phase_qubit: int, phi: float) -> Statevector:
+    """W-state relative-phase family: within the W state's support, exactly
+    one basis state has `phase_qubit` set to |1> — so RZ(phi) on that qubit
+    adds the phase to that single term only, leaving the others' RELATIVE
+    phase among themselves at zero, matching the target's definition."""
+    qc = _alt_w_state(n)
+    qc.rz(phi, phase_qubit)
+    return Statevector(qc)
+
+
+def _alt_dj_reversed(n_input: int, secret: int | None) -> Statevector:
+    """Qubit-ordering family: the canonical DJ alternative, bit-reversed via
+    `Statevector.reverse_qargs()` — a generic, library-verified relabeling
+    operation, not a hand-rebuilt construction that could share a bug with
+    either the primary or the un-reversed alternative."""
+    return _alt_deutsch_jozsa(n_input, secret).reverse_qargs()
+
+
+def _alt_qft_no_swap(n: int) -> QuantumCircuit:
+    """Qubit-ordering family (qft_8q_perturbed): the library QFTGate (which
+    includes its own internal swap layer) with an EXPLICIT swap layer
+    appended afterward to cancel it back out — verified to match the
+    primary's do_swaps=False convention before use. Independent of the
+    primary's hand-rolled Hadamard/controlled-phase loop."""
+    qc = QuantumCircuit(n)
+    qc.append(QFTGate(n), range(n))
+    for i in range(n // 2):
+        qc.swap(i, n - 1 - i)
+    return qc
+
+
+def _alt_full_adder_reversed() -> QuantumCircuit:
+    """Qubit-ordering family: the canonical full-adder alternative (a flat
+    closed-form permutation), bit-reversed via `.reverse_bits()`."""
+    return _alt_full_adder().reverse_bits()
+
+
+def _alt_compose_with_qft(base: QuantumCircuit) -> QuantumCircuit:
+    """Composition family: append the library QFTGate to an independently-
+    rebuilt base circuit. The QFT half is the same library primitive already
+    trusted as the canonical qft_Nq tasks' own alternative (is_library=True
+    there); independence for the composed task comes from the base circuit
+    being rebuilt from scratch, not shared with build_t1_perturbed.py."""
+    qc = base.copy()
+    qc.append(QFTGate(base.num_qubits), range(base.num_qubits))
+    return qc
 
 
 # -- T2 (T045) independent constructions — deliberately NOT imported from
@@ -391,6 +467,55 @@ def _build_alternatives(
     `qiskit.circuit.library` primitive (QFT) — that, not merely "a circuit
     form exists", is what `check_library_crosscheck` reports.
     """
+    # T1 perturbed (T048) task_ids (exact matches) must be checked BEFORE the
+    # generic "bell_"/"ghz_"/"w_state_"/"qft_" prefix branches below, which
+    # would otherwise intercept e.g. "ghz_3q_perturbed" and mis-parse
+    # "3q_perturbed" as a qubit count (same class of bug already found and
+    # fixed once for T4's ghz_linear5_* task_ids).
+    if task_id == "bell_phi_plus_2q_perturbed":
+        return _alt_phase_bell(np.pi / 3), None, False
+    if task_id == "ghz_3q_perturbed":
+        return _alt_phase_ghz(3, 2 * np.pi / 5), None, False
+    if task_id == "ghz_8q_perturbed":
+        return _alt_phase_ghz(8, np.pi / 6), None, False
+    if task_id == "w_state_3q_perturbed":
+        return _alt_phase_w_state(3, 2, np.pi / 2), None, False
+    if task_id == "bell_phi_minus_2q_perturbed":
+        return Statevector(_alt_bell("phi_minus")), None, False
+    if task_id == "ghz_5q_perturbed":
+        return Statevector(_alt_ghz(5)), None, False
+    if task_id == "reversible_half_adder_4q_perturbed":
+        circuit = _alt_half_adder()
+        return Operator(circuit), circuit, False
+    if task_id == "w_state_5q_perturbed":
+        return Statevector(_alt_w_state(5)), None, False
+    if task_id == "dj_constant_4q_perturbed":
+        return _alt_dj_reversed(3, None), None, False
+    if task_id == "dj_balanced_6q_perturbed":
+        return _alt_dj_reversed(5, 0b10110), None, False
+    if task_id == "qft_8q_perturbed":
+        circuit = _alt_qft_no_swap(8)
+        return Operator(circuit), circuit, False
+    if task_id == "reversible_full_adder_5q_perturbed":
+        circuit = _alt_full_adder_reversed()
+        return Operator(circuit), circuit, False
+    if task_id == "bell_psi_plus_2q_perturbed":
+        composed = _alt_compose_with_qft(_alt_bell("psi_plus"))
+        return Statevector(composed), None, False
+    if task_id == "w_state_8q_perturbed":
+        composed = _alt_compose_with_qft(_alt_w_state(8))
+        return Statevector(composed), None, False
+    if task_id == "reversible_boolean4_8q_perturbed":
+        circuit = _alt_compose_with_qft(_alt_boolean4())
+        return Operator(circuit), circuit, False
+    if task_id == "qft_3q_perturbed":
+        lib = _alt_qft(3)
+        return Operator(lib), lib, True
+    if task_id == "qft_5q_perturbed":
+        lib = _alt_qft(5)
+        return Operator(lib), lib, True
+    if task_id == "dj_balanced_4q_perturbed":
+        return _alt_deutsch_jozsa(3, 0b101), None, False
     if task_id.startswith("bell_"):
         kind = task_id[len("bell_") : -len("_2q")]
         return Statevector(_alt_bell(kind)), None, False
@@ -406,6 +531,17 @@ def _build_alternatives(
         return _alt_ghz_subset(5, [0, 1, 4]), None, False
     if task_id == "ghz_linear5_endpoints":
         return _alt_ghz_subset(5, [0, 4]), None, False
+    # T4 perturbed (T048) ghz_linear5_*_perturbed — same exact-match-before-
+    # generic-prefix discipline as the canonical ghz_linear5_* block above.
+    if task_id == "ghz_linear5_endpoints_perturbed":
+        return _alt_ghz_subset(5, [0, 4]), None, False
+    if task_id == "ghz_linear5_mixed_perturbed":
+        return _alt_ghz_subset(5, [0, 1, 4]).reverse_qargs(), None, False
+    if task_id == "ghz_linear5_scattered_even_perturbed":
+        return _alt_ghz_subset(5, [0, 2, 4]), None, False
+    if task_id == "ghz_linear5_full_perturbed":
+        alt = _alt_ghz_subset(5, [0, 1, 2, 3, 4]).evolve(QFTGate(5), qargs=range(5))
+        return alt, None, False
     if task_id.startswith("ghz_"):
         n = int(task_id[len("ghz_") : -1])
         return Statevector(_alt_ghz(n)), None, False
@@ -431,6 +567,45 @@ def _build_alternatives(
     if task_id == "reversible_boolean4_8q":
         circuit = _alt_boolean4()
         return Operator(circuit), circuit, False
+    # T2 perturbed (T048) task_ids (exact matches) must be checked BEFORE
+    # the generic "bv_"/"simon_" prefix branches below — same class of bug
+    # already found and fixed once for T1's ghz_ prefix and again for T4's
+    # ghz_linear5_* exact matches.
+    if task_id == "bv_4q_perturbed":
+        return _alt_bernstein_vazirani(3, 0b101), None, False
+    if task_id == "grover_3q_perturbed":
+        return _alt_grover(3, [5], 2), None, False
+    if task_id == "qaoa_maxcut_3q_perturbed":
+        return _alt_qaoa_maxcut(3, [(0, 1), (1, 2), (0, 2)], 0.5, 0.3), None, False
+    if task_id == "bv_5q_perturbed":
+        return _alt_bernstein_vazirani(4, 0b1011).reverse_qargs(), None, False
+    if task_id == "simon_8q_perturbed":
+        return _alt_simon(4, 0b1010).reverse_qargs(), None, False
+    if task_id == "qpe_4q_perturbed":
+        return _alt_qpe(3, 3).reverse_qargs(), None, False
+    if task_id == "grover_5q_perturbed":
+        return _alt_grover(5, [13, 20], 3).reverse_qargs(), None, False
+    if task_id == "bv_6q_perturbed":
+        return _alt_bernstein_vazirani(5, 0b10110), None, False
+    if task_id == "simon_10q_perturbed":
+        return _alt_simon(5, 0b10110), None, False
+    if task_id == "qpe_5q_perturbed":
+        return _alt_qpe(4, 5), None, False
+    if task_id == "simon_6q_perturbed":
+        alt = _alt_simon(3, 0b101).evolve(RZGate(np.pi / 4), qargs=[0])
+        return alt, None, False
+    if task_id == "grover_4q_perturbed":
+        alt = _alt_grover(4, [9], 3).evolve(RZGate(np.pi / 4), qargs=[0])
+        return alt, None, False
+    if task_id == "qaoa_maxcut_4q_perturbed":
+        base = _alt_qaoa_maxcut(4, [(0, 1), (1, 2), (2, 3), (3, 0)], 0.6, 0.4)
+        return base.evolve(RZGate(np.pi / 4), qargs=[0]), None, False
+    if task_id == "qpe_6q_perturbed":
+        alt = _alt_qpe(5, 11).evolve(QFTGate(6), qargs=range(6))
+        return alt, None, False
+    if task_id == "qaoa_maxcut_5q_perturbed":
+        base = _alt_qaoa_maxcut(5, [(0, 1), (1, 2), (2, 3), (3, 4), (4, 0)], 0.7, 0.35)
+        return base.evolve(QFTGate(5), qargs=range(5)), None, False
     if task_id.startswith("bv_"):
         n_input = int(task_id[len("bv_") : -1]) - 1
         secret = {"bv_4q": 0b101, "bv_5q": 0b1011, "bv_6q": 0b10110}[task_id]
@@ -458,6 +633,72 @@ def _build_alternatives(
     if task_id == "qaoa_maxcut_5q":
         edges = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 0)]
         return _alt_qaoa_maxcut(5, edges, 0.7, 0.35), None, False
+    # T3 perturbed (T048) task_ids — all exact matches, no prefix-collision
+    # risk (T3's task_ids never share a prefix with a differently-parsed
+    # family), but grouped here as a block for the same reason T1/T2's
+    # perturbed dispatches are grouped: keeps the "same discipline, per
+    # tier" structure legible.
+    if task_id == "ising_weighted_maxcut_3q_perturbed":
+        c = _alt_diagonal_ising(3, {}, {(0, 1): 0.6, (1, 2): -0.4, (0, 2): 0.9}, [], 0.5)
+        c = c.copy()
+        c.rz(np.pi / 4, 0)
+        return Operator(c), c, False
+    if task_id == "ising_field_coupling_4q_perturbed":
+        field = {0: 0.2, 1: -0.4, 2: 0.3, 3: 0.1}
+        couplings = {(0, 1): 0.5, (2, 3): 0.3}
+        c = _alt_diagonal_ising(4, field, couplings, [], 0.45)
+        c = c.copy()
+        c.rz(np.pi / 4, 0)
+        return Operator(c), c, False
+    if task_id == "ising_weighted_maxcut_4q_perturbed":
+        couplings = {(0, 1): 0.3, (1, 2): 0.7, (2, 3): -0.5, (0, 3): 0.4}
+        c = _alt_diagonal_ising(4, {}, couplings, [], 0.45)
+        return Operator(c), c, False
+    if task_id == "ising_mixed_body_4q_perturbed":
+        c = _alt_diagonal_ising(4, {}, {}, [([0, 1], 0.4), ([1, 2, 3], 0.6)], 0.5)
+        return Operator(c), c, False
+    if task_id == "qubo_ising_3var_perturbed":
+        field, couplings = _alt_ising_from_qubo([[2, -1, 0.5], [0, -3, 1.5], [0, 0, 1]], 3)
+        c = _alt_diagonal_ising(3, field, couplings, [], 0.5)
+        return Operator(c), c, False
+    if task_id == "ising_weighted_maxcut_5q_perturbed":
+        couplings = {(0, 1): 0.5, (0, 2): -0.3, (0, 3): 0.8, (0, 4): 0.2}
+        c = _alt_diagonal_ising(5, {}, couplings, [], 0.4).reverse_bits()
+        return Operator(c), c, False
+    if task_id == "ising_field_coupling_3q_perturbed":
+        c = _alt_diagonal_ising(3, {0: 0.3, 1: 0.5, 2: -0.2}, {(0, 1): 0.4}, [], 0.5).reverse_bits()
+        return Operator(c), c, False
+    if task_id == "qubo_ising_4var_perturbed":
+        qubo = [[1.5, -0.8, 0.6, 0.0], [0, -2.0, 0.4, 0.9], [0, 0, 1.0, -0.7], [0, 0, 0, 0.5]]
+        field, couplings = _alt_ising_from_qubo(qubo, 4)
+        c = _alt_diagonal_ising(4, field, couplings, [], 0.45).reverse_bits()
+        return Operator(c), c, False
+    if task_id == "ising_zzz_3q_perturbed":
+        c = _alt_diagonal_ising(3, {}, {}, [([0, 1, 2], 0.7)], 3 / 5)
+        return Operator(c), c, False
+    if task_id == "qubo_ising_5var_perturbed":
+        qubo = [
+            [1.0, 0.5, -0.6, 0.0, 0.3],
+            [0, -1.5, 0.8, -0.4, 0.0],
+            [0, 0, 1.2, 0.5, -0.3],
+            [0, 0, 0, -0.8, 0.6],
+            [0, 0, 0, 0, 0.4],
+        ]
+        field, couplings = _alt_ising_from_qubo(qubo, 5)
+        c = _alt_diagonal_ising(5, field, couplings, [], 2 / 5)
+        return Operator(c), c, False
+    if task_id == "ising_zzzz_4q_perturbed":
+        c = _alt_diagonal_ising(4, {}, {}, [([0, 1, 2, 3], 0.5)], 0.5)
+        c = c.copy()
+        c.append(QFTGate(4), range(4))
+        return Operator(c), c, False
+    if task_id == "ising_field_coupling_5q_perturbed":
+        field = {0: 0.2, 1: 0.3, 2: -0.1, 3: 0.4, 4: -0.3}
+        couplings = {(0, 1): 0.3, (1, 2): 0.4, (2, 3): -0.2, (3, 4): 0.5}
+        c = _alt_diagonal_ising(5, field, couplings, [], 0.4)
+        c = c.copy()
+        c.append(QFTGate(5), range(5))
+        return Operator(c), c, False
     if task_id == "ising_weighted_maxcut_3q":
         c = _alt_diagonal_ising(3, {}, {(0, 1): 0.6, (1, 2): -0.4, (0, 2): 0.9}, [], 0.5)
         return Operator(c), c, False
@@ -510,6 +751,45 @@ def _build_alternatives(
         ]
         field, couplings = _alt_ising_from_qubo(qubo, 5)
         c = _alt_diagonal_ising(5, field, couplings, [], 0.4)
+        return Operator(c), c, False
+    # T4 perturbed (T048) — exact matches, grouped as a block (same reason
+    # as T3's equivalent block above).
+    if task_id == "ising_linear5_distance2_perturbed":
+        edge_weights = {(0, 2): 0.5, (1, 3): -0.4, (2, 4): 0.3}
+        c = _alt_diagonal_ising(5, {}, edge_weights, [], 0.45)
+        c = c.copy()
+        c.rz(np.pi / 4, 0)
+        return Operator(c), c, False
+    if task_id == "zstring_linear5_scattered_perturbed":
+        c = _alt_diagonal_ising(5, {}, {}, [([0, 2, 4], 0.6)], 0.5)
+        c = c.copy()
+        c.rz(np.pi / 4, 0)
+        return Operator(c), c, False
+    if task_id == "ising_linear5_endpoints_perturbed":
+        c = _alt_diagonal_ising(5, {}, {(0, 4): 0.6}, [], 0.5)
+        return Operator(c), c, False
+    if task_id == "field_coupling_linear5_local_perturbed":
+        field = {0: 0.2, 1: 0.3, 2: -0.1, 3: 0.4, 4: -0.3}
+        couplings = {(0, 1): 0.3, (1, 2): 0.4, (2, 3): -0.2, (3, 4): 0.5}
+        c = _alt_diagonal_ising(5, field, couplings, [], 0.4)
+        return Operator(c), c, False
+    if task_id == "ising_linear5_local_perturbed":
+        edge_weights = {(0, 1): 0.4, (1, 2): -0.3, (2, 3): 0.5, (3, 4): -0.2}
+        c = _alt_diagonal_ising(5, {}, edge_weights, [], 0.5).reverse_bits()
+        return Operator(c), c, False
+    if task_id == "field_coupling_linear5_scattered_perturbed":
+        field = {0: 0.2, 1: 0.3, 2: -0.1, 3: 0.4, 4: -0.3}
+        couplings = {(0, 4): 0.4, (1, 3): -0.3}
+        c = _alt_diagonal_ising(5, field, couplings, [], 0.4).reverse_bits()
+        return Operator(c), c, False
+    if task_id == "zstring_linear5_full_chain_perturbed":
+        c = _alt_diagonal_ising(5, {}, {}, [([0, 1, 2, 3, 4], 1 / 2)], 1 / 2)
+        return Operator(c), c, False
+    if task_id == "ising_linear5_mixed_perturbed":
+        edge_weights = {(0, 1): 0.3, (2, 3): -0.4, (0, 4): 0.5}
+        c = _alt_diagonal_ising(5, {}, edge_weights, [], 0.45)
+        c = c.copy()
+        c.append(QFTGate(5), range(5))
         return Operator(c), c, False
     if task_id == "ising_linear5_local":
         edge_weights = {(0, 1): 0.4, (1, 2): -0.3, (2, 3): 0.5, (3, 4): -0.2}
@@ -748,16 +1028,26 @@ def check_energy_sanity_seeds(payload: dict) -> tuple[bool, str]:
     gave std~0.0029 and a worst observed error of ~0.006 — 0.02 leaves
     ~3x that margin, so it will not fail a genuinely correct ansatz to
     shot noise alone.
+
+    Ansatz qubit roles (which qubit gets X, which gets RY, CX control/
+    target) are read from the payload with the canonical defaults
+    (0, 1, 1, 0) — T048's `vqe_h2_r130_perturbed` (qubit-ordering family)
+    is the only payload that overrides them, swapping roles to match its
+    swapped Z0/Z1 Hamiltonian coefficients (build_t2_perturbed.py).
     """
     labels = payload["pauli_labels"]
     coeffs = dict(zip(labels, payload["coeffs"], strict=True))
     theta = payload["ansatz_theta_rad"]
+    x_qubit = payload.get("ansatz_x_qubit", 0)
+    ry_qubit = payload.get("ansatz_ry_qubit", 1)
+    cx_control = payload.get("ansatz_cx_control", 1)
+    cx_target = payload.get("ansatz_cx_target", 0)
 
     def ansatz() -> QuantumCircuit:
         qc = QuantumCircuit(2)
-        qc.x(0)
-        qc.ry(theta, 1)
-        qc.cx(1, 0)
+        qc.x(x_qubit)
+        qc.ry(theta, ry_qubit)
+        qc.cx(cx_control, cx_target)
         return qc
 
     def eigenvalue_for(label: str, bitstring: str) -> int:
@@ -847,15 +1137,80 @@ def validate_one(task: TaskSpec) -> list[tuple[str, bool | None, str]]:
     return results
 
 
+def check_perturbation_pairing(all_tasks: list[TaskSpec]) -> list[tuple[str, bool | None, str]]:
+    """FR-017: every canonical task must have exactly one paired perturbed
+    variant, linked via `base_task_id`. Two invariants are ALWAYS enforced
+    (blocking, regardless of how much of T048 is built): no perturbed task
+    may reference a missing or itself-perturbed base_task_id, and no
+    canonical task may have more than one perturbed variant. The
+    COMPLETENESS invariant — every canonical task has AT LEAST one variant —
+    is reported but not yet blocking while T048 is built incrementally
+    (T1's 18 first, reviewed, then T2-T4); it becomes a hard failure
+    automatically once every canonical task has a variant, so this gate
+    tightens on its own as the dataset completes rather than needing a
+    manual flip later.
+    """
+    canonical_ids = {t.task_id for t in all_tasks if not t.perturbed}
+    perturbed = [t for t in all_tasks if t.perturbed]
+    results: list[tuple[str, bool | None, str]] = []
+    base_to_variants: dict[str, list[str]] = {}
+    for t in perturbed:
+        if t.base_task_id is None:
+            results.append((t.task_id, False, "perturbed=True but base_task_id is not set"))
+            continue
+        if t.base_task_id not in canonical_ids:
+            results.append(
+                (
+                    t.task_id,
+                    False,
+                    f"base_task_id={t.base_task_id!r} does not reference an "
+                    "existing non-perturbed task",
+                )
+            )
+            continue
+        base_to_variants.setdefault(t.base_task_id, []).append(t.task_id)
+    for base_id, variants in base_to_variants.items():
+        if len(variants) > 1:
+            results.append(
+                (
+                    base_id,
+                    False,
+                    f"has {len(variants)} perturbed variants {variants} — "
+                    "FR-017 requires exactly one",
+                )
+            )
+    n_paired = len(base_to_variants)
+    n_canonical = len(canonical_ids)
+    if n_canonical > 0 and n_paired == n_canonical:
+        results.append(
+            (
+                "<pairing coverage>",
+                True,
+                f"all {n_canonical} canonical tasks have exactly one paired perturbed variant",
+            )
+        )
+    else:
+        results.append(
+            (
+                "<pairing coverage>",
+                None,
+                f"{n_paired}/{n_canonical} canonical tasks have a paired "
+                "perturbed variant so far (T048 in progress)",
+            )
+        )
+    return results
+
+
 def main() -> None:
     task_paths = sorted(TASKS_DIR.rglob("*.json"))
     if not task_paths:
         print(f"no task files found under {TASKS_DIR}/", file=sys.stderr)
         raise SystemExit(1)
 
+    all_tasks = [TaskSpec.model_validate_json(path.read_text()) for path in task_paths]
+
     any_failed = False
-    for path in task_paths:
-        task = TaskSpec.model_validate_json(path.read_text())
+    for task in all_tasks:
         print(
             f"\n{task.task_id} ({task.tier}, oracle_kind={task.oracle_kind}, "
             f"n_qubits={task.n_qubits})"
@@ -869,6 +1224,17 @@ def main() -> None:
                 status = "FAIL"
                 any_failed = True
             print(f"  [{status}] {name}: {detail}")
+
+    print("\nperturbation pairing (FR-017)")
+    for name, verdict, detail in check_perturbation_pairing(all_tasks):
+        if verdict is None:
+            status = "INFO"
+        elif verdict:
+            status = "PASS"
+        else:
+            status = "FAIL"
+            any_failed = True
+        print(f"  [{status}] {name}: {detail}")
 
     print("\n" + "=" * 70)
     print("ALL ORACLES PASSED" if not any_failed else "AT LEAST ONE ORACLE FAILED")
