@@ -1,0 +1,26 @@
+max_iter: 5
+model: qwen2.5-coder:7b
+results_dir: results
+seeds:
+- 1
+tasks:
+- bell_phi_minus_2q
+- dj_balanced_4q
+- ghz_3q
+- qft_3q
+- reversible_boolean4_8q
+- w_state_3q
+- bv_4q
+- grover_3q
+- qaoa_maxcut_3q
+- qpe_4q
+- simon_10q
+- vqe_h2_r055
+- ising_field_coupling_3q
+- ising_mixed_body_4q
+- ising_weighted_maxcut_5q
+- qubo_ising_3var
+- field_coupling_linear5_local
+- ghz_linear5_full
+- ising_linear5_distance2
+- ising_linear5_mixed

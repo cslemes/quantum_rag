@@ -1,0 +1,10 @@
+max_iter: 5
+model: qwen2.5-coder:7b
+results_dir: results
+seeds:
+- 1
+- 2
+tasks:
+- ghz_linear5_endpoints
+- bell_phi_plus_2q
+- grover_3q

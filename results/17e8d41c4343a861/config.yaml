@@ -1,0 +1,7 @@
+max_iter: 5
+model: qwen2.5-coder:7b
+results_dir: results
+seeds:
+- 1
+tasks:
+- bell_phi_plus_2q
