@@ -19,6 +19,11 @@ from bench.schema import RunRecord
 GOOD = {
     "qiskit": "1.2.4",
     "ollama": "0.34.1",
+    "hostname": "claude-Quantum-RAG",
+    "python": "/home/agent/.venvs/qcagent/bin/python3",
+    "platform": "Linux 7.0.12",
+    "mp_start_method": "fork",
+    "containerized": "no",
     "ollama_temperature": "0.0",
     "qdocs_points": "1019",
     "generator_state": "reset_before_run",
@@ -149,3 +154,34 @@ def test_a_declared_and_matching_gpu_stack_passes_silently(capsys) -> None:
         [_record(gpu_stack="driver=550.54,cuda=12.4")],
     )
     assert "gpu_stack" not in capsys.readouterr().err
+
+
+# --- where it ran (D15 amended, F21) ---------------------------------------
+
+
+def test_a_different_environment_refuses_the_comparison() -> None:
+    """Verification runs locally, so a different BLAS or CPU dispatch can flip
+    `Operator.equiv()` at a tolerance boundary. Two runs from different
+    environments are two systems, not one system measured twice."""
+    with pytest.raises(IncomparableRunsError, match="containerized"):
+        check_comparable([_record()], [_record(containerized="yes")])
+
+
+def test_a_different_host_refuses_the_comparison() -> None:
+    with pytest.raises(IncomparableRunsError, match="hostname"):
+        check_comparable([_record()], [_record(hostname="other-machine")])
+
+
+def test_a_different_interpreter_refuses_the_comparison() -> None:
+    """The sandbox venv and the canonical image are both Linux+fork with
+    identical package versions, and are still different builds."""
+    with pytest.raises(IncomparableRunsError, match="python"):
+        check_comparable([_record()], [_record(python="/opt/venv/bin/python")])
+
+
+def test_a_spawn_run_never_compares_against_a_fork_run() -> None:
+    """D15's substantive requirement: Linux + fork, never Windows spawn. It
+    changes the WorkerPool's cost profile (D1b), so the two are incomparable
+    even when every result matches."""
+    with pytest.raises(IncomparableRunsError, match="mp_start_method"):
+        check_comparable([_record()], [_record(mp_start_method="spawn")])

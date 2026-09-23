@@ -54,6 +54,15 @@ CONTROLLED_FIELDS = (
     # and it is the kind of change that surfaces only when someone
     # reproduces the results later, on another machine or after `apt upgrade`.
     "ollama",
+    # WHERE it ran. The largest inherited condition of all, and unrecorded
+    # until D15 was amended: verification runs locally, so a different BLAS or
+    # CPU dispatch can flip `Operator.equiv()` at a tolerance boundary. Two
+    # runs from different environments are two systems, not one system twice.
+    "hostname",
+    "python",
+    "platform",
+    "mp_start_method",
+    "containerized",
 )
 
 # Conditions that change the measurement and that this code CANNOT observe.

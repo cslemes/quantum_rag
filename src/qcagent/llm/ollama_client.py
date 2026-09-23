@@ -107,6 +107,52 @@ def _parse_ollama_ps_processor(output: str, model_id: str) -> str | None:
     return None
 
 
+def gpu_offload_fraction(base_url: str, model_id: str) -> float | None:
+    """Share of the model resident in VRAM, from the HTTP API, or None when
+    the model is not loaded.
+
+    The CLI-based `gpu_telemetry` below cannot answer this from where this
+    code actually runs: `ollama` and `nvidia-smi` are on the Windows host,
+    and the agent reaches Ollama only over HTTP. That is why
+    `RunRecord.gpu_processor` is None in every record ever written while
+    data-model.md claimed a guard aborted on anything but "100% GPU" (F21).
+    `/api/ps` reports `size` and `size_vram`, which is the same quantity the
+    PROCESSOR column summarises.
+    """
+    try:
+        response = httpx.get(f"{base_url}/api/ps", timeout=10)
+        response.raise_for_status()
+        for model in response.json().get("models", []):
+            if model.get("name") == model_id or model.get("model") == model_id:
+                size = model.get("size") or 0
+                return (model.get("size_vram") or 0) / size if size else None
+    except (httpx.HTTPError, ValueError, ZeroDivisionError):
+        return None
+    return None
+
+
+def assert_full_gpu_offload_http(base_url: str, model_id: str) -> float:
+    """D10c, enforced over HTTP. Raises unless the model is fully in VRAM.
+
+    An offloaded run makes the latency figures meaningless, and SC-007 is a
+    latency figure. Returns the measured fraction so the caller can record
+    it: a guard whose result is not recorded is only half a guard, which is
+    the F21 pattern this is fixing.
+    """
+    fraction = gpu_offload_fraction(base_url, model_id)
+    if fraction is None:
+        raise GPUOffloadError(
+            f"cannot determine GPU offload for {model_id!r} — the model is not loaded at "
+            f"{base_url}, so `/api/ps` reports nothing. Load it before checking."
+        )
+    if fraction < 1.0:
+        raise GPUOffloadError(
+            f"{model_id!r} is only {fraction:.0%} in VRAM; aborting rather than silently "
+            "contaminating the latency metric that SC-007 is measured on (D10c)"
+        )
+    return fraction
+
+
 def assert_full_gpu_offload(model_id: str) -> None:
     """Raises `GPUOffloadError` unless `model_id` is running 100% on GPU.
     Call before the local arm of the experimental matrix (D10c, T015c)."""

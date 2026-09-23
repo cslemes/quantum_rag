@@ -1769,12 +1769,64 @@ continha uma alegação identificavelmente incorreta — não só classificar o
 
 ## D15 — Ambiente de execução canônico
 
-**Decisão**: `app` (agente) e `qdrant` rodam em containers via
-`docker-compose.yml`; **Ollama roda nativamente no host Windows**, nunca
-como serviço containerizado, alcançado em `host.docker.internal:11434`.
-Desenvolvimento **e** a matriz experimental completa DEVEM rodar nesta mesma
-configuração — nunca uma mistura de execução nativa no Windows e execução
-containerizada entre sessões de desenvolvimento e a rodada final.
+> **EMENDADO em 2026-09-23, para descrever o que de fato aconteceu.** A
+> decisão original dizia que o agente rodava em container. **Ele nunca
+> rodou.** A imagem `quantum-rag-app:latest` foi construída, validada uma vez
+> (T103) e **nenhum container `app` jamais foi criado** — `docker compose ps
+> -a`, que inclui containers parados, lista apenas `qdrant`. Todos os números
+> registrados neste projeto — o baseline, as 3 h 26 min de SC-007, e o
+> resultado de 0/360 em que a tese mais se apoia — foram produzidos pelo
+> **venv do sandbox** (`/home/agent/.venvs/qcagent/bin/python3`), fora do
+> ambiente que este documento declarava canônico.
+>
+> Pior: **os registros não permitiam descobrir isso.** `lib_versions` grava
+> versões de pacote e nada que identifique o ambiente — sem hostname, sem
+> digest de imagem, sem executável. A pergunta "onde isto rodou?" não era
+> respondível a partir dos dados, só da memória de quem rodou. Corrigido em
+> T106 (ver F21).
+>
+> **O que a emenda NÃO retrata como desastre, porque não é**: a RAZÃO
+> substantiva de D15 continuou satisfeita o tempo todo. O motivo nº 1 abaixo
+> é `fork` em Linux, e não "container" por si. Verificado nos dois:
+>
+> | | sandbox venv | imagem canônica |
+> |---|---|---|
+> | platform | Linux 7.0.12 | Linux 7.0.12 |
+> | start method | `fork` | `fork` |
+> | qiskit / aer / numpy / scipy | 1.2.4 / 0.15.1 / 1.26.4 / 1.17.1 | idênticos |
+>
+> Ou seja: a propriedade que D15 existia para garantir (Linux + `fork`, nunca
+> `spawn` do Windows) valeu em todas as execuções. O que não valeu foi o
+> MECANISMO descrito. Um documento que descreve um ambiente nunca usado é a
+> mesma classe de falsa garantia que um campo gravado que ninguém verifica —
+> e este projeto já encontrou quatro dessas (F21).
+>
+> **Risco residual, declarado**: a geração não é afetada (sandbox e container
+> falam com o MESMO Ollama no host). A VERIFICAÇÃO roda localmente —
+> `Statevector`, `Operator.equiv()`, comparações com tolerância — e BLAS ou
+> despacho de CPU diferentes mudam os últimos bits, o que pode virar um
+> `equiv()` na fronteira da tolerância. As versões coincidem; os builds e o
+> caminho de CPU podem não. Isso é testável e ainda não foi testado: executar
+> a suíte uma vez no container e comparar com `99960870239e97e7` com o
+> `analysis/compare.py` que já existe. 0/360 entre DOIS ambientes genuinamente
+> diferentes seria uma afirmação muito mais forte que 0/360 dentro de um só.
+
+**Decisão (emendada)**: o ambiente canônico é **Linux com `multiprocessing`
+usando `fork`**, `qdrant` em container, e **Ollama nativo no host Windows**,
+alcançado em `host.docker.internal:11434`. O agente roda num venv Linux —
+hoje o do sandbox; a imagem `app` é uma segunda encarnação VÁLIDA do mesmo
+ambiente, ainda não exercitada de ponta a ponta. O que nunca é aceitável
+continua sendo o que a decisão original proibia: misturar execução nativa no
+Windows (`spawn`) com execução Linux entre sessões de desenvolvimento e a
+rodada final.
+
+**Decisão original, preservada para registro**: `app` (agente) e `qdrant`
+rodam em containers via `docker-compose.yml`; **Ollama roda nativamente no
+host Windows**, nunca como serviço containerizado, alcançado em
+`host.docker.internal:11434`. Desenvolvimento **e** a matriz experimental
+completa DEVEM rodar nesta mesma configuração — nunca uma mistura de execução
+nativa no Windows e execução containerizada entre sessões de desenvolvimento
+e a rodada final.
 
 **Razão**:
 

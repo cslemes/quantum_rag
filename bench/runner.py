@@ -38,7 +38,12 @@ from qcagent.config import collect_lib_versions, git_sha, make_run_id, settings
 from qcagent.graph import Oracle, recursion_limit_for
 from qcagent.live import LiveServices, build_live_graph, initial_state
 from qcagent.llm.base import BaseLLMClient, LLMResponse
-from qcagent.llm.ollama_client import OllamaClient
+from qcagent.llm.ollama_client import (
+    GPUOffloadError,
+    OllamaClient,
+    assert_full_gpu_offload_http,
+    gpu_offload_fraction,
+)
 from qcagent.retrieval.embedding import FastEmbedEmbedder
 from qcagent.state import AgentState, ErrorRecord
 from qcagent.validators.sandbox import WorkerPool
@@ -111,6 +116,36 @@ def verify_references(tasks: Iterable[TaskSpec]) -> list[str]:
             if verdict is False
         )
     return failures
+
+
+def verify_gpu_offload(base_url: str, model: str) -> float:
+    """D10c: refuse to run unless the generator is fully on GPU.
+
+    Ordering matters and is deliberate. This runs BEFORE
+    `reset_generator_state`, because `/api/ps` can only report a model that
+    is loaded, and the reset unloads it. Warming here and unloading after
+    leaves the run starting from exactly the same cold state the 0/360
+    determinism was measured under — the check is added without changing the
+    protocol it would otherwise invalidate.
+
+    The guard described in data-model.md had never executed: it shelled out
+    to `ollama ps` and `nvidia-smi`, which live on the Windows host, so
+    `gpu_processor` is None in all 360 records of every run ever made (F21).
+    """
+    if gpu_offload_fraction(base_url, model) is None:
+        # Not loaded: warm it so there is something to measure. Safe to do
+        # here precisely because the unload follows.
+        try:
+            httpx.post(
+                f"{base_url}/api/generate",
+                json={"model": model, "prompt": "ok", "stream": False},
+                timeout=300,
+            )
+        except httpx.HTTPError as exc:
+            raise GPUOffloadError(f"could not reach the generator at {base_url}: {exc}") from exc
+    fraction = assert_full_gpu_offload_http(base_url, model)
+    print(f"generator offload: {fraction:.0%} GPU (D10c)", flush=True)
+    return fraction
 
 
 def reset_generator_state(base_url: str, model: str) -> None:
@@ -407,6 +442,13 @@ def run_suite(
             "ollama_temperature": str(settings.ollama_temperature),
             "ollama_num_ctx": str(settings.ollama_num_ctx),
             "generator_state": "reset_before_run",
+            # A guard whose result is not recorded is only half a guard.
+            # Verified EXACTLY here and nowhere else: the check needs the
+            # model loaded, `reset_generator_state` unloads it, and calling
+            # it again later would re-warm the model and change the state the
+            # run starts from — which is the protocol the 0/360 determinism
+            # was measured under.
+            "gpu_offload": f"{verify_gpu_offload(settings.ollama_base_url, config.model):.0%}",
         }
     usage = usage or Usage()
     runner = task_runner or _graph_runner(config, usage)

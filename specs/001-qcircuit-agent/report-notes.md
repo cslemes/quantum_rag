@@ -1695,6 +1695,78 @@ enquanto ambos pareciam corretos.
 
 ---
 
+### F21 — Um campo gravado que nada verifica é decoração, e um documento que descreve um ambiente nunca usado é a mesma coisa
+
+**A pergunta que expôs isto**: "se o container `app` não está rodando, onde a
+suíte de 360 execuções rodou?" Resposta, verificada por comando e não por
+memória: no **venv do sandbox**, `/home/agent/.venvs/qcagent/bin/python3`. O
+`docker compose ps -a` — que inclui containers PARADOS — lista apenas
+`qdrant`. A imagem `quantum-rag-app:latest` foi construída há cinco dias,
+validada uma vez, e **nenhum container `app` jamais existiu**.
+
+D15 declarava que o agente rodava em container. Nunca rodou. Todo número
+deste projeto — baseline, as 3 h 26 min de SC-007, e o 0/360 em que a tese
+mais se apoia — veio de um ambiente diferente do declarado.
+
+**E os registros não permitiam descobrir isso.** `lib_versions` gravava
+versões de pacote e nada que identificasse o ambiente: sem hostname, sem
+executável, sem digest de imagem. "Onde isto rodou?" só era respondível pela
+memória de quem rodou.
+
+**O padrão geral, que é o finding**: um campo gravado sem NENHUM consumidor
+que falhe em caso de divergência não protege nada — ele apenas cria a
+impressão de proteção, que é pior que a ausência dela, porque quem lê o
+registro conclui que aquilo foi conferido. Quatro instâncias neste projeto:
+
+| campo | gravado desde | verificado a partir de | o que o descuido custou |
+|---|---|---|---|
+| `ollama` (versão) | a primeira execução | 2026-09-22 | nada ainda — um upgrade teria misturado dois sistemas em silêncio |
+| `qdocs_points` | F13 | F13 (mesmo dia) | corpus encolheu de 1020 para 1019 sem aviso |
+| `gpu_processor` | v1 | **nunca funcionou** | `None` em 360/360 registros, com o spec afirmando que havia um guard |
+| ambiente (host, python, container) | **não existia** | 2026-09-23 | todo número do projeto obtido fora do ambiente declarado, sem rastro |
+
+**A regra que passa a valer**: todo campo do registro é ou (a) verificado por
+alguma coisa que FALHA quando diverge, ou (b) explicitamente rotulado como
+descritivo. Não há terceira categoria. `gpu_stack` é o primeiro caso tratado
+sob a regra nova: não é observável de dentro do contêiner, então é declarado
+pelo operador e AVISA em vez de recusar — honesto porque diz o que é, em vez
+de fingir verificação.
+
+**O caso do `gpu_processor` é o mais instrutivo dos quatro**, porque o código
+do guard EXISTIA. `assert_full_gpu_offload` estava escrito, testado por
+ninguém, chamado por ninguém — e não teria funcionado se chamado, porque
+invoca `ollama ps` e `nvidia-smi` por subprocesso, binários que vivem no host
+Windows enquanto o agente só alcança o Ollama por HTTP. Um guard existente,
+inalcançável, e um spec afirmando que ele abortava execuções. Agora mede por
+`/api/ps` (`size_vram/size`), grava o resultado, e roda ANTES do reset de
+estado — deliberadamente, porque `/api/ps` só reporta modelo carregado e o
+reset descarrega: aquecer antes e descarregar depois adiciona a checagem sem
+mudar o protocolo sob o qual o 0/360 foi medido.
+
+**O que NÃO se retrata como desastre**: a razão substantiva de D15 —
+`multiprocessing` com `fork` em Linux, nunca `spawn` do Windows — valeu em
+todas as execuções. Verificado nos dois ambientes: ambos Linux 7.0.12, ambos
+`fork`, mesmas versões de qiskit/aer/numpy/scipy. O que falhou foi o
+MECANISMO descrito, não a propriedade exigida. E o 0/360 continua internamente
+válido, porque as duas execuções comparadas rodaram no mesmo ambiente.
+
+**O que fica em aberto, e é testável**: se o resultado se mantém ENTRE
+ambientes. A geração não muda (os dois falam com o mesmo Ollama no host), mas
+a verificação roda localmente — `Statevector`, `Operator.equiv()`, tolerâncias
+— e BLAS ou despacho de CPU diferentes mexem nos últimos bits. 0/360 entre
+dois ambientes genuinamente diferentes seria uma afirmação muito mais forte
+que 0/360 dentro de um. É uma execução de ~3,5 h e o `compare.py` já recusa
+comparar ambientes diferentes, então a comparação precisará ser feita com a
+consciência de que ela cruza a fronteira de propósito.
+
+**Fonte**: `docker compose ps -a`; `sys.executable` das execuções;
+`src/qcagent/config.py::environment_identity`;
+`src/qcagent/llm/ollama_client.py::assert_full_gpu_offload_http`;
+`bench/runner.py::verify_gpu_offload`; `tests/unit/test_gpu_offload_guard.py`;
+D15 (emendada); F13; F15.
+
+---
+
 ### F16 — Um controle que dispara vale mais que uma hipótese que confirma
 
 **O achado mais transferível deste projeto, e não é sobre computação

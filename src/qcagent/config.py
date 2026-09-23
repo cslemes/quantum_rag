@@ -7,8 +7,12 @@ import hashlib
 import importlib.metadata
 import json
 import logging
+import multiprocessing
 import os
+import platform
+import socket
 import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -152,4 +156,34 @@ def collect_lib_versions(*, ollama_base_url: str | None = None) -> dict[str, str
     # silently omitted — a field that is missing from the record cannot be
     # distinguished later from a field that was checked and matched.
     versions["gpu_stack"] = os.environ.get("QCAGENT_GPU_STACK", "unrecorded")
+    versions.update(environment_identity())
     return versions
+
+
+def environment_identity() -> dict[str, str]:
+    """WHERE this ran, which was the largest unrecorded condition of all.
+
+    D15 declared the agent ran in a container. It never did — every number in
+    this project came from a venv on the host, and the records could not
+    reveal that, because nothing captured the environment. "Where did this
+    run?" was answerable only from the memory of whoever ran it.
+
+    Verification runs locally (`Statevector`, `Operator.equiv()`, tolerance
+    comparisons), so a different BLAS or CPU dispatch can flip a verdict at a
+    tolerance boundary. That makes the environment a controlled condition in
+    exactly the sense `ollama_temperature` and `qdocs_points` are, not
+    metadata.
+    """
+    identity = {
+        "hostname": socket.gethostname(),
+        "python": sys.executable,
+        "platform": f"{platform.system()} {platform.release()}",
+        "mp_start_method": multiprocessing.get_start_method(),
+        # D15's substantive requirement is Linux + fork, never Windows spawn.
+        # Recorded so the claim is checkable rather than assumed.
+        "containerized": "yes" if Path("/.dockerenv").exists() else "no",
+    }
+    # Set by the image build so a containerized run identifies WHICH image.
+    if digest := os.environ.get("QCAGENT_IMAGE_DIGEST"):
+        identity["image_digest"] = digest
+    return identity
