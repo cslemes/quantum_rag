@@ -1759,6 +1759,42 @@ que 0/360 dentro de um. É uma execução de ~3,5 h e o `compare.py` já recusa
 comparar ambientes diferentes, então a comparação precisará ser feita com a
 consciência de que ela cruza a fronteira de propósito.
 
+**Consequência registrada: o baseline de 0/360 fica ÓRFÃO, por decisão.**
+Acrescentar `hostname`/`python`/`platform`/`mp_start_method`/`containerized`
+aos campos controlados torna as execuções `99960870239e97e7` e
+`7de38e77ac071bd3` incomparáveis mecanicamente: seus registros não têm os
+campos novos, e campo ausente conta como divergência (regra deliberada — uma
+execução anterior ao protocolo não pode ser mostrada como tendo-o cumprido).
+
+Resolvido por DECLARAÇÃO, não por re-execução: **o 0/360 permanece como
+resultado REPORTADO, não como alvo vivo de comparação.** Está medido,
+registrado e citável; o que ele não é mais é o "antes" de um `compare.py`. A
+próxima execução completa da suíte estabelece a nova referência, já com
+identidade de ambiente completa. Quem tentar diferenciar contra os dois runs
+antigos vai receber uma recusa — e a recusa está CERTA, não é regressão. Esta
+nota existe para que ninguém conclua que algo quebrou.
+
+**Consequência 2: o guard de GPU muda o protocolo, e a equivalência é
+suposta, não testada.** A sequência agora é: aquecer o modelo → verificar
+offload → descarregar → execução começa a frio. A antiga era: descarregar →
+execução começa a frio. Raciocinei que as duas terminam no mesmo estado
+(modelo descarregado) e portanto são equivalentes, e o raciocínio parece
+certo — mas "provavelmente equivalente" é exatamente o que F19 diz que
+precisa ser testado, e não é porque o raciocínio é meu que ele escapa da
+regra. Um ciclo aquecer/descarregar pode deixar estado residual que um
+"nunca aquecido" não deixa; nada verificou isso.
+
+**Precisão sobre o que a próxima execução testa, porque é mais estreito do
+que parece**: duas execuções sob o protocolo NOVO testam que o protocolo novo
+é internamente determinístico — se der 0/360 de novo, o aquecer/descarregar
+não introduziu não-determinismo. Isso NÃO testa equivalência com o protocolo
+antigo. Para isso seria preciso comparar uma execução nova contra uma antiga,
+que é justamente o que a orfandade acima impede por mecanismo. As duas
+consequências desta mudança se cruzam: a segunda pergunta tornou-se
+inrespondível pela primeira. Registrado como limitação conhecida, não como
+algo a contornar — se a equivalência importar depois, o caminho é reexecutar
+o protocolo antigo deliberadamente, com os campos novos gravados, e comparar.
+
 **Fonte**: `docker compose ps -a`; `sys.executable` das execuções;
 `src/qcagent/config.py::environment_identity`;
 `src/qcagent/llm/ollama_client.py::assert_full_gpu_offload_http`;
