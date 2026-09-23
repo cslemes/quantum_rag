@@ -164,7 +164,17 @@ def _report_payload(state: dict) -> dict | None:
             for outcome in report.assertions
         ],
         "requirements": [
-            {"description": r.description, "passed": r.passed, "detail": r.detail}
+            # `r.requirement.description`, not `r.description`: a
+            # RequirementOutcome WRAPS the Requirement rather than flattening
+            # it, because the two have different provenance and the report
+            # keeps them distinct. My unit tests used fabricated payloads and
+            # missed this; the first real run through the container caught it
+            # (F19, once more).
+            {
+                "description": r.requirement.description,
+                "passed": r.passed,
+                "detail": r.detail,
+            }
             for r in report.requirements
         ],
         "text": render_guarantee_report(report),

@@ -24,11 +24,17 @@ services:
     # 8000:8000/tcp` run OUTSIDE the sandbox.
     ports:
       - "8000:8000"
+    environment:
+      # `localhost` inside this container is the container, not the host, so
+      # .env's QDRANT_URL cannot work here. The compose network resolves the
+      # service name. Overrides env_file, which is loaded first.
+      QDRANT_URL: http://qdrant:6333
     volumes:
-      - ./results:/app/results
-      - ./bench:/app/bench
-      - ./src:/app/src
-      - ./scripts:/app/scripts
+      # The whole project, so what is edited on the host is what the container
+      # serves — no rebuild to see a change. Safe because the virtualenv lives
+      # at /opt/venv (UV_PROJECT_ENVIRONMENT), outside /app, so this mount
+      # cannot shadow it. Do NOT mount anything over /opt/fastembed (D18b).
+      - .:/app
     # Ollama runs on the host, not as a compose service (see research.md's
     # "Ambiente de execução canônico" note): it's already benchmarked there
     # at 100% GPU / 492 tok/s prefill (D10), a containerized instance would
@@ -37,7 +43,16 @@ services:
     # host.docker.internal instead of a service name.
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    command: ["sleep", "infinity"] # driven interactively via `make` targets
+    # Serves the interface (US6). This replaced `sleep infinity`, which meant
+    # the service existed only to be exec'd into — and left `docker compose up
+    # app` serving nothing, so the container path was never actually used
+    # (F21). A demo that depends on a dev session being alive is too fragile
+    # to hand to someone else.
+    #
+    # The make targets still work, because exec does not care what PID 1 is:
+    #   docker compose exec app make eval
+    #   docker compose exec app make index
+    command: ["uvicorn", "qcagent.ui.app:app", "--host", "0.0.0.0", "--port", "8000"]
 
   qdrant:
     image: qdrant/qdrant:v1.12.4

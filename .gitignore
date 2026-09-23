@@ -36,3 +36,6 @@ Thumbs.db
 # Corporate CA bundle for TLS-intercepting networks (research.md D18) —
 # machine-specific, never a real cert in version control
 corporate-ca.crt
+
+# Local-only compose overrides (per-machine networking workarounds)
+docker-compose.override.yml
