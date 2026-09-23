@@ -8,6 +8,22 @@ services:
     depends_on:
       qdrant:
         condition: service_healthy
+    # research.md D18b — the embedding models are baked into the image at their
+    # pinned revisions (Dockerfile, FASTEMBED_CACHE_PATH=/opt/fastembed). This
+    # replaced D18's named `fastembed_cache` volume: a volume made the download
+    # a first-run cost, but a fresh volume still needed huggingface.co at
+    # runtime. Do not mount anything over /opt/fastembed.
+    # US6 (T105): the interface is served from this container, so the port has
+    # to leave it — the browser is outside. Bound to 0.0.0.0 inside the
+    # container on purpose; publishing alone is not enough if the server
+    # listens only on 127.0.0.1.
+    #
+    # NOTE for the sandboxed dev environment: publishing here exposes the port
+    # to the Docker host, not to a browser outside the sandbox. Reaching it
+    # from the host machine additionally needs `sbx ports <sandbox> --publish
+    # 8000:8000/tcp` run OUTSIDE the sandbox.
+    ports:
+      - "8000:8000"
     volumes:
       - ./results:/app/results
       - ./bench:/app/bench

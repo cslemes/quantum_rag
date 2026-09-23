@@ -26,7 +26,12 @@ dependencies = [
     "numpy>=1.26,<2",
     "scipy>=1.13,<2",
     "beautifulsoup4>=4.12,<5",
+    # bench/runner.py's config.yaml (T098b). Present transitively today (langgraph);
+    # declared because the runner imports it directly.
+    "pyyaml>=6,<7",
     "lxml>=5.0,<7",
+    "fastapi>=0.141.1",
+    "uvicorn[standard]>=0.53.0",
 ]
 
 [project.optional-dependencies]
@@ -36,6 +41,7 @@ dev = [
     "pytest-cov>=5.0,<6",
     "ruff>=0.6,<1",
     "mypy>=1.11,<2",
+    "types-PyYAML>=6,<7",
     "pre-commit>=3.8,<4",
 ]
 
@@ -52,15 +58,23 @@ dev = [
     "pytest-cov>=5.0,<6",
     "ruff>=0.6,<1",
     "mypy>=1.11,<2",
+    "types-PyYAML>=6,<7",
     "pre-commit>=3.8,<4",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# `bench` and `analysis` are top-level packages in the repo, not installed
+# distributions — tests import them (bench.runner, analysis.metrics) the same
+# way `python -m bench.runner` does, from the repo root.
+pythonpath = ["."]
 markers = [
     "smoke: benchmarks that require real hardware (GPU) and are skipped by default",
 ]
-addopts = "-ra -m 'not smoke'"
+# -ra: short summary names every non-passing test. --durations: any test over
+# 5 s is listed by name, so a slow run (the 99 s one, D18b) points at its
+# cause instead of only showing a total.
+addopts = "-ra -m 'not smoke' --durations=10 --durations-min=5.0"
 
 [tool.ruff]
 line-length = 100

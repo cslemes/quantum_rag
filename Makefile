@@ -1,11 +1,25 @@
-.PHONY: install index eval eval-retrieval validate-oracles run report test lint typecheck smoke
+.PHONY: install models index eval verify-suite eval-retrieval validate-oracles run report test lint typecheck smoke
 
 install:
 	uv sync --group dev
 	uv run pre-commit install
 
+# research.md D18b — the ONLY step that downloads model weights: the pinned
+# revisions in src/qcagent/retrieval/embedding.py, into .cache/fastembed (or
+# FASTEMBED_CACHE_PATH). Run once per machine outside the image; everything
+# else, including `make test`, loads them offline and never reaches the network.
+models:
+	uv run python scripts/fetch_models.py
+
 index:
 	uv run python -m qcagent.retrieval.ingest
+
+# US6 — the interface. Same graph as the suite (qcagent.live.build_live_graph),
+# read-only with respect to results/. Reachable at http://localhost:8000 once
+# docker-compose publishes the port; in the sandboxed dev environment the host
+# additionally needs `sbx ports <sandbox> --publish 8000:8000/tcp`.
+ui:
+	uv run uvicorn qcagent.ui.app:app --host 0.0.0.0 --port 8000
 
 eval:
 	uv run python -m bench.runner --config config.yaml
@@ -25,9 +39,16 @@ validate-oracles:
 run:
 	uv run python -m bench.run_single $(TASK)
 
+# Principle IV, without running anything: re-validates every reference named
+# in config.yaml and stops. The same check runs automatically before `eval`.
+verify-suite:
+	uv run python -m bench.runner --config config.yaml --verify-only
+
+# Metrics for the most recent run (or pass a path). `analysis.ablation` is
+# gone with v2's experimental matrix (MIGRATION.md); comparing two runs is
+# `analysis.compare BEFORE AFTER`.
 report:
 	uv run python -m analysis.metrics
-	uv run python -m analysis.ablation
 
 test:
 	uv run pytest

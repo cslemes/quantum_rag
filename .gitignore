@@ -32,3 +32,7 @@ Thumbs.db
 
 # Qdrant snapshots downloaded locally (large binaries — see T036b)
 *.snapshot
+
+# Corporate CA bundle for TLS-intercepting networks (research.md D18) —
+# machine-specific, never a real cert in version control
+corporate-ca.crt

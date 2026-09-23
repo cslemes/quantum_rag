@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>qcircuit-agent</title>
+<style>
+  /* ------------------------------------------------------------------
+     The verdict owns the visual hierarchy.
+
+     A green check is a VERDICT glyph. It is never spent on a sub-fact:
+     "Executed: yes" gets neutral typography, because a check there borrows
+     the verdict's authority for a fact that is not the verdict. This is
+     FR-017's rule ("executing is not a synonym for correct") in visual form,
+     and it is the reason the text report had to be reordered once already.
+     Colour and iconography are read before words are parsed, so ordering
+     alone cannot carry it here.
+     ------------------------------------------------------------------ */
+  :root {
+    --bg: #ffffff; --fg: #1a1a1a; --muted: #666; --line: #d8d8d8;
+    --verified: #0a7d3c; --verified-bg: #f0f9f3;
+    --unverified: #8a5a00; --unverified-bg: #fdf6e8;
+    --fail: #b3261e; --code-bg: #f6f6f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16181c; --fg: #e8e8e8; --muted: #a0a0a0; --line: #33363d;
+      --verified: #4ade80; --verified-bg: #10231a;
+      --unverified: #fbbf24; --unverified-bg: #2a2313;
+      --fail: #f87171; --code-bg: #1e2127;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 19px; margin: 0 0 2px; font-weight: 640; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+  label { display: block; font-weight: 600; font-size: 13px; margin: 16px 0 6px; }
+  .hint { font-weight: 400; color: var(--muted); font-size: 12px; }
+  textarea, input[type=number] {
+    width: 100%; background: var(--bg); color: var(--fg);
+    border: 1px solid var(--line); border-radius: 6px; padding: 9px 10px;
+    font: 13px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  textarea { resize: vertical; }
+  button { font: inherit; font-weight: 600; border-radius: 6px; cursor: pointer;
+           border: 1px solid var(--line); background: var(--bg); color: var(--fg); padding: 6px 11px; }
+  button.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); padding: 10px 18px; }
+  button:disabled { opacity: .5; cursor: default; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .chips button { font-size: 12px; font-weight: 500; padding: 4px 9px; }
+  .convention { font-size: 12px; color: var(--muted); border-left: 2px solid var(--line);
+                padding: 6px 0 6px 10px; margin: 8px 0; }
+  .echo { font: 12px/1.6 ui-monospace, Menlo, monospace; margin-top: 8px; }
+  .echo div { color: var(--muted); }
+  .echo .bad { color: var(--fail); }
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+        padding: 12px; overflow-x: auto; font: 12.5px/1.5 ui-monospace, Menlo, monospace; margin: 0; }
+
+  /* Progress: bounded and discrete. No percentage bar — the attempt count is
+     the honest unit, and a fake percentage would imply knowledge we lack. */
+  .stage { font-size: 13px; color: var(--muted); margin: 10px 0; }
+  .attempts { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin-top: 10px; }
+  .attempt { padding: 8px 11px; border-top: 1px solid var(--line); font-size: 13px; }
+  .attempt:first-child { border-top: 0; }
+  .attempt .why { color: var(--fail); font: 12px/1.5 ui-monospace, Menlo, monospace; }
+  .attempt .fix { color: var(--muted); font-size: 12px; }
+
+  /* The report card IS the warning surface when unverified. You cannot skim
+     past a container the way you can skim past a line. */
+  .report { border: 2px solid var(--line); border-radius: 8px; padding: 16px; margin-top: 8px; }
+  .report.verified   { border-color: var(--verified);   background: var(--verified-bg); }
+  .report.unverified { border-color: var(--unverified); background: var(--unverified-bg); }
+  .verdict { font-size: 15px; font-weight: 700; letter-spacing: .01em; }
+  .report.verified   .verdict { color: var(--verified); }
+  .report.unverified .verdict { color: var(--unverified); }
+  .verdict-body { margin-top: 6px; font-size: 13.5px; }
+  .facts { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);
+           font-size: 13px; color: var(--muted); }
+  .facts div { margin: 2px 0; }
+  .alist { margin-top: 12px; font: 12.5px/1.7 ui-monospace, Menlo, monospace; }
+  .alist .pass { color: var(--verified); }
+  .alist .violated { color: var(--fail); }
+  .alist .na { color: var(--unverified); }
+
+  /* The code must never be separable from its verdict. Screenshotting or
+     scrolling to just the code is the realistic misuse, so the banner travels
+     with the code panel rather than living only in the report above. */
+  .codehead { font-size: 12px; font-weight: 700; padding: 7px 11px;
+              border: 1px solid var(--line); border-bottom: 0;
+              border-radius: 6px 6px 0 0; }
+  .codehead.unverified { color: var(--unverified); background: var(--unverified-bg);
+                         border-color: var(--unverified); }
+  .codehead.verified { color: var(--verified); background: var(--verified-bg);
+                       border-color: var(--verified); }
+  .codehead + pre { border-radius: 0 0 6px 6px; }
+  .basenote { font-size: 12px; color: var(--muted); margin-top: 12px;
+              border-left: 2px solid var(--line); padding-left: 10px; }
+  .health { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+  details summary { cursor: pointer; font-size: 12px; color: var(--muted); margin-top: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>qcircuit-agent</h1>
+  <div class="sub">Describe a circuit. The system writes it, checks it, and tells you exactly what it verified — and what it did not.</div>
+  <div class="health" id="health"></div>
+
+  <div class="cols">
+    <section>
+      <label for="spec">Circuit description</label>
+      <textarea id="spec" rows="4" placeholder="A 2-qubit Bell state |Phi+> using H and CNOT."></textarea>
+
+      <label for="nq">Number of qubits <span class="hint">— sizes the kets in the templates below</span></label>
+      <input type="number" id="nq" value="2" min="1" max="20" style="width:90px">
+
+      <label>Assertions <span class="hint">— optional, but they are the only way this run can be VERIFIED</span></label>
+      <div class="chips" id="chips"></div>
+      <div class="convention">
+        In every ket the <strong>leftmost character is the highest-numbered qubit</strong>,
+        rightmost is qubit&nbsp;0 — the same order Qiskit prints.
+        For 2 qubits, <code>|10&gt;</code> means qubit&nbsp;1 is 1 and qubit&nbsp;0 is 0.
+      </div>
+      <textarea id="assertions" rows="5" spellcheck="false"
+        placeholder="PROBABILITY(|00>) ~= 0.5"></textarea>
+      <div class="echo" id="echo"></div>
+
+      <label for="maxiter">Attempts before giving up</label>
+      <input type="number" id="maxiter" value="5" min="1" max="10" style="width:90px">
+
+      <div style="margin-top:18px"><button class="primary" id="go">Build circuit</button></div>
+    </section>
+
+    <section id="right"></section>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+// Templates insert EDITABLE grammar, not a wizard. The grammar is the
+// interface; hiding it would teach the user nothing and leave them unable to
+// write the second assertion. What is hard is the first token, not the fifth.
+const TEMPLATES = [
+  ["equally likely",      n => `PROBABILITY(|${"0".repeat(n)}>) ~= 0.5`],
+  ["measuring gives",     n => `MEASURES == "${"0".repeat(n)}"`],
+  ["a qubit's state",     _ => `QUBIT(0) == "|+>"`],
+  ["only these gates",    _ => `GATES_SUBSET_OF({"h", "cx"})`],
+  ["amplitudes equal",    n => `AMPLITUDE(|${"0".repeat(n)}>) == AMPLITUDE(|${"1".repeat(n)}>)`],
+  ["relative phase",      n => `PHASE_DIFF(|${"0".repeat(n)}>, |${"1".repeat(n)}>) ~= pi`],
+];
+TEMPLATES.forEach(([label, make]) => {
+  const b = document.createElement("button");
+  b.textContent = label;
+  b.onclick = () => {
+    const ta = $("assertions"), n = +$("nq").value || 2;
+    ta.value = (ta.value.trimEnd() + "\n" + make(n)).trim() + "\n";
+    ta.focus(); validate();
+  };
+  $("chips").appendChild(b);
+});
+
+// Parse errors: debounced, and NEVER on the line the cursor is on — a
+// half-typed `PROBABILITY(` is not a mistake, it is someone typing. The
+// authority is still the backend at submit; this is a convenience that uses
+// the SAME parser via /api/validate, never a second grammar.
+let timer;
+const validate = () => { clearTimeout(timer); timer = setTimeout(doValidate, 400); };
+$("assertions").addEventListener("input", validate);
+$("nq").addEventListener("input", validate);
+
+async function doValidate() {
+  const ta = $("assertions");
+  const upto = ta.value.slice(0, ta.selectionStart);
+  const editing = ta.value.split("\n")[upto.split("\n").length - 1];
+  const finished = ta.value.split("\n")
+    .filter(l => l.trim() && l.trim() !== editing.trim()).join("\n");
+  if (!finished.trim()) { $("echo").innerHTML = ""; return; }
+  const r = await fetch("/api/validate", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({assertions_text: finished, n_qubits: +$("nq").value || 2})
+  }).then(r => r.json());
+  $("echo").innerHTML = r.ok
+    ? "<div>understood as:</div>" + r.assertions.map(a => `<div>&nbsp;&nbsp;${esc(a)}</div>`).join("")
+    : `<div class="bad">${esc(r.error)}</div>`;
+}
+
+fetch("/api/health").then(r => r.json()).then(h =>
+  $("health").textContent = `retrieval: ${h.qdrant} · generator: ${h.ollama}`);
+
+$("go").onclick = () => {
+  const spec = $("spec").value.trim();
+  if (!spec) { $("spec").focus(); return; }
+  $("go").disabled = true;
+  const maxIter = +$("maxiter").value || 5;
+  const src = new EventSource("/api/run?spec=" + encodeURIComponent(spec)
+    + "&assertions=" + encodeURIComponent($("assertions").value)
+    + "&max_iter=" + maxIter);
+
+  src.addEventListener("stage", e => renderProgress(JSON.parse(e.data)));
+  src.addEventListener("done", e => { renderDone(JSON.parse(e.data)); src.close(); $("go").disabled = false; });
+  src.addEventListener("error", e => {
+    let d = {}; try { d = JSON.parse(e.data); } catch {}
+    $("right").innerHTML = `<div class="report unverified"><div class="verdict">RUN FAILED</div>
+      <div class="verdict-body">This is a fault in the tool, not a verdict about your circuit.
+      <code>${esc(d.error_type || "connection lost")}: ${esc(d.message || "")}</code></div></div>`;
+    src.close(); $("go").disabled = false;
+  });
+};
+
+function attemptsHtml(failures, attempt, maxIter, label, elapsed) {
+  const rows = failures.map(f => `<div class="attempt">
+      <strong>Attempt ${f.iteration}</strong> — did not work
+      <div class="why">${esc(f.error_type)}: ${esc(f.message)}</div>
+    </div>`).join("");
+  const now = label ? `<div class="attempt"><strong>Attempt ${Math.max(attempt,1)} of ${maxIter}</strong>
+      <div class="fix">${esc(label)}… (${elapsed}s)</div></div>` : "";
+  return `<div class="attempts">${rows}${now}</div>`;
+}
+
+function renderProgress(d) {
+  $("right").innerHTML = `<label>Progress</label>
+    <div class="stage">Attempt ${Math.max(d.attempt,1)} of ${d.max_iter} · ${esc(d.label)}</div>
+    ${attemptsHtml(d.failures, d.attempt, d.max_iter, d.label, d.elapsed_s)}`;
+}
+
+function renderDone(d) {
+  const rep = d.report;
+  const verified = rep && rep.verified;
+  const cls = verified ? "verified" : "unverified";
+
+  // The positive verdict enumerates what passed. A lone "VERIFIED" overclaims:
+  // what was verified is N specific assertions, not correctness in general.
+  let head, body;
+  if (verified) {
+    const n = rep.assertions.length;
+    head = `VERIFIED — ${n} of ${n} declared assertion${n === 1 ? "" : "s"} passed`;
+    body = `The circuit satisfies every property you declared. It does <strong>not</strong>
+            mean the circuit is correct in any sense beyond those ${n} propert${n === 1 ? "y" : "ies"}.`;
+  } else if (d.status === "rejected_input") {
+    head = "REFUSED BEFORE BUILDING";
+    body = "Your request was refused before any circuit was written — see below.";
+  } else if (!rep || !rep.executed) {
+    head = "NOT VERIFIED — the circuit never ran";
+    body = "Nothing about its behaviour could be checked.";
+  } else if (rep.assertions.length === 0) {
+    head = "NOT VERIFIED — nothing was checked";
+    body = `The code ran, but you declared no assertions and there is no reference to
+            compare against, so <strong>nothing checked whether it does what you asked</strong>.
+            Add an assertion to make a verified run possible.`;
+  } else {
+    head = "NOT VERIFIED — a declared assertion did not hold";
+    body = "See each assertion below.";
+  }
+
+  const alist = rep && rep.assertions.length ? `<div class="alist">` + rep.assertions.map(a => {
+    const k = a.passed === true ? "pass" : a.passed === false ? "violated" : "na";
+    const word = a.passed === true ? "held" : a.passed === false ? "VIOLATED" : "NOT EVALUABLE";
+    return `<div class="${k}">${esc(a.text)} — ${word}${a.detail ? " · " + esc(a.detail) : ""}</div>`;
+  }).join("") + `</div>` : "";
+
+  // Sub-facts get neutral marks, never checkmarks (see the CSS note).
+  const facts = rep ? `<div class="facts">
+      <div>Executed · ${rep.executed ? "yes" : "no"}</div>
+      <div>Transpiled · ${rep.transpiled ? "yes" : "no"}</div>
+      ${rep.requirements.map(r => `<div>${esc(r.description)} · ${r.passed === true ? "held"
+          : r.passed === false ? "not met" : "not checkable"}</div>`).join("")}
+    </div>` : "";
+
+  const maxedOut = d.iterations >= d.max_iter && !verified;
+  const stopped = maxedOut ? `<div class="basenote">
+      <strong>Stopped after ${d.max_iter} attempts without verifying correctness.</strong>
+      The system declined to claim success rather than presenting unchecked code as done.
+      Each attempt above shows what was tried and why it did not work.
+      <br><br>For context, measured over the project's reference suite — a deliberately hard
+      set including perturbed variants built to defeat memorisation — most tasks are not
+      verified within 5 attempts. That is a fact about that suite, not a prediction for
+      your description.</div>` : "";
+
+  $("right").innerHTML = `<label>Result</label>
+    <div class="report ${cls}">
+      <div class="verdict">${head}</div>
+      <div class="verdict-body">${body}</div>
+      ${alist}${facts}
+    </div>
+    ${stopped}
+    ${d.code ? `<label>Circuit</label>
+      <div class="codehead ${cls}">${verified
+        ? `VERIFIED against ${rep.assertions.length} declared assertion${rep.assertions.length === 1 ? "" : "s"} — nothing more`
+        : "NOT VERIFIED — nothing checked whether this does what you asked"}</div>
+      <pre>${esc(d.code)}</pre>` : ""}
+    ${attemptsHtml(d.failures, d.iterations, d.max_iter, null, d.elapsed_s)}
+    ${rep ? `<details><summary>Full guarantee report (text)</summary><pre>${esc(rep.text)}</pre></details>` : ""}`;
+}
+</script>
+</body>
+</html>
