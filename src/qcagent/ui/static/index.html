@@ -362,6 +362,10 @@ function renderCheck(r) {
       const w = a.passed === true ? "holds" : a.passed === false ? "VIOLATED" : "NOT EVALUABLE";
       return `<div class="${k}">${esc(a.text)} — ${w}${a.detail ? " · " + esc(a.detail) : ""}</div>`;
     }).join("")}</div>
+    ${r.circular ? `<div class="about" style="border-left:2px solid var(--unverified);padding-left:10px">
+      <strong>These assertions were drafted from this circuit's own output</strong>, so they pass by
+      construction — including if the circuit is wrong. The draft button writes an assertion; only you
+      can decide it is the one you wanted. Edit them to say what you INTENDED, then check again.</div>` : ""}
     <div class="about">Checked against the circuit shown above (run ${esc(r.token)}), not a new one.
       ${v ? "It does <strong>not</strong> mean the circuit is correct beyond these properties." : ""}</div>
   </div>`;

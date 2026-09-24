@@ -110,3 +110,57 @@ def test_the_report_comes_from_the_one_builder() -> None:
     source = __import__("pathlib").Path("src/qcagent/ui/session.py").read_text()
     assert "_build_guarantee_report" in source
     assert "GuaranteeReport(" not in source, "the UI must not assemble a report itself"
+
+
+# --- a check against self-drafted assertions proves nothing ----------------
+
+
+def _store_with_drafts(circuit: QuantumCircuit, drafts: set[str]) -> str:
+    token = _store(circuit)
+    session._runs[token]["drafts"] = drafts
+    return token
+
+
+def test_checking_only_self_drafted_assertions_is_flagged_circular() -> None:
+    """Drafted from the circuit's own output, so they pass by construction —
+    including when the circuit is WRONG. Unflagged, a tautology reads as
+    verification at exactly the moment the guarantee is being demonstrated."""
+    token = _store_with_drafts(_bell(), {"PROBABILITY(|00>) ~= 0.5"})
+
+    result = session.check_stored_circuit(token, "PROBABILITY(|00>) ~= 0.5")
+
+    assert result["report"]["verified"] is True
+    assert result["circular"] is True, "a self-referential check must say so"
+
+
+def test_an_edited_assertion_is_not_circular() -> None:
+    """The moment the user states their own intent, the check means
+    something."""
+    token = _store_with_drafts(_bell(), {"PROBABILITY(|00>) ~= 0.5"})
+
+    result = session.check_stored_circuit(token, "PROBABILITY(|11>) ~= 0.5")
+
+    assert result["circular"] is False
+
+
+def test_a_mix_of_drafted_and_written_is_not_circular() -> None:
+    token = _store_with_drafts(_bell(), {"PROBABILITY(|00>) ~= 0.5"})
+
+    result = session.check_stored_circuit(
+        token, "PROBABILITY(|00>) ~= 0.5\nPROBABILITY(|11>) ~= 0.5"
+    )
+
+    assert result["circular"] is False
+
+
+def test_a_wrong_circuit_verifies_against_its_own_drafts_and_is_flagged() -> None:
+    """The hazard in full: an inert circuit verifying against assertions
+    describing its own inertness."""
+    inert = QuantumCircuit(2)
+    inert.ch(0, 1)
+    token = _store_with_drafts(inert, {'MEASURES == "00"'})
+
+    result = session.check_stored_circuit(token, 'MEASURES == "00"')
+
+    assert result["report"]["verified"] is True, "it genuinely satisfies that assertion"
+    assert result["circular"] is True, "and the interface must not let that read as correctness"

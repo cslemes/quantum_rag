@@ -123,9 +123,7 @@ def run_streaming(
                         "max_iter": max_iter,
                         "failures": _attempt_failures(state),
                         "report": _report_payload(state),
-                        "distribution": _distribution_payload(state),
-                        "token": _remember_run(state),
-                        "diagram": _diagram_payload(state),
+                        **_run_artifacts(state),
                         "elapsed_s": round(time.monotonic() - started, 1),
                     },
                 )
@@ -171,7 +169,14 @@ def _remember_run(state: dict) -> str | None:
     if static is None or static.circuit_qpy is None:
         return None
     token = uuid.uuid4().hex[:12]
-    _runs[token] = {"static": static, "code": state.get("code") or ""}
+    _runs[token] = {
+        "static": static,
+        "code": state.get("code") or "",
+        # The drafts this run offered, so a check can tell the user when the
+        # assertions it is checking were DERIVED from the very circuit it is
+        # checking them against (see `_is_circular`).
+        "drafts": set(),
+    }
     while len(_runs) > _MAX_KEPT_RUNS:
         _runs.popitem(last=False)
     return token
@@ -214,6 +219,7 @@ def check_stored_circuit(token: str, assertions_text: str) -> dict:
         return {"ok": False, "error": "no assertions to check"}
 
     outcomes = evaluate_assertions(parsed, circuit)
+    circular = _is_circular(assertions_text, stored)
     report = _build_guarantee_report(
         {
             "static": stored["static"],
@@ -230,7 +236,31 @@ def check_stored_circuit(token: str, assertions_text: str) -> dict:
         "token": token,
         "report": _serialise_report(report),
         "code": stored["code"],
+        "circular": circular,
     }
+
+
+def _is_circular(assertions_text: str, stored: dict) -> bool:
+    """True when EVERY assertion being checked was auto-drafted from this
+    same circuit's observed output.
+
+    Then the check passes by construction and proves nothing: the assertions
+    describe what the circuit does, so of course the circuit does it. A
+    circuit that is WRONG will still verify against assertions drafted from
+    its own wrong behaviour — which, unflagged, makes the guarantee look
+    hollow at exactly the moment it is being demonstrated.
+
+    The draft button is a way to WRITE an assertion, not a way to decide it
+    is the right one. Only the user knows whether the observed values are the
+    ones they wanted, and the interface has to say so rather than let a
+    tautology read as verification. Same rule as everywhere else here: never
+    appear to claim more than was established.
+    """
+    drafts = stored.get("drafts") or set()
+    if not drafts:
+        return False
+    lines = [line.strip() for line in assertions_text.splitlines() if line.strip()]
+    return bool(lines) and all(line in drafts for line in lines)
 
 
 def _circuit_from(static: Any) -> Any:
@@ -246,6 +276,16 @@ def _circuit_from(static: Any) -> Any:
         return circuit
     except Exception:  # noqa: BLE001 — bug 21's class
         return None
+
+
+def _run_artifacts(state: dict) -> dict:
+    """Distribution, token and diagram together, so the drafts offered can be
+    recorded against the token that will later be asked to check them."""
+    distribution = _distribution_payload(state)
+    token = _remember_run(state)
+    if token and distribution and distribution.get("available"):
+        _runs[token]["drafts"] = {o["draft"] for o in distribution["outcomes"]}
+    return {"distribution": distribution, "token": token, "diagram": _diagram_payload(state)}
 
 
 def _diagram_payload(state: dict) -> dict | None:
