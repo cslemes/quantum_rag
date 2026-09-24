@@ -1923,13 +1923,21 @@ quântica:
    *em relação ao comportamento correto* fica permanentemente invisível — o
    teste passa para sempre. Estrutura idêntica: o critério veio do artefato.
 2. **Pedir a um LLM que escreva os testes do código que o mesmo LLM gerou.**
-   Mesma falha, em escala, e prática comum. O modelo que interpretou mal o
-   requisito interpreta mal do mesmo jeito ao escrever o teste — os dois erros
-   são correlacionados porque têm a mesma origem — e a suíte verde certifica a
-   interpretação errada. É o caso mais perigoso dos três porque PARECE
-   verificação independente: há um artefato de código e um artefato de teste,
-   escritos em momentos diferentes, e nada na aparência revela que a fonte do
-   critério e a fonte do comportamento são a mesma.
+   Mesma falha, em escala, e prática comum. É o caso mais perigoso dos três
+   porque PARECE verificação independente: há um artefato de código e um
+   artefato de teste, escritos em momentos diferentes, em arquivos
+   diferentes, e nada na aparência revela que a fonte do critério e a fonte
+   do comportamento são a mesma.
+
+   **E a mitigação que todo mundo tenta primeiro — "então use outro modelo
+   para escrever os testes" — é muito mais fraca do que parece.** O erro não
+   se origina no modelo; origina-se no ENUNCIADO DO REQUISITO. Um segundo
+   modelo, recebendo o mesmo requisito mal formulado, erra da mesma forma:
+   a ambiguidade está no texto, não na cabeça de quem o lê. Trocar de modelo
+   muda a fonte do ARTEFATO sem mudar a fonte do CRITÉRIO, e é exatamente a
+   segunda que precisava mudar. Dois modelos distintos lendo o mesmo
+   requisito ambíguo produzem erros correlacionados pelo mesmo motivo que um
+   modelo lendo-o duas vezes produz.
 
 A versão deste projeto está entre as duas: o rascunho é derivado
 mecanicamente da saída (como um snapshot), mas é oferecido como conveniência
@@ -1940,10 +1948,23 @@ de escrita (como o LLM que "ajuda" com os testes).
 > Uma checagem só é significativa quando seu critério tem uma fonte
 > INDEPENDENTE do artefato checado.
 
-Não "escrita por outra pessoa", não "escrita depois" — **independente**. Um
-critério derivado do artefato não adquire independência por ser editado
-levemente, por ser escrito noutra linguagem, nem por ser produzido por outra
-execução do mesmo modelo.
+Com precisão: o que precisa ser independente é a **ORIGEM do critério**, não
+a identidade de quem o escreveu. Um critério não adquire independência por ser
+editado levemente, por ser escrito noutra linguagem, por vir de outra execução
+do mesmo modelo, nem por vir de um modelo diferente — se todos derivam do
+mesmo enunciado ambíguo ou do mesmo artefato observado, a origem é uma só.
+
+Na prática isso deixa duas fontes genuinamente independentes:
+
+- **um humano declarando intenção** — "eu queria 50/50, não 25% em quatro" —
+  que é conhecimento que não existe em lugar nenhum do artefato;
+- **uma especificação escrita ANTES do artefato existir**, que não pode ter
+  sido contaminada por ele, e cuja anterioridade é verificável (data de
+  commit, ordem no histórico).
+
+Vale enunciar as duas explicitamente porque a lista do que NÃO conta é longa e
+contraintuitiva, e porque a primeira coisa que se tenta — trocar de modelo —
+está nela.
 
 E a contramedida operacional que este projeto adotou, porque a regra sozinha
 é exatamente o tipo de coisa que se esquece no momento em que importa (F11):
@@ -1962,6 +1983,14 @@ escrita por LLM deveria dizer quais testes vieram do mesmo modelo que escreveu
 o código. Em todos os casos a informação existe no momento da criação e é
 descartada — e é precisamente a informação sem a qual o veredito não pode ser
 interpretado.
+
+**Autoconsistência, que vale uma linha**: `circular=True` É a regra de
+proveniência que a generalização acima prescreve, aplicada a este próprio
+sistema — o critério carrega a informação de onde veio, e o veredito a leva
+até a tela. O projeto implementou a recomendação antes de a articular, o que
+importa porque mostra que a regra é **implementável**, não apenas aconselhável:
+custou uma função de dez linhas, um campo no payload e um parágrafo na
+interface.
 
 **Onde entra no relatório**: capítulo de metodologia, como o achado mais
 transferível do trabalho, e independente do domínio quântico. Liga-se a F16 (um
