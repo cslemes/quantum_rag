@@ -32,22 +32,33 @@
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg);
-         font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
-  .wrap { max-width: 1120px; margin: 0 auto; padding: 24px 16px 64px; }
-  h1 { font-size: 19px; margin: 0 0 2px; font-weight: 640; }
-  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
-  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
-  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
-  label { display: block; font-weight: 600; font-size: 13px; margin: 16px 0 6px; }
-  .hint { font-weight: 400; color: var(--muted); font-size: 12px; }
+         font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+         -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 40px 24px 96px; }
+  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 650; letter-spacing: -0.012em; }
+  .sub { color: var(--muted); font-size: 13.5px; margin-bottom: 28px; max-width: 62ch; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
+  @media (max-width: 980px) { .cols { grid-template-columns: 1fr; gap: 32px; } }
+  /* Labels are signposts, not headings: uppercase tracking reads as
+     structure at a glance without competing with the verdict for weight. */
+  label { display: block; font-weight: 600; font-size: 11.5px; margin: 24px 0 8px;
+          text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  label:first-child { margin-top: 0; }
+  .hint { font-weight: 400; text-transform: none; letter-spacing: 0;
+          color: var(--muted); font-size: 12px; }
   textarea, input[type=number] {
     width: 100%; background: var(--bg); color: var(--fg);
-    border: 1px solid var(--line); border-radius: 6px; padding: 9px 10px;
-    font: 13px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+    border: 1px solid var(--line); border-radius: 7px; padding: 11px 12px;
+    font: 13px/1.65 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    transition: border-color .12s ease; }
+  textarea:focus, input[type=number]:focus { outline: none; border-color: var(--fg); }
   textarea { resize: vertical; }
-  button { font: inherit; font-weight: 600; border-radius: 6px; cursor: pointer;
-           border: 1px solid var(--line); background: var(--bg); color: var(--fg); padding: 6px 11px; }
-  button.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); padding: 10px 18px; }
+  button { font: inherit; font-size: 13px; font-weight: 550; border-radius: 7px;
+           cursor: pointer; border: 1px solid var(--line); background: var(--bg);
+           color: var(--fg); padding: 7px 13px; transition: border-color .12s ease; }
+  button:hover:not(:disabled) { border-color: var(--fg); }
+  button.primary { background: var(--fg); color: var(--bg); border-color: var(--fg);
+                   padding: 11px 22px; font-size: 14px; font-weight: 600; }
   button:disabled { opacity: .5; cursor: default; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
   .chips button { font-size: 12px; font-weight: 500; padding: 4px 9px; }
@@ -56,31 +67,33 @@
   .echo { font: 12px/1.6 ui-monospace, Menlo, monospace; margin-top: 8px; }
   .echo div { color: var(--muted); }
   .echo .bad { color: var(--fail); }
-  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
-        padding: 12px; overflow-x: auto; font: 12.5px/1.5 ui-monospace, Menlo, monospace; margin: 0; }
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 0;
+        padding: 14px 16px; overflow-x: auto; font: 12.5px/1.65 ui-monospace, Menlo, monospace;
+        margin: 0; }
 
   /* Progress: bounded and discrete. No percentage bar — the attempt count is
      the honest unit, and a fake percentage would imply knowledge we lack. */
   .stage { font-size: 13px; color: var(--muted); margin: 10px 0; }
   .attempts { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin-top: 10px; }
-  .attempt { padding: 8px 11px; border-top: 1px solid var(--line); font-size: 13px; }
+  .attempt { padding: 10px 13px; border-top: 1px solid var(--line); font-size: 13px; }
   .attempt:first-child { border-top: 0; }
   .attempt .why { color: var(--fail); font: 12px/1.5 ui-monospace, Menlo, monospace; }
   .attempt .fix { color: var(--muted); font-size: 12px; }
 
   /* The report card IS the warning surface when unverified. You cannot skim
      past a container the way you can skim past a line. */
-  .report { border: 2px solid var(--line); border-radius: 8px; padding: 16px; margin-top: 8px; }
+  .report { border: 2px solid var(--line); border-radius: 10px; padding: 20px; margin-top: 8px; }
   .report.verified   { border-color: var(--verified);   background: var(--verified-bg); }
   .report.unverified { border-color: var(--unverified); background: var(--unverified-bg); }
-  .verdict { font-size: 15px; font-weight: 700; letter-spacing: .01em; }
+  .verdict { font-size: 16.5px; font-weight: 700; letter-spacing: -0.008em; line-height: 1.35; }
   .report.verified   .verdict { color: var(--verified); }
   .report.unverified .verdict { color: var(--unverified); }
-  .verdict-body { margin-top: 6px; font-size: 13.5px; }
-  .facts { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);
-           font-size: 13px; color: var(--muted); }
+  .verdict-body { margin-top: 9px; font-size: 13.5px; line-height: 1.6; max-width: 64ch; }
+  .facts { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line);
+           font-size: 12.5px; color: var(--muted); }
+  .facts div { margin: 3px 0; }
   .facts div { margin: 2px 0; }
-  .alist { margin-top: 12px; font: 12.5px/1.7 ui-monospace, Menlo, monospace; }
+  .alist { margin-top: 16px; font: 12.5px/1.85 ui-monospace, Menlo, monospace; }
   .alist .pass { color: var(--verified); }
   .alist .violated { color: var(--fail); }
   .alist .na { color: var(--unverified); }
@@ -88,7 +101,8 @@
   /* The code must never be separable from its verdict. Screenshotting or
      scrolling to just the code is the realistic misuse, so the banner travels
      with the code panel rather than living only in the report above. */
-  .codehead { font-size: 12px; font-weight: 700; padding: 7px 11px;
+  .codehead { font-size: 11.5px; font-weight: 700; letter-spacing: 0.03em;
+              text-transform: uppercase; padding: 9px 13px;
               border: 1px solid var(--line); border-bottom: 0;
               border-radius: 6px 6px 0 0; }
   .codehead.unverified { color: var(--unverified); background: var(--unverified-bg);
@@ -105,12 +119,12 @@
      seeing 50/50 on |000> and |111> will infer correctness themselves — the
      system must not appear to be making that claim. FR-017 in a new place.
      ------------------------------------------------------------------ */
-  .dist { border: 1px solid var(--line); border-radius: 6px; padding: 14px; margin-top: 8px; }
+  .dist { border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; margin-top: 8px; }
   .dist .src { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
-  .row { display: grid; grid-template-columns: auto 1fr auto auto; gap: 9px;
-         align-items: center; margin: 5px 0; }
+  .row { display: grid; grid-template-columns: auto 1fr auto auto; gap: 12px;
+         align-items: center; margin: 7px 0; }
   .ket { font: 12.5px ui-monospace, Menlo, monospace; color: var(--fg); white-space: nowrap; }
-  .bar { height: 9px; border-radius: 2px; background: var(--line); min-width: 1px; }
+  .bar { height: 10px; border-radius: 3px; background: var(--line); min-width: 2px; }
   .pc { font: 12px ui-monospace, Menlo, monospace; color: var(--muted);
         width: 56px; text-align: right; }
   .row button { font-size: 11px; padding: 2px 7px; white-space: nowrap; }
@@ -129,6 +143,13 @@
   .checked.verified   { border-color: var(--verified);   background: var(--verified-bg); }
   .checked.unverified { border-color: var(--unverified); background: var(--unverified-bg); }
   .checked .about { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  /* The diagram sits with the code, not with the verdict: both describe the
+     artifact, neither evaluates it. Transparent PNG so it reads in either
+     theme without a second render. */
+  .diagram { border: 1px solid var(--line); border-top: 0; border-radius: 0 0 6px 6px;
+             padding: 12px; text-align: center; background: var(--code-bg); }
+  .diagram img { max-width: 100%; height: auto; }
+  .diagram .why { font-size: 12px; color: var(--muted); }
   .basenote { font-size: 12px; color: var(--muted); margin-top: 12px;
               border-left: 2px solid var(--line); padding-left: 10px; }
   .health { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
@@ -263,6 +284,13 @@ function renderProgress(d) {
 
 // The distribution panel. Neutral by construction: the only colour is the
 // same --line grey used for borders, so no bar can read as a pass.
+function diagramHtml(diag) {
+  if (!diag) return "";
+  return diag.image
+    ? `<div class="diagram"><img alt="circuit diagram" src="${diag.image}"></div>`
+    : `<div class="diagram"><span class="why">Diagram not shown: ${esc(diag.reason || "unavailable")}</span></div>`;
+}
+
 function distributionHtml(dist) {
   if (!dist) return "";
   if (!dist.available)
@@ -418,7 +446,8 @@ function renderDone(d) {
       <div class="codehead ${cls}">${verified
         ? `VERIFIED against ${rep.assertions.length} declared assertion${rep.assertions.length === 1 ? "" : "s"} — nothing more`
         : "NOT VERIFIED — nothing checked whether this does what you asked"}</div>
-      <pre>${esc(d.code)}</pre>` : ""}
+      <pre>${esc(d.code)}</pre>
+      ${diagramHtml(d.diagram)}` : ""}
     ${distributionHtml(d.distribution)}
     ${attemptsHtml(d.failures, d.iterations, d.max_iter, null, d.elapsed_s)}
     ${rep ? `<details><summary>Full guarantee report (text)</summary><pre>${esc(rep.text)}</pre></details>` : ""}`;

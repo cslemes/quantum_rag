@@ -32,6 +32,8 @@ dependencies = [
     "lxml>=5.0,<7",
     "fastapi>=0.141.1",
     "uvicorn[standard]>=0.53.0",
+    "matplotlib>=3.11.2",
+    "pylatexenc>=2.11",
 ]
 
 [project.optional-dependencies]

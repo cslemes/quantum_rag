@@ -125,6 +125,7 @@ def run_streaming(
                         "report": _report_payload(state),
                         "distribution": _distribution_payload(state),
                         "token": _remember_run(state),
+                        "diagram": _diagram_payload(state),
                         "elapsed_s": round(time.monotonic() - started, 1),
                     },
                 )
@@ -245,6 +246,25 @@ def _circuit_from(static: Any) -> Any:
         return circuit
     except Exception:  # noqa: BLE001 — bug 21's class
         return None
+
+
+def _diagram_payload(state: dict) -> dict | None:
+    """The circuit drawn, from the QPY static_check already produced.
+
+    Cosmetic by design: a failure here returns a reason and never raises. The
+    diagram is the best-looking thing on the page and the least important —
+    a verified run is still verified without it.
+    """
+    static = state.get("static")
+    if static is None or static.circuit_qpy is None:
+        return None
+    circuit = _circuit_from(static)
+    if circuit is None:
+        return None
+    from qcagent.ui.diagram import circuit_png
+
+    data_uri, reason = circuit_png(circuit)
+    return {"image": data_uri, "reason": reason}
 
 
 def _distribution_payload(state: dict) -> dict | None:
