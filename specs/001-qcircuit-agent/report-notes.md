@@ -996,6 +996,23 @@ resolve as duas rivais de uma vez:
 | **II** — honestidade sobre garantia | classe | `report.py` (campo computado, `extra=forbid`) | **2026-09-23**, depois das falhas | **F8, F10** |
 | **III** — regressão verificável | classe ("TODA mudança…") | campos controlados em `compare.py` | **2026-09-23**, depois das falhas | **F13, F15, F18** |
 
+**Duas ressalvas metodológicas, antes de ler a tabela como simétrica:**
+
+1. **A coluna "quando" é um confundidor parcial.** I e IV ganharam mecanismo
+   cedo; II e III em 2026-09-23, DEPOIS das falhas. A comparação real é
+   "mecanismo cedo vs. mecanismo tarde", não "mecanismo vs. nenhum". O que a
+   tabela sustenta com força é a **direção negativa**: II e III foram violados
+   exatamente durante o período em que não tinham mecanismo. O período
+   pós-correção de II e III tem **um dia de idade e ainda não é evidência de
+   nada** — se eles voltarem a ser violados agora, a tese de mecanismo é que
+   sofre.
+2. **Sobrevivência amostral.** A tabela lista regras que visivelmente
+   propagaram ou visivelmente falharam. Uma regra sem mecanismo cujo caso
+   adjacente NUNCA surgiu parece ter propagado quando apenas nunca foi
+   desafiada. Com N=4, uma classificação errada move a conclusão. Há pelo
+   menos uma assim neste projeto, marcada abaixo como **sem oportunidade** —
+   e não conta como apoio.
+
 **Rival 1 está REFUTADA.** Os quatro princípios estão no mesmo documento, com
 a mesma autoridade declarada, no mesmo arquivo. Dois propagaram sem
 manutenção; dois foram violados repetida e caramente. A autoridade do
@@ -1040,8 +1057,41 @@ horas dentro de uma execução. `test_taxonomy_closed.py`, que enumera a
 taxonomia inteira contra os três lugares, pega em tempo de autoria. Mesmo
 defeito, mesma família de mecanismo; o que muda o custo é a quantificação.
 
-**O que a reformulação prevê** — que é o teste de ser finding e não moral da
-história: auditar toda regra deste projeto enunciada sobre uma instância,
+**A previsão muda de alvo, e fica finita e checável hoje.**
+
+O perigo não são as regras enunciadas sobre instâncias. Uma regra de escopo
+estreito é visivelmente estreita, e ninguém confia nela além do seu caso. O
+perigo são as **regras quantificadas sobre CLASSE e SEM mecanismo, porque
+parecem prontas**: normativas, bem justificadas, no documento certo. O
+Princípio II é a prova — estava na constituição, quantificado sobre classe,
+com a justificativa correta, e o sistema emitia `status="success"` ao lado de
+um relatório dizendo NOT VERIFIED.
+
+Auditoria da constituição, de `research.md` e dos contratos. Esta é a lista de
+onde vêm os próximos findings:
+
+| regra (classe, sem mecanismo que falhe) | onde | custo do mecanismo | estado |
+|---|---|---|---|
+| "Código gerado NUNCA executa no processo principal" | constituição | **barato** — teste de AST proibindo `exec`/`eval`/`compile` sobre código gerado fora de `validators/sandbox.py`, espelhando `test_architecture.py`, ~20 linhas | os testes cobrem o comportamento DO sandbox (denylist, timeout, reciclagem); nenhum afirma que nada o contorna |
+| "Atualização de versão exige rodada de regressão" | constituição | **caro/impossível em teste** — nenhum teste força um humano a rodar 3 h 26 min | parcial: `compare.py` RECUSA comparar versões diferentes, o que detecta mas não força. **Rotular como não imposta** |
+| "Hardware real NÃO PODE ser apresentado como veredito" | constituição | barato quando US5 existir (estender o teste de vocabulário de `report.py`) | **SEM OPORTUNIDADE**: US5 não está implementada, `hardware_note` é sempre `None`. A regra nunca foi desafiada — não conta como propagação |
+
+Regras que a auditoria encontrou **já com mecanismo**, e portanto fora da
+lista: "chunk obsoleto DEVE chegar rotulado, não filtrado"
+(`test_us2_flow.py::test_scenario3_...`), "erro de infraestrutura NUNCA
+contabiliza como erro do modelo" (`analysis/metrics.py` + `test_metrics.py`),
+FR-017 (teste de vocabulário em `test_report.py`, estendido ao DOM em
+`test_ui_verdict_rendering.py`), e o próprio F21 (`compare.py`).
+
+**As duas ações que a lista prescreve** são diferentes e não devem ser
+confundidas: construir o mecanismo barato (primeira linha, agora), e
+**rotular explicitamente como NÃO IMPOSTAS** as duas restantes, para que
+ninguém as leia como garantias. Uma regra sem mecanismo que se anuncia como
+não imposta é honesta; a mesma regra sem rótulo é a decoração de F21 aplicada
+a princípios em vez de campos.
+
+**O que a reformulação prevê, na forma antiga** — auditar toda regra deste
+projeto enunciada sobre uma instância,
 enunciar sua classe, e então perguntar se existe mecanismo. Inventário
 concreto em duas colunas, não exortação. A própria F11 é o caso demonstrativo:
 como "corrigi o sítio errado" (instância) não previu nada; como "estado
