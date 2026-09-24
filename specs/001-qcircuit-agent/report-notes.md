@@ -1865,10 +1865,114 @@ maquinaria de verificação deste projeto — asserções, tri-estado, relatóri
 garantia honesto — se aplica igual. Fica anotado como próximo passo natural,
 não como escopo atual.
 
+**O que este finding NÃO cobre, e que se revelou ao testar a correção**:
+separar as duas operações resolveu a confusão sobre QUAL circuito está sendo
+julgado, e criou imediatamente um problema mais fundo — uma asserção
+rascunhada a partir da saída observada e checada contra aquele mesmo circuito
+passa por construção. F23 trata disso, e é o achado mais forte dos dois.
+
 **Fonte**: `src/qcagent/ui/session.py::check_stored_circuit`;
 `src/qcagent/ui/app.py::check`; `tests/unit/test_check_stored_circuit.py`;
 sequência observada ao vivo (50/50 -> rascunho -> failed_semantic antes,
--> VERIFIED depois); F8; F10.
+-> VERIFIED depois); F8; F10; F23.
+
+---
+
+### F23 — Um sistema que sugere o próprio critério de aceitação produz uma checagem que não pode falhar, e é a prestatividade que causa isso
+
+**O resultado mais transferível deste projeto.** Não é sobre computação
+quântica, nem sobre LLMs especificamente; é sobre de onde vem o critério.
+
+**O mecanismo**: quanto mais um sistema ajuda a escrever a asserção, mais a
+asserção descreve **o que o sistema fez** em vez de **o que o usuário
+queria**. No limite — quando o critério é gerado inteiramente a partir da
+saída observada — a checagem é uma tautologia: o artefato satisfaz o critério
+porque o critério foi lido do artefato. E o modo de falha é invisível, porque
+o que aparece na tela é `VERIFIED`.
+
+A ajuda é a causa, não um efeito colateral. Uma interface que deixasse o
+usuário sozinho diante de uma caixa de texto vazia não teria este problema —
+teria o problema oposto (ninguém escreve asserção nenhuma, e nada é
+verificado, que é exatamente o buraco que US3 existe para tapar). Os dois
+extremos falham, e falham em direções opostas: **sem ajuda, nada é
+verificado; com ajuda demais, tudo "verifica" e nada é verificado.**
+
+**Evidência medida, neste sistema, ao vivo:**
+
+    execução (sem asserções declaradas) -> completed_unverified
+      distribuição observada: |00> 25%, |01> 25%, |10> 25%, |11> 25%
+      rascunhos oferecidos pela interface: PROBABILITY(|00>) ~= 0.25, ... (os quatro)
+
+    checagem com os rascunhos    -> verified=True    circular=True
+    checagem com intenção escrita -> verified=False   circular=False
+      (PROBABILITY(|00>) ~= 0.5 / PROBABILITY(|11>) ~= 0.5, um Bell de verdade)
+
+O circuito estava **errado**: pedia-se um estado de Bell e produziu-se
+superposição uniforme de quatro estados. A checagem contra os próprios
+rascunhos devolveu VERIFIED, corretamente em relação àquelas asserções e
+catastroficamente em relação ao que alguém lendo a tela concluiria. O mesmo
+circuito, contra uma asserção que expressa INTENÇÃO, reprova.
+
+**Instâncias conhecidas fora deste projeto** — é isto que torna o achado
+legível para um público de engenharia de software e não só de computação
+quântica:
+
+1. **Snapshot testing.** A primeira execução grava a saída como "esperada", e
+   todo teste subsequente compara contra aquilo. Se a implementação original
+   estava errada, o snapshot grava o erro como especificação, e toda regressão
+   *em relação ao comportamento correto* fica permanentemente invisível — o
+   teste passa para sempre. Estrutura idêntica: o critério veio do artefato.
+2. **Pedir a um LLM que escreva os testes do código que o mesmo LLM gerou.**
+   Mesma falha, em escala, e prática comum. O modelo que interpretou mal o
+   requisito interpreta mal do mesmo jeito ao escrever o teste — os dois erros
+   são correlacionados porque têm a mesma origem — e a suíte verde certifica a
+   interpretação errada. É o caso mais perigoso dos três porque PARECE
+   verificação independente: há um artefato de código e um artefato de teste,
+   escritos em momentos diferentes, e nada na aparência revela que a fonte do
+   critério e a fonte do comportamento são a mesma.
+
+A versão deste projeto está entre as duas: o rascunho é derivado
+mecanicamente da saída (como um snapshot), mas é oferecido como conveniência
+de escrita (como o LLM que "ajuda" com os testes).
+
+**A contramedida, na forma geral:**
+
+> Uma checagem só é significativa quando seu critério tem uma fonte
+> INDEPENDENTE do artefato checado.
+
+Não "escrita por outra pessoa", não "escrita depois" — **independente**. Um
+critério derivado do artefato não adquire independência por ser editado
+levemente, por ser escrito noutra linguagem, nem por ser produzido por outra
+execução do mesmo modelo.
+
+E a contramedida operacional que este projeto adotou, porque a regra sozinha
+é exatamente o tipo de coisa que se esquece no momento em que importa (F11):
+**tornar a dependência detectável e declará-la na saída.** `check_stored_
+circuit` devolve `circular=True` quando TODA asserção checada foi
+auto-rascunhada daquela execução, e a interface diz, ali mesmo, que a
+checagem passa por construção e que só o usuário pode decidir se aqueles eram
+os valores desejados. Não bloqueia — bloquear destruiria a rampa de entrada
+que US3 precisa — mas impede que a tautologia se apresente como verificação.
+
+**Generalização para quem for aplicar isto noutro lugar**: se uma ferramenta
+gera o critério, ela precisa registrar essa proveniência junto do veredito, e
+o veredito precisa carregá-la até a tela. Um snapshot deveria dizer "este
+valor foi gravado da execução N, nunca revisado por ninguém"; uma suíte
+escrita por LLM deveria dizer quais testes vieram do mesmo modelo que escreveu
+o código. Em todos os casos a informação existe no momento da criação e é
+descartada — e é precisamente a informação sem a qual o veredito não pode ser
+interpretado.
+
+**Onde entra no relatório**: capítulo de metodologia, como o achado mais
+transferível do trabalho, e independente do domínio quântico. Liga-se a F16 (um
+controle que dispara vale mais que uma hipótese que confirma): ambos são sobre
+a diferença entre um resultado que poderia ter sido diferente e um que não
+poderia.
+
+**Fonte**: `src/qcagent/ui/session.py::_is_circular` e
+`::check_stored_circuit`; `tests/unit/test_check_stored_circuit.py`
+(incluindo o circuito inerte que "verifica" contra a própria inércia);
+sequência medida ao vivo no container; F16; F22.
 
 ---
 
@@ -2631,6 +2735,13 @@ Tudo que limita o que pode ser afirmado a partir deste desenho experimental.
   a frio, o ritmo é ~31 s/run contra 18-21 s antes. Consequências: o ganho de
   −34% atribuído à correção de roteamento foi retirado, e **SC-007 pode
   falhar a frio** — o "2 h 45 min" tinha 15 min de margem que eram o cache.
+- **Uma checagem contra critério auto-rascunhado não é evidência (F23).**
+  A interface oferece rascunhos de asserção derivados da distribuição
+  observada; checá-los contra o mesmo circuito passa por construção, inclusive
+  quando o circuito está errado (medido: circuito uniforme de 25% "verificado"
+  contra asserções que descreviam seus próprios 25%). Qualquer número ou
+  demonstração que dependa de uma checagem com `circular=True` não sustenta
+  nada sobre corretude.
 - **Zeros são robustos; deltas pequenos não são (F15, F19).** `verificado@1 =
   0,0%` sobre 341 runs é um zero REAL: ruído de amostragem pode mover um
   número, não pode fabricar 341 ausências de sucesso na primeira tentativa. A
