@@ -19,6 +19,8 @@ that also wrote records would create a second, unversioned source of numbers.
 import queue
 import threading
 import time
+import uuid
+from collections import OrderedDict
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
@@ -121,6 +123,8 @@ def run_streaming(
                         "max_iter": max_iter,
                         "failures": _attempt_failures(state),
                         "report": _report_payload(state),
+                        "distribution": _distribution_payload(state),
+                        "token": _remember_run(state),
                         "elapsed_s": round(time.monotonic() - started, 1),
                     },
                 )
@@ -137,6 +141,163 @@ def run_streaming(
         yield event
 
 
+# ---------------------------------------------------------------------------
+# Checking a circuit that already exists, versus generating one
+# ---------------------------------------------------------------------------
+#
+# These are DIFFERENT OPERATIONS and the interface had merged them. "Does this
+# circuit satisfy X?" is a question about an artifact that exists; "generate a
+# circuit satisfying X" is a request for one that does not. Declaring an
+# assertion drafted from an observed distribution used to trigger the second
+# when the user meant the first — and since the generator is unreliable, the
+# new circuit routinely violated assertions drafted from the old one.
+#
+# So a finished run is kept by token, and checking evaluates against THAT
+# stored circuit. Requirement: it must be unambiguous which circuit was
+# verified, which is why the token is issued per run rather than "the last
+# one" — "the last one" silently changes under a second browser tab.
+#
+# Bounded: this is a single-user demo surface (P2), not storage. Old entries
+# fall off rather than accumulating.
+_MAX_KEPT_RUNS = 8
+_runs: "OrderedDict[str, dict]" = OrderedDict()
+
+
+def _remember_run(state: dict) -> str | None:
+    """Keeps a finished run's circuit so it can be checked without
+    regenerating. Returns the token, or None when there is no circuit."""
+    static = state.get("static")
+    if static is None or static.circuit_qpy is None:
+        return None
+    token = uuid.uuid4().hex[:12]
+    _runs[token] = {"static": static, "code": state.get("code") or ""}
+    while len(_runs) > _MAX_KEPT_RUNS:
+        _runs.popitem(last=False)
+    return token
+
+
+def check_stored_circuit(token: str, assertions_text: str) -> dict:
+    """Evaluate assertions against a circuit ALREADY generated — no LLM, no
+    regeneration.
+
+    A check that passes IS functional verification of that circuit with
+    respect to those assertions, so the guarantee report may legitimately say
+    VERIFIED. What it must never be is ambiguous about WHICH circuit: the
+    verdict here is about the stored QPY from the run identified by `token`,
+    not about anything generated since.
+
+    Reuses `_build_guarantee_report` rather than assembling a report here.
+    The verdict is decided in one place and everything reads it (F8/F10); a
+    second constructor would be the third instance of that bug.
+    """
+    from qcagent.nodes.routing import _build_guarantee_report
+    from qcagent.validators.assertions import (
+        AssertionParseError,
+        evaluate_assertions,
+        parse_assertions,
+    )
+
+    stored = _runs.get(token)
+    if stored is None:
+        return {"ok": False, "error": "that run is no longer held in memory — re-run it"}
+
+    circuit = _circuit_from(stored["static"])
+    if circuit is None:
+        return {"ok": False, "error": "the stored run has no circuit to check"}
+
+    try:
+        parsed = parse_assertions(assertions_text, circuit.num_qubits)
+    except AssertionParseError as exc:
+        return {"ok": False, "error": str(exc)}
+    if not parsed:
+        return {"ok": False, "error": "no assertions to check"}
+
+    outcomes = evaluate_assertions(parsed, circuit)
+    report = _build_guarantee_report(
+        {
+            "static": stored["static"],
+            "assertion_results": outcomes,
+            "requirement_results": [],
+            "coupling_map_name": None,
+            "semantic": None,
+            "resource": None,
+            "n_qubits_correction": None,
+        }
+    )
+    return {
+        "ok": True,
+        "token": token,
+        "report": _serialise_report(report),
+        "code": stored["code"],
+    }
+
+
+def _circuit_from(static: Any) -> Any:
+    import io
+
+    from qiskit import qpy
+
+    if static.circuit_qpy is None:
+        return None
+    try:
+        with io.BytesIO(static.circuit_qpy) as buffer:
+            (circuit,) = qpy.load(buffer)
+        return circuit
+    except Exception:  # noqa: BLE001 — bug 21's class
+        return None
+
+
+def _distribution_payload(state: dict) -> dict | None:
+    """What the circuit DOES (FR-018) — descriptive, never evaluative.
+
+    Deliberately a sibling of the report rather than a field inside it. The
+    guarantee report is the system's claim; the distribution is an
+    observation, and merging them would let a reader take the observation as
+    part of the claim. The client keeps them visually separate for the same
+    reason (FR-017 in a new place).
+
+    Reads the QPY that `static_check` already produced, so generated code is
+    never executed a second time outside the sandbox.
+    """
+    static = state.get("static")
+    if static is None or static.circuit_qpy is None:
+        return None
+    import io
+
+    from qiskit import qpy
+
+    from qcagent.validators.circuits import NotEvaluable
+    from qcagent.validators.distribution import draft_assertion, outcome_distribution
+
+    try:
+        with io.BytesIO(static.circuit_qpy) as buffer:
+            (circuit,) = qpy.load(buffer)
+    except Exception:  # noqa: BLE001 — bug 21's class; never crash the run
+        return None
+
+    result = outcome_distribution(circuit)
+    if isinstance(result, NotEvaluable):
+        return {"available": False, "reason": result.reason}
+    return {
+        "available": True,
+        "source": result.source,
+        "n_qubits": result.n_qubits,
+        "truncated": result.truncated,
+        "total_outcomes": result.total_outcomes,
+        "omitted_probability": result.omitted_probability,
+        "outcomes": [
+            {
+                "bitstring": outcome.bitstring,
+                "probability": outcome.probability,
+                # The draft is built server-side, by the same code that can
+                # check it, so the client never has to construct grammar.
+                "draft": draft_assertion(outcome, n_qubits=result.n_qubits),
+            }
+            for outcome in result.outcomes
+        ],
+    }
+
+
 def _report_payload(state: dict) -> dict | None:
     """The guarantee report as data for the client.
 
@@ -147,8 +308,13 @@ def _report_payload(state: dict) -> dict | None:
     third.
     """
     report = state.get("guarantee_report")
-    if report is None:
-        return None
+    return None if report is None else _serialise_report(report)
+
+
+def _serialise_report(report) -> dict:
+    """One serialisation, used by both a generated run and a check of a
+    stored circuit. Two would drift, and the thing they would drift about is
+    the verdict."""
     from qcagent.report import render_guarantee_report
 
     return {

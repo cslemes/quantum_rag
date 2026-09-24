@@ -96,6 +96,39 @@
   .codehead.verified { color: var(--verified); background: var(--verified-bg);
                        border-color: var(--verified); }
   .codehead + pre { border-radius: 0 0 6px 6px; }
+  /* ------------------------------------------------------------------
+     The distribution is DESCRIPTIVE. It says what the circuit does; it says
+     nothing about whether that is what was asked for.
+
+     So it lives OUTSIDE the report card and gets neutral treatment: no
+     success colour, no checkmark, no border that echoes the verdict. Someone
+     seeing 50/50 on |000> and |111> will infer correctness themselves — the
+     system must not appear to be making that claim. FR-017 in a new place.
+     ------------------------------------------------------------------ */
+  .dist { border: 1px solid var(--line); border-radius: 6px; padding: 14px; margin-top: 8px; }
+  .dist .src { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  .row { display: grid; grid-template-columns: auto 1fr auto auto; gap: 9px;
+         align-items: center; margin: 5px 0; }
+  .ket { font: 12.5px ui-monospace, Menlo, monospace; color: var(--fg); white-space: nowrap; }
+  .bar { height: 9px; border-radius: 2px; background: var(--line); min-width: 1px; }
+  .pc { font: 12px ui-monospace, Menlo, monospace; color: var(--muted);
+        width: 56px; text-align: right; }
+  .row button { font-size: 11px; padding: 2px 7px; white-space: nowrap; }
+  .dist .tail { font-size: 12px; color: var(--muted); margin-top: 9px; }
+  /* Two DIFFERENT operations, deliberately not alike.
+     "Check this circuit" asks about the artifact on screen: immediate, no
+     model, describes what is already there.
+     "Build circuit" asks for one that does not exist yet: minutes, a new
+     generation, and the assertions are a SPECIFICATION for it.
+     The interface merged these once; keeping them apart is the fix. */
+  .checkbar { display: flex; gap: 9px; align-items: center; flex-wrap: wrap;
+              margin-top: 10px; padding: 10px 12px; border: 1px dashed var(--line);
+              border-radius: 6px; }
+  .checkbar .what { font-size: 12px; color: var(--muted); }
+  .checked { border: 2px solid var(--line); border-radius: 8px; padding: 14px; margin-top: 10px; }
+  .checked.verified   { border-color: var(--verified);   background: var(--verified-bg); }
+  .checked.unverified { border-color: var(--unverified); background: var(--unverified-bg); }
+  .checked .about { font-size: 12px; color: var(--muted); margin-top: 8px; }
   .basenote { font-size: 12px; color: var(--muted); margin-top: 12px;
               border-left: 2px solid var(--line); padding-left: 10px; }
   .health { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
@@ -227,6 +260,100 @@ function renderProgress(d) {
     ${attemptsHtml(d.failures, d.attempt, d.max_iter, d.label, d.elapsed_s)}`;
 }
 
+
+// The distribution panel. Neutral by construction: the only colour is the
+// same --line grey used for borders, so no bar can read as a pass.
+function distributionHtml(dist) {
+  if (!dist) return "";
+  if (!dist.available)
+    return `<label>What the circuit does</label><div class="dist">
+      <div class="src">No output distribution: ${esc(dist.reason || "not evaluable")}</div></div>`;
+
+  const max = Math.max(...dist.outcomes.map(o => o.probability), 1e-12);
+  const rows = dist.outcomes.map((o, i) => `<div class="row">
+      <span class="ket">|${esc(o.bitstring)}&gt;</span>
+      <span class="bar" style="width:${(100 * o.probability / max).toFixed(1)}%"></span>
+      <span class="pc">${(100 * o.probability).toFixed(1)}%</span>
+      <button data-draft="${i}" title="Adds this as an assertion you can check or require">use as assertion</button>
+    </div>`).join("");
+
+  // "exact" vs "sampled" is stated, not assumed: they are different claims.
+  const src = dist.source === "exact"
+    ? "Exact probabilities from the simulated state — not sampled, so there is no shot noise."
+    : "Sampled over 8192 shots (this circuit has no single output state to read exactly).";
+  const tail = dist.truncated
+    ? `<div class="tail">Showing the ${dist.outcomes.length} most likely of
+       ${dist.total_outcomes} outcomes; the rest hold
+       ${(100 * dist.omitted_probability).toFixed(1)}% together.</div>` : "";
+
+  return `<label>What the circuit does <span class="hint">— an observation, not a verdict</span></label>
+    <div class="dist"><div class="src">${src}</div>${rows}${tail}</div>
+    <div class="checkbar">
+      <button id="checkbtn">Check this circuit</button>
+      <span class="what">Evaluates your assertions against <strong>the circuit above</strong>,
+        immediately. No model, nothing regenerated.</span>
+    </div>
+    <div id="checkout"></div>`;
+}
+
+// Turning an observed outcome into a declared assertion is the on-ramp to
+// US3: seeing the distribution is how someone discovers what to assert, and
+// the hard part is the first one. The draft is built SERVER-side by the code
+// that can also check it, so the browser never constructs grammar.
+function wireCheck(token) {
+  const btn = $("checkbtn");
+  if (!btn) return;
+  if (!token) { btn.disabled = true; btn.title = "this run produced no circuit"; return; }
+  btn.onclick = async () => {
+    const text = $("assertions").value.trim();
+    if (!text) { $("assertions").focus(); return; }
+    btn.disabled = true; btn.textContent = "Checking…";
+    const r = await fetch("/api/check", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({token, assertions_text: text})
+    }).then(r => r.json());
+    btn.disabled = false; btn.textContent = "Check this circuit";
+    renderCheck(r);
+  };
+}
+
+// Deliberately NOT styled like a generated run: no attempt list, no elapsed
+// time, no code panel. A check describes the circuit already on screen, and
+// must never be mistakable for a fresh generation.
+function renderCheck(r) {
+  const out = $("checkout");
+  if (!r.ok) { out.innerHTML = `<div class="checked unverified">${esc(r.error)}</div>`; return; }
+  const rep = r.report, v = rep.verified;
+  const n = rep.assertions.length;
+  out.innerHTML = `<div class="checked ${v ? "verified" : "unverified"}">
+    <div class="verdict">${v
+      ? `VERIFIED — ${n} of ${n} declared assertion${n === 1 ? "" : "s"} hold for this circuit`
+      : `NOT VERIFIED — a declared assertion does not hold for this circuit`}</div>
+    <div class="alist">${rep.assertions.map(a => {
+      const k = a.passed === true ? "pass" : a.passed === false ? "violated" : "na";
+      const w = a.passed === true ? "holds" : a.passed === false ? "VIOLATED" : "NOT EVALUABLE";
+      return `<div class="${k}">${esc(a.text)} — ${w}${a.detail ? " · " + esc(a.detail) : ""}</div>`;
+    }).join("")}</div>
+    <div class="about">Checked against the circuit shown above (run ${esc(r.token)}), not a new one.
+      ${v ? "It does <strong>not</strong> mean the circuit is correct beyond these properties." : ""}</div>
+  </div>`;
+}
+
+function wireDrafts(dist) {
+  if (!dist || !dist.available) return;
+  document.querySelectorAll(".row button[data-draft]").forEach(btn => {
+    btn.onclick = () => {
+      const draft = dist.outcomes[+btn.dataset.draft].draft;
+      const ta = $("assertions");
+      if (ta.value.includes(draft)) return;
+      ta.value = (ta.value.trimEnd() + "\n" + draft).trim() + "\n";
+      $("nq").value = dist.n_qubits;   // kets are sized for THIS circuit
+      validate();
+      ta.scrollIntoView({behavior: "smooth", block: "center"});
+    };
+  });
+}
+
 function renderDone(d) {
   const rep = d.report;
   const verified = rep && rep.verified;
@@ -292,8 +419,11 @@ function renderDone(d) {
         ? `VERIFIED against ${rep.assertions.length} declared assertion${rep.assertions.length === 1 ? "" : "s"} — nothing more`
         : "NOT VERIFIED — nothing checked whether this does what you asked"}</div>
       <pre>${esc(d.code)}</pre>` : ""}
+    ${distributionHtml(d.distribution)}
     ${attemptsHtml(d.failures, d.iterations, d.max_iter, null, d.elapsed_s)}
     ${rep ? `<details><summary>Full guarantee report (text)</summary><pre>${esc(rep.text)}</pre></details>` : ""}`;
+  wireDrafts(d.distribution);
+  wireCheck(d.token);
 }
 </script>
 </body>

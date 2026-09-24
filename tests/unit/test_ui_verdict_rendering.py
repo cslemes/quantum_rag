@@ -110,3 +110,69 @@ def test_the_verdict_is_read_from_the_report_never_recomputed() -> None:
     assert not re.search(r"verified\s*=\s*.*executed", source), (
         "the verdict must not be re-derived from sub-facts in the client"
     )
+
+
+# --- the distribution is descriptive, never evaluative (FR-018) ------------
+
+
+def _distribution_source() -> str:
+    start = PAGE.index("function distributionHtml(")
+    return PAGE[start : PAGE.index("\n}", start)]
+
+
+def test_the_distribution_uses_no_verdict_colour() -> None:
+    """Someone seeing 50/50 on |000> and |111> will infer correctness on their
+    own. The system must not appear to be making that claim, so no bar, label
+    or border in this panel may use the success colour — FR-017 in a new
+    place."""
+    source = _distribution_source()
+
+    assert "--verified" not in source
+    assert "verified" not in source.replace("NOT VERIFIED", ""), (
+        "the distribution panel must not reference the verdict at all"
+    )
+    # The only colour the bars use is the same grey as borders.
+    assert "var(--line)" in PAGE[PAGE.index(".bar {") : PAGE.index(".bar {") + 200]
+
+
+def test_the_distribution_is_rendered_outside_the_guarantee_card() -> None:
+    """Inside the card it would read as part of the claim."""
+    done = _render_done_source()
+    card_end = done.index("${stopped}")
+    assert "distributionHtml" not in done[:card_end], (
+        "the observation must not be nested in the verdict's container"
+    )
+    assert "distributionHtml" in done
+
+
+def test_the_panel_says_it_is_an_observation() -> None:
+    source = _distribution_source()
+    assert "an observation, not a verdict" in source
+
+
+def test_exact_and_sampled_are_distinguished_rather_than_blurred() -> None:
+    """They are different claims: one has shot noise and the other does not."""
+    source = _distribution_source()
+    assert "not sampled, so there is no shot noise" in source
+    assert "8192 shots" in source
+
+
+def test_truncation_states_the_omitted_mass() -> None:
+    """Silently dropping outcomes would misrepresent the circuit."""
+    assert "omitted_probability" in _distribution_source()
+
+
+def test_the_draft_assertion_comes_from_the_server() -> None:
+    """The browser must never construct grammar: a second, more forgiving
+    generator would drift from the parser (F11). The server builds the draft
+    with the same code that can check it."""
+    source = PAGE[PAGE.index("function wireDrafts(") :]
+    assert "dist.outcomes[+btn.dataset.draft].draft" in source
+    assert "PROBABILITY(" not in source, "no grammar construction in the client"
+
+
+def test_clicking_a_draft_sizes_the_kets_for_that_circuit() -> None:
+    """No implicit padding in the grammar (bug 10), so a draft pasted at the
+    wrong qubit count would be refused."""
+    source = PAGE[PAGE.index("function wireDrafts(") :]
+    assert '$("nq").value = dist.n_qubits' in source

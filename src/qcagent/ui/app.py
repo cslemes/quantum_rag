@@ -29,7 +29,7 @@ from qcagent.config import settings
 from qcagent.live import LiveServices
 from qcagent.llm.ollama_client import OllamaClient
 from qcagent.retrieval.embedding import FastEmbedEmbedder
-from qcagent.ui.session import check_service_health, run_streaming
+from qcagent.ui.session import check_service_health, check_stored_circuit, run_streaming
 from qcagent.validators.assertions import AssertionParseError, parse_assertions, render_assertion
 from qcagent.validators.sandbox import WorkerPool
 
@@ -67,6 +67,15 @@ class ValidateRequest(BaseModel):
     n_qubits: int
 
 
+class CheckRequest(BaseModel):
+    """Which circuit, named explicitly. Not "the last run" — that changes
+    silently under a second tab, and the one thing a verdict must never be
+    is ambiguous about what it is a verdict ABOUT."""
+
+    token: str
+    assertions_text: str
+
+
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(STATIC / "index.html")
@@ -96,6 +105,24 @@ def validate(request: ValidateRequest) -> dict:
     except AssertionParseError as exc:
         return {"ok": False, "error": str(exc)}
     return {"ok": True, "assertions": [render_assertion(a) for a in parsed]}
+
+
+@app.post("/api/check")
+def check(request: CheckRequest) -> dict:
+    """Evaluate assertions against a circuit that ALREADY EXISTS — no LLM, no
+    generation.
+
+    This separates two operations the interface had merged: "does this
+    circuit satisfy X?" and "generate a circuit satisfying X". Declaring an
+    assertion drafted from an observed distribution used to trigger the
+    second when the user meant the first, and since the generator is
+    unreliable the new circuit routinely violated assertions drafted from the
+    old one.
+
+    A check that passes IS functional verification of that circuit with
+    respect to those assertions, so the report may legitimately say VERIFIED.
+    """
+    return check_stored_circuit(request.token, request.assertions_text)
 
 
 @app.get("/api/run")

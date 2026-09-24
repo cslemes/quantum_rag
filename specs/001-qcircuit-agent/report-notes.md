@@ -1803,6 +1803,75 @@ D15 (emendada); F13; F15.
 
 ---
 
+### F22 — "este circuito satisfaz X?" e "gere um circuito que satisfaça X" são operações diferentes, e a interface as tinha fundido
+
+**O que aconteceu**: FR-018 pôs a distribuição de saída na tela, e com ela um
+botão que transforma um resultado observado numa asserção — a rampa de entrada
+para US3, porque ver o que o circuito faz é como alguém descobre o que
+afirmar. Testado ponta a ponta:
+
+    1. execução sem asserções  -> |00> 50%, |11> 50%
+       rascunhos gerados       -> PROBABILITY(|00>) ~= 0.5, PROBABILITY(|11>) ~= 0.5
+    2. asserções declaradas    -> failed_semantic, AMBAS violadas
+
+Não era bug. Declarar a asserção disparava uma **geração nova**, e a segunda
+produziu um circuito diferente — seis Hadamards e dois CNOTs — que
+legitimamente não satisfazia asserções derivadas do primeiro. O sistema estava
+certo; a interface é que prometia outra coisa.
+
+**A confusão é conceitual, não de affordance.** São duas operações distintas:
+
+| | "este circuito satisfaz X?" | "gere um circuito que satisfaça X" |
+|---|---|---|
+| objeto | artefato que EXISTE | artefato que ainda não existe |
+| custo | imediato, sem LLM | minutos, geração nova |
+| asserção é | uma PERGUNTA sobre o que está na tela | uma ESPECIFICAÇÃO para o que vier |
+| resultado | veredito sobre aquele circuito | veredito sobre um circuito novo |
+
+A interface só tinha a segunda, então a primeira era expressa acionando a
+segunda — e o resultado só coincidia quando o gerador era confiável, que é
+precisamente o regime que este projeto mediu como raro (1,7% de sucesso).
+Quanto pior o gerador, mais a rampa de entrada falha, que é o oposto do que se
+quer de uma rampa de entrada.
+
+**Correção**: `/api/check` avalia asserções contra o QPY ARMAZENADO da
+execução na tela. Sem LLM, sem regeneração, instantâneo. Duas exigências de
+desenho, porque senão a mesma confusão volta noutra forma:
+
+1. **As duas ações são visual e verbalmente distintas.** "Check this circuit"
+   fica junto da distribuição, diz explicitamente "the circuit above", e seu
+   resultado NÃO é renderizado como uma execução: sem lista de tentativas, sem
+   tempo decorrido, sem painel de código. "Build circuit" continua sendo a
+   geração. O botão do rascunho passou de "assert this" para "use as
+   assertion" — ele agora alimenta as duas ações, e dizer qual seria mentir
+   sobre a outra.
+2. **Um check que passa É verificação funcional daquele circuito** com
+   respeito àquelas asserções, então o relatório pode legitimamente dizer
+   VERIFIED. O que ele não pode ser é ambíguo sobre QUAL circuito: o veredito
+   nomeia o token da execução. Por isso o token é por execução e não "a
+   última" — "a última" muda em silêncio quando há uma segunda aba aberta.
+
+O relatório vem de `_build_guarantee_report`, o mesmo construtor da execução
+normal. Um segundo construtor seria a terceira instância de F8/F10, e o que
+ele divergiria seria justamente o veredito.
+
+**Capacidade adjacente, registrada e NÃO construída**: `/api/check` é quase
+toda a máquina de uma funcionalidade que o produto não tem — **verificar um
+circuito que o usuário mesmo escreveu, sem geração alguma**. Falta só aceitar
+código colado em vez de um token. Argumentavelmente é mais útil na prática que
+a geração: o problema real de quem trabalha com Qiskit raramente é escrever o
+circuito, é saber se o que escreveu faz o que ele pensa que faz. Toda a
+maquinaria de verificação deste projeto — asserções, tri-estado, relatório de
+garantia honesto — se aplica igual. Fica anotado como próximo passo natural,
+não como escopo atual.
+
+**Fonte**: `src/qcagent/ui/session.py::check_stored_circuit`;
+`src/qcagent/ui/app.py::check`; `tests/unit/test_check_stored_circuit.py`;
+sequência observada ao vivo (50/50 -> rascunho -> failed_semantic antes,
+-> VERIFIED depois); F8; F10.
+
+---
+
 ### F16 — Um controle que dispara vale mais que uma hipótese que confirma
 
 **O achado mais transferível deste projeto, e não é sobre computação
