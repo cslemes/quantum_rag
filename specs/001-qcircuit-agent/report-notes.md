@@ -1984,6 +1984,34 @@ o código. Em todos os casos a informação existe no momento da criação e é
 descartada — e é precisamente a informação sem a qual o veredito não pode ser
 interpretado.
 
+**A autoaplicação, que fecha o círculo e incomoda**: "uma especificação
+escrita ANTES do artefato existir, cuja anterioridade é verificável" descreve
+exatamente o que desenvolvimento orientado a especificação produz. Os FRs e
+SCs de `spec.md` SÃO critérios independentes — **desde que não tenham sido
+emendados depois de medir o artefato.** Dois foram.
+
+`SC-007` passou de 3 h para 4 h depois de medir 3 h 26 min. `SC-008` foi
+reescrito depois de medir divergência. As duas emendas estão argumentadas e
+eu continuo achando as duas certas — o teto de 3 h era estimativa anterior a
+qualquer medição, e o limiar de 5% de SC-008 conflatava coisas de naturezas
+diferentes. Mas o argumento não é o ponto: **um critério emendado depois de
+observar o artefato deixa de restringi-lo e passa a descrevê-lo.** É o mesmo
+mecanismo do rascunho auto-gerado, numa escala mais lenta e mais respeitável.
+
+Consequência: **a propriedade de independência é POR CRITÉRIO e POR VERSÃO,
+não por documento.** "SC-007 passa" e "SC-003 passa" não são evidências do
+mesmo tipo, e um relatório que os liste na mesma tabela sem distinção está
+fundindo duas coisas.
+
+A auditoria é mecânica, que é justamente a questão — a ordem dos commits a
+torna verificável em vez de afirmada:
+
+| critério | última alteração | relação com a medição | status |
+|---|---|---|---|
+| SC-001 … SC-006, SC-009 | `401dd58`, 2026-09-11 | anterior à primeira execução (2026-09-19) | **independente** |
+| SC-007 | `a837d85`, 2026-09-23 | emendado APÓS medir 3 h 26 min | **descritivo** |
+| SC-008 | `a837d85`, 2026-09-23 | reescrito APÓS medir 50%/36,7% de divergência | **descritivo** |
+
 **Autoconsistência, que vale uma linha**: `circular=True` É a regra de
 proveniência que a generalização acima prescreve, aplicada a este próprio
 sistema — o critério carrega a informação de onde veio, e o veredito a leva
@@ -2764,6 +2792,24 @@ Tudo que limita o que pode ser afirmado a partir deste desenho experimental.
   a frio, o ritmo é ~31 s/run contra 18-21 s antes. Consequências: o ganho de
   −34% atribuído à correção de roteamento foi retirado, e **SC-007 pode
   falhar a frio** — o "2 h 45 min" tinha 15 min de margem que eram o cache.
+- **Dois critérios de sucesso foram emendados DEPOIS de medir, e por isso
+  descrevem o sistema em vez de restringi-lo (F23).** A independência de um
+  critério é por critério e por versão, não por documento:
+  - **SC-001 a SC-006 e SC-009**: alterados pela última vez em `401dd58`
+    (2026-09-11), antes da primeira execução completa (2026-09-19). São
+    critérios independentes no sentido forte — foram escritos sem conhecer o
+    artefato, e a anterioridade é checável na ordem dos commits.
+  - **SC-007**: teto passou de 3 h para 4 h em `a837d85` (2026-09-23), depois
+    de medir 3 h 26 min. A emenda é argumentada (o 3 h era estimativa anterior
+    a qualquer medição, e as medições que pareciam cumpri-lo tinham cache
+    quente), e ainda assim "SC-007 passa" não é evidência do mesmo tipo que
+    "SC-003 passa".
+  - **SC-008**: reescrito no mesmo commit, depois de medir 50% e depois 36,7%
+    de divergência.
+
+  Nenhuma das duas emendas é desonesta, e ambas estão registradas com o
+  raciocínio. O que não se pode fazer é citá-las como se restringissem o
+  sistema: elas o descrevem.
 - **Uma checagem contra critério auto-rascunhado não é evidência (F23).**
   A interface oferece rascunhos de asserção derivados da distribuição
   observada; checá-los contra o mesmo circuito passa por construção, inclusive

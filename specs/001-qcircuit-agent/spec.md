@@ -333,6 +333,21 @@ transforma as 120 tarefas já construídas no ativo de qualidade do produto.
 - **SC-009**: 100% das referências da suíte passam pela verificação
   independente.
 
+> **Independência dos critérios (F23).** Um critério só restringe o artefato se
+> sua origem for independente dele. Isso vale POR CRITÉRIO e POR VERSÃO, não
+> por documento, e a ordem dos commits torna a checagem mecânica:
+>
+> | critério | última alteração | status |
+> |---|---|---|
+> | SC-001 … SC-006, SC-009 | 2026-09-11, antes da 1ª execução (2026-09-19) | **independente** |
+> | SC-007 | 2026-09-23, após medir 3 h 26 min | **descritivo** — emendado pós-medição |
+> | SC-008 | 2026-09-23, após medir a divergência | **descritivo** — emendado pós-medição |
+>
+> As duas emendas estão argumentadas (ver report-notes.md e research.md D20) e
+> não são desonestas. Mas "SC-007 passa" não é evidência do mesmo tipo que
+> "SC-003 passa", e um relatório que as apresente lado a lado sem essa
+> distinção funde duas coisas diferentes.
+
 ---
 
 ## Assumptions
