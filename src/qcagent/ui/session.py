@@ -210,5 +210,13 @@ def check_service_health() -> dict[str, str]:
         httpx.get(f"{settings.ollama_base_url}/api/version", timeout=3).raise_for_status()
         health["ollama"] = settings.ollama_model
     except Exception as exc:  # noqa: BLE001
-        health["ollama"] = f"unreachable: {exc}"
+        # Name the URL. "Connection refused" without it sends people to debug
+        # the container when the usual cause is the SERVER: Ollama binds to
+        # 127.0.0.1 by default, which a container cannot reach however
+        # correctly it is configured.
+        health["ollama"] = (
+            f"unreachable at {settings.ollama_base_url} ({type(exc).__name__}). "
+            "If Ollama runs on the host, it is probably bound to 127.0.0.1 — "
+            "set OLLAMA_HOST=0.0.0.0 and restart it."
+        )
     return health
