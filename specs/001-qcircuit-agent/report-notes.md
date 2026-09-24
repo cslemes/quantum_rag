@@ -52,6 +52,33 @@ quatro para cinco erros).
 Cada achado: o que foi observado, a evidência, por que generaliza, e onde
 deve entrar no relatório.
 
+> ### Os três achados principais, para um público de engenharia de software
+>
+> A maior parte do que segue é específica de verificação de circuitos. Estes
+> três não são, e são os que devem aparecer em primeiro plano no relatório —
+> não no meio da lista:
+>
+> **[F11](#f11) — uma regra só se propaga se for enunciada sobre uma CLASSE
+> e tiver um MECANISMO que falha quando violada.** Testado contra as duas
+> explicações rivais e decidido pelo registro: os Princípios I e IV nasceram
+> com mecanismo e nunca foram violados; os Princípios II e III, no MESMO
+> documento e com a mesma autoridade, não tinham mecanismo e custaram cinco
+> findings. Autoridade do documento não discrimina nada. Inclui F21 como caso
+> particular.
+>
+> **[F23](#f23) — um sistema que sugere o próprio critério de aceitação
+> produz uma checagem que não pode falhar, e é a prestatividade que causa
+> isso.** Mesma estrutura de snapshot testing e de pedir a um LLM que escreva
+> os testes do código que ele gerou. Inclui a autoaplicação incômoda: dois
+> critérios de sucesso deste projeto foram emendados após medição (HARKing do
+> lado do critério), e a auditoria por ordem de commits está registrada.
+>
+> **[F19](#f19) — um teste fora do regime de produção passa independentemente
+> de quão bom ele seja.** Cinco testes de determinismo isolados passaram
+> enquanto o pipeline divergia em 15%. A cobertura é o PRODUTO de quão bem o
+> teste exercita o código e de quão perto sua entrada está da real; a segunda
+> é um fator, não uma parcela.
+
 ### F1 — Oráculos mais estreitos que seus enunciados rejeitam respostas corretas em silêncio
 
 **Observado**: três instâncias independentes, em três tiers diferentes, da
@@ -807,6 +834,8 @@ composição.
 
 ---
 
+<a id="f11"></a>
+
 ### F11 — Uma regra enunciada sobre uma instância não se propaga; enunciada sobre uma classe, sim
 
 **O que aconteceu**: `Statevector(qc)` e `Operator(qc)` levantam `QiskitError`
@@ -942,12 +971,84 @@ classes, propagaram sem manutenção. E o pré-registro foi enunciado sobre
 EXPERIMENTOS, nunca sobre "qualquer critério pelo qual este trabalho será
 avaliado", então não alcançou SC-007 nem SC-008.
 
+**Duas explicações rivais, testadas contra o inventário completo de regras —
+e o resultado muda a prescrição.**
+
+*Rival 1 — autoridade do documento.* O Princípio I vive na constituição, que
+se declara normativa; D10b vive em `research.md`, que registra decisões.
+Talvez o que propague seja ONDE a regra está, não COMO foi quantificada.
+
+*Rival 2 — mecanismo de imposição.* O Princípio I tem
+`test_architecture.py`, que falha quando violado. D10b não tinha nada. Talvez
+a cadeia seja: quantificada sobre classe → torna-se imponível por mecanismo →
+propaga.
+
+**O teste decisivo**: existe alguma regra quantificada sobre CLASSE, SEM
+mecanismo, que tenha propagado assim mesmo?
+
+**Não. E os contraexemplos estão dentro da própria constituição**, o que
+resolve as duas rivais de uma vez:
+
+| princípio | quantificação | mecanismo | quando | violações registradas |
+|---|---|---|---|---|
+| **I** — verificação determinística | classe ("TODA afirmação…") | `test_architecture.py` | **desde o 1º commit**, 2026-09-04 | **nenhuma** |
+| **IV** — referências testadas | classe ("TODA tarefa…") | `validate_oracles.py` como portão | 2026-09-09 | **nenhuma** |
+| **II** — honestidade sobre garantia | classe | `report.py` (campo computado, `extra=forbid`) | **2026-09-23**, depois das falhas | **F8, F10** |
+| **III** — regressão verificável | classe ("TODA mudança…") | campos controlados em `compare.py` | **2026-09-23**, depois das falhas | **F13, F15, F18** |
+
+**Rival 1 está REFUTADA.** Os quatro princípios estão no mesmo documento, com
+a mesma autoridade declarada, no mesmo arquivo. Dois propagaram sem
+manutenção; dois foram violados repetida e caramente. A autoridade do
+documento não discrimina nada.
+
+**Rival 2 SOBREVIVE e é a carga.** O que separa I e IV de II e III é
+exatamente uma coisa: I e IV nasceram com um mecanismo que falha; II e III só
+ganharam o seu depois de as violações os forçarem. O Princípio II — "nenhuma
+saída afirma corretude sem verificação" — estava escrito, era normativo, era
+quantificado sobre classe, e o sistema mesmo assim reportou `success` com o
+texto dizendo NOT VERIFIED (F8). Escrever não bastou. Nem escrever na
+constituição.
+
+**Então a prescrição muda**: enunciar a classe é o PRIMEIRO passo, não o
+passo. A cadeia causal completa é
+
+> quantificar sobre uma classe → **isso torna um mecanismo possível** →
+> o mecanismo é o que propaga.
+
+O quantificador é necessário e insuficiente, e a necessidade tem uma razão
+mecânica, não retórica: **não se consegue escrever um mecanismo para uma regra
+enunciada sobre uma instância.** Um teste para "`num_ctx` deve ser explícito"
+só pode checar `num_ctx`; ele não tem como alcançar `temperature`. Já "nenhuma
+entrada ambiente pode ser herdada" é enumerável — e foi exatamente enumerá-la
+que produziu os campos controlados.
+
+**Isto unifica F11 e F21 numa afirmação mais apertada que qualquer das duas:**
+
+> Uma regra só se propaga se for (a) enunciada sobre uma CLASSE, o que torna um
+> mecanismo possível, e (b) dotada de um MECANISMO QUE FALHA quando violada.
+> Classe sem mecanismo é aspiração — os Princípios II e III são a prova, e
+> custaram cinco findings. Mecanismo sem classe é uma checagem pontual: pega
+> aquele caso e nenhum vizinho.
+
+F21 ("campo gravado que nada verifica é decoração") é o caso particular desta
+regra aplicado a campos de registro; F11 é o caso geral aplicado a regras.
+
+**Refinamento que o registro também dá**: um mecanismo de escopo instância
+detecta TARDE. `route_action` levanta em `error_type` desconhecido — mecanismo
+real, mas enunciado sobre "este arquivo": pegou o bug 20 em produção, duas
+horas dentro de uma execução. `test_taxonomy_closed.py`, que enumera a
+taxonomia inteira contra os três lugares, pega em tempo de autoria. Mesmo
+defeito, mesma família de mecanismo; o que muda o custo é a quantificação.
+
 **O que a reformulação prevê** — que é o teste de ser finding e não moral da
-história: auditar toda regra deste projeto enunciada sobre uma instância e
-enunciar sua classe. Inventário concreto, não exortação. A própria F11 é o
-caso demonstrativo: como "corrigi o sítio errado" (instância) não previu nada;
-como "estado ambiente herdado" (classe) produziu na hora uma lista
-verificável. Reenunciar a regra foi o que a fez funcionar.
+história: auditar toda regra deste projeto enunciada sobre uma instância,
+enunciar sua classe, e então perguntar se existe mecanismo. Inventário
+concreto em duas colunas, não exortação. A própria F11 é o caso demonstrativo:
+como "corrigi o sítio errado" (instância) não previu nada; como "estado
+ambiente herdado" (classe) produziu na hora uma lista verificável — e os dois
+itens dessa lista que viraram campos controlados só pararam de ser risco
+quando `compare.py` passou a recusar comparação, isto é, quando ganharam
+mecanismo.
 
 **Por que a formulação importa**: "corrigi o sítio em vez da classe" descreve
 o passado e não prevê nada. "Todo estado herdado do ambiente que possa alterar
@@ -1619,6 +1720,8 @@ que rodou.**
 
 ---
 
+<a id="f19"></a>
+
 ### F19 — Um teste fora do regime de produção passa independentemente de quão bom ele seja
 
 **A generalização de F11 e F17, e a lição metodológica mais cara deste
@@ -1927,6 +2030,8 @@ sequência observada ao vivo (50/50 -> rascunho -> failed_semantic antes,
 -> VERIFIED depois); F8; F10; F23.
 
 ---
+
+<a id="f23"></a>
 
 ### F23 — Um sistema que sugere o próprio critério de aceitação produz uma checagem que não pode falhar, e é a prestatividade que causa isso
 
