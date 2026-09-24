@@ -807,7 +807,7 @@ composição.
 
 ---
 
-### F11 — Uma regra correta sobre estado HERDADO não se propaga para o próximo estado herdado
+### F11 — Uma regra enunciada sobre uma instância não se propaga; enunciada sobre uma classe, sim
 
 **O que aconteceu**: `Statevector(qc)` e `Operator(qc)` levantam `QiskitError`
 em qualquer circuito que carregue uma medição, e código gerado real termina em
@@ -898,6 +898,56 @@ Duas outras instâncias são da mesma família, com estado herdado de outro
 tipo: o primitivo de remoção de medições aplicado a um caminho de oráculo e
 não aos outros três (bug 11), e `except QiskitError` como contrato implícito
 sobre como a biblioteca falha, cego a `TypeError` (bug 19).
+
+**Reformulação de 2026-09-24, decidida contra o registro e não por analogia.**
+
+A pergunta que a forçou: a disciplina de PRÉ-REGISTRO foi aplicada com rigor
+às hipóteses deste projeto (T090c, H-inc, F16) e não foi aplicada aos
+critérios de sucesso, onde SC-007 e SC-008 acabaram emendados após medir
+(F23). Isso é F11 noutro registro? Não é código, não é ambiente, não é estado
+— é uma disciplina metodológica que não atravessou para o domínio vizinho.
+
+**A tentação a rejeitar primeiro**: generalizar para "regras não se propagam
+além da instância onde foram aprendidas". Isso unifica tudo e **destrói o que
+torna F11 um finding**. A força de F11 é prever: "estado ambiente herdado"
+permitiu ENUMERAR candidatos — driver de GPU, binário do Ollama,
+`PYTHONHASHSEED` — e dois viraram campos controlados. "Regras não se propagam"
+não enumera nada; prevê tudo e portanto nada.
+
+**Mas há uma forma intermediária, e o registro a decide.** O discriminante
+estava neste repositório o tempo todo, em duas regras de qualidade
+equivalente e destinos opostos:
+
+| | como foi enunciada | propagou? |
+|---|---|---|
+| **Princípio I** | "**TODA** afirmação de corretude sobre um circuito gerado DEVE derivar de um verificador determinístico" — quantificada sobre uma CLASSE | **sim** — inclusive para `assertions.py`, escrito muito depois, sem ninguém precisar lembrar |
+| **D10b** | "`num_ctx` fixado explicitamente em cada chamada" — quantificada sobre UM PARÂMETRO | **não** — nem `temperature`, nem estado do servidor, nem cache |
+
+Mesmo autor, mesmo repositório, mesma qualidade de justificativa. A diferença
+é o QUANTIFICADOR.
+
+Logo a forma profunda de F11 não é sobre ambiente, e também não é o vago
+"regras não se propagam":
+
+> **Uma regra enunciada sobre uma INSTÂNCIA não se propaga. Uma regra
+> enunciada sobre uma CLASSE se propaga.** Enunciar a classe é o trabalho — e
+> quem acabou de resolver o caso concreto é justamente quem tem menos motivo
+> para fazê-lo, porque para ele a regra já é óbvia.
+
+Explica o histórico inteiro sem exceção: o primitivo de remoção de medições
+foi enunciado sobre `_prepared_statevector`; `ParameterBindingError` sobre
+`check_energy`; a emenda de taxonomia sobre "este arquivo" — todas instâncias,
+todas falharam em propagar. Os Princípios I-IV, todos quantificados sobre
+classes, propagaram sem manutenção. E o pré-registro foi enunciado sobre
+EXPERIMENTOS, nunca sobre "qualquer critério pelo qual este trabalho será
+avaliado", então não alcançou SC-007 nem SC-008.
+
+**O que a reformulação prevê** — que é o teste de ser finding e não moral da
+história: auditar toda regra deste projeto enunciada sobre uma instância e
+enunciar sua classe. Inventário concreto, não exortação. A própria F11 é o
+caso demonstrativo: como "corrigi o sítio errado" (instância) não previu nada;
+como "estado ambiente herdado" (classe) produziu na hora uma lista
+verificável. Reenunciar a regra foi o que a fez funcionar.
 
 **Por que a formulação importa**: "corrigi o sítio em vez da classe" descreve
 o passado e não prevê nada. "Todo estado herdado do ambiente que possa alterar
@@ -2011,6 +2061,40 @@ torna verificável em vez de afirmada:
 | SC-001 … SC-006, SC-009 | `401dd58`, 2026-09-11 | anterior à primeira execução (2026-09-19) | **independente** |
 | SC-007 | `a837d85`, 2026-09-23 | emendado APÓS medir 3 h 26 min | **descritivo** |
 | SC-008 | `a837d85`, 2026-09-23 | reescrito APÓS medir 50%/36,7% de divergência | **descritivo** |
+
+**O nome estabelecido disso é HARKing** (*Hypothesizing After the Results are
+Known*, Kerr 1998): apresentar como *a priori* uma hipótese formulada depois
+de ver os dados. O que SC-007 e SC-008 fizeram é o análogo do lado do
+CRITÉRIO em vez do lado da hipótese — o limiar, e não a previsão, foi
+ajustado depois da observação.
+
+Citar a literatura aqui não é ornamento: ela já explica por que o passo parece
+inócuo, e explica melhor do que eu tinha explicado. Nenhum passo isolado é
+errado. Medir é certo. Descobrir que o teto era uma estimativa sem base é
+certo. Corrigi-lo com justificativa registrada é certo. **A circularidade só
+fica visível quando a sequência é colapsada** — e quem escreve vive a
+sequência, não o colapso. É por isso que o remédio nunca é "tenha mais
+cuidado": é registrar a ordem de modo que o colapso seja reconstruível por
+terceiros, que é o que a ordem dos commits faz aqui.
+
+**A simetria incômoda, e ela é sobre este trabalho:**
+
+A contramedida padrão para HARKing é PRÉ-REGISTRO — dizer de antemão o que
+contaria. Este projeto fez exatamente isso, e com rigor, **do lado das
+hipóteses**:
+
+- a predição de T090c escrita ANTES de aplicar a correção de roteamento,
+  incluindo as condições de refutação — e foi refutada nos próprios termos
+  que ela declarou;
+- H-inc (reparo incremental) com quatro condições de falsificação nomeadas
+  antes de qualquer teste, mais o risco de ancoragem registrado antes de
+  medi-lo;
+- F16, cuja tese É que nomear de antemão o que NÃO pode mudar é o que
+  distingue ruído de resultado.
+
+E do lado dos critérios de sucesso, a mesma disciplina não foi aplicada. A
+regra existia, estava escrita, estava sendo executada com cuidado — num lado
+só.
 
 **Autoconsistência, que vale uma linha**: `circular=True` É a regra de
 proveniência que a generalização acima prescreve, aplicada a este próprio
