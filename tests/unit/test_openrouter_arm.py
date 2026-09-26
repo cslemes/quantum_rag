@@ -85,3 +85,44 @@ def test_an_unpriced_model_cannot_start() -> None:
 def test_the_config_must_turn_off_the_ollama_protocol() -> None:
     with pytest.raises(ValueError, match="reset_per_run: false"):
         RunConfig(provider="openrouter", model="openai/gpt-6-luna")
+
+
+def test_the_messages_sent_are_byte_identical_to_the_qwen_arm() -> None:
+    """The comparison is between MODELS, so what each model is sent must be
+    the same bytes: both clients send exactly [system, user] with the node's
+    strings, untouched. What cannot match is declared in report-notes.md
+    (temperature, visible-output cap, context window, reasoning)."""
+    from qcagent.llm.ollama_client import OllamaClient
+
+    system = "You write Qiskit 1.2.4 code.\n\nRules: ..."
+    prompt = "Task: prepare a Bell state.\n\n## Retrieved API docs\n- HGate ..."
+    sent: dict[str, list] = {}
+
+    def ollama(request: httpx.Request) -> httpx.Response:
+        sent["qwen"] = json.loads(request.content)["messages"]
+        return httpx.Response(
+            200,
+            json={
+                "message": {"content": "qc = 1"},
+                "prompt_eval_count": 10,
+                "eval_count": 5,
+                "done_reason": "stop",
+            },
+        )
+
+    def openrouter(request: httpx.Request) -> httpx.Response:
+        sent["luna"] = json.loads(request.content)["messages"]
+        return _ok(request)
+
+    qwen = OllamaClient("http://ollama.test")
+    qwen._client = httpx.Client(
+        base_url="http://ollama.test", transport=httpx.MockTransport(ollama)
+    )
+    qwen._generate_impl(system=system, prompt=prompt, seed=1, max_tokens=4096)
+    _client(openrouter)._generate_impl(system=system, prompt=prompt, seed=1, max_tokens=4096)
+
+    assert json.dumps(sent["qwen"]) == json.dumps(sent["luna"])
+    assert sent["luna"] == [
+        {"role": "system", "content": system},
+        {"role": "user", "content": prompt},
+    ]

@@ -3677,6 +3677,62 @@ T090d endereça.
 
 ---
 
+### PREDIÇÃO REGISTRADA — braço de API (piloto GPT-6 Luna), escrita antes de qualquer chamada (2026-09-26)
+
+**A pergunta**: o gargalo medido em S2/S3 — oscilação por reparo regenerativo,
+99% esgotando as cinco tentativas — é da ARQUITETURA ou do GERADOR (qwen2.5
+7B local)? Um braço de API com todo o resto fixo responde.
+
+**Desenho**: mesmas 16 tarefas, mesmo corpus 1.2 (875), mesmos validadores,
+roteamento, corretor (T113+T115) e código (`config.fronteira-b.yaml`); o LLM
+muda em TODOS os papéis (planner, gerador, crítico). Piloto: seed 1 (16
+runs, ~US$ 0,10-0,30). Comparação: S3 (`1eb35fad922ec8ef`), o braço qwen no
+mesmo código.
+
+**Predição (do orientador)**: um modelo de fronteira praticamente elimina a
+classe de símbolos inventados, porque conhece a API real do Qiskit, e
+provavelmente não oscila — logo o sucesso deve subir substancialmente.
+
+**Falsificação**: se oscilar a uma taxa comparável à de S3 (símbolo corrigido
+voltando após outra tentativa: 13 no estrato B), a arquitetura está implicada
+e T090d passa de trabalho futuro a prioridade.
+
+**Regra de decisão sobre um segundo braço (Sonnet 5, US$ 3-9)**:
+- sucesso alto, sem oscilação → respondido: o gargalo é o gerador; um
+  segundo braço acrescenta pouco;
+- oscila também → o resultado mais interessante, implica a arquitetura, e aí
+  um segundo modelo vale o custo para descartar "é só este modelo";
+- falha de modo estranho (erros de API, saída malformada) → problema de
+  integração, corrigido antes de gastar mais.
+
+**Ressalva registrada ANTES do resultado, porque muda a leitura de um dos
+ramos**: a predição e a regra falam de "um modelo de fronteira". GPT-6 Luna,
+pela descrição do próprio OpenRouter, é "o modelo rápido e de baixo custo da
+série GPT-6, posicionado abaixo do GPT-6 Sol". Os ramos se leem assim:
+- Luna NÃO oscila → evidência FORTE de que o gargalo é o gerador — se até o
+  nível pequeno de outra família resolve, a arquitetura não era o limite;
+- Luna OSCILA → AMBÍGUO: compatível com arquitetura implicada e com "modelo
+  pequeno". Nesse caso o próximo passo é um modelo de nível de fronteira
+  (`openai/gpt-6-sol-pro` já está precificado, ou Sonnet 5) — não um segundo
+  modelo pequeno —, e T090d NÃO é promovido com base só no Luna.
+
+**Paridade de integração — o que é igual e o que não pode ser** (checado
+antes de rodar; `tests/unit/test_openrouter_arm.py::test_the_messages_sent_are_byte_identical_to_the_qwen_arm`):
+
+| parâmetro | qwen (S3) | Luna | igual? |
+|---|---|---|---|
+| mensagens enviadas | `[system, user]`, strings dos nós | idem | **byte-idêntico** (teste) |
+| prompts de sistema, recuperação (k=8, corpus 1.2), validadores, roteamento, corretor | código de `41a7b21` | idem | idêntico |
+| `temperature` | 0,0 fixado | **não suportado** pelo modelo (não enviado) | NÃO — decodificação no padrão do provedor |
+| teto de saída visível | `num_predict` = orçamento do nó (512/2048/4096) | orçamento do nó + 12.000 de raciocínio, compartilhados | NÃO — o Luna pode escrever mais texto visível que o qwen podia |
+| janela de contexto | 16.384, com recusa acima disso | ~1.050.000 | NÃO na regra; SIM na prática: a recusa do qwen **nunca disparou** (0 em S2, S3 e na execução completa) |
+| raciocínio | nenhum | esforço `high` | NÃO — é parte do que "o modelo" é |
+| seed | enviado, determinístico sob reset | enviado, não reprodutível | NÃO (ver Threats) |
+| tokenizador | Qwen | GPT | NÃO — contagens de tokens não são comparáveis entre braços |
+| provedor servidor | local | OpenRouter → OpenAI (fixado, sem fallback; contado por chamada) | — |
+
+---
+
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
 
 **Este é o ponto de referência do Princípio III**: o número contra o qual toda
@@ -4008,6 +4064,18 @@ Tudo que limita o que pode ser afirmado a partir deste desenho experimental.
   contra asserções que descreviam seus próprios 25%). Qualquer número ou
   demonstração que dependa de uma checagem com `circular=True` não sustenta
   nada sobre corretude.
+- **O braço de API é um RETRATO, não uma medição reprodutível** (declarado
+  antes de rodar, 2026-09-26). Não existe análogo de `reset_per_run` para um
+  modelo remoto: não há modelo a descarregar nem controle sobre o estado do
+  servidor, o provedor pode trocar o modelo por baixo de um mesmo
+  identificador entre execuções sem mudança visível de versão, e a
+  decodificação não é determinística nem com seed. O braço local (qwen,
+  replay-idêntico 0/360, independência verificada sob reset) continua sendo o
+  reprodutível; o de API responde "como este modelo, neste dia, se comporta
+  nesta arquitetura", e é reportado com data, provedor que serviu cada
+  chamada (fixado, sem fallback) e custo medido. Nenhuma comparação por
+  tarefa entre duas execuções do braço de API tem a garantia que o braço
+  local tem.
 - **A replay-identidade não é independência (F28).** O que se mostrou é
   0/360 idênticos sob uma sequência de chamadas fixa — forte, e raro em
   sistemas com LLM no laço. Não se mostrou, e é falso no protocolo em que

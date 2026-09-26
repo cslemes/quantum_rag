@@ -1431,6 +1431,20 @@ Medir e documentar, seja qual for o resultado.
 
 ## D10 — Seleção de geradores
 
+> **Emenda (2026-09-26) — de dois braços de fronteira para UM, por mudança de
+> escopo.** D10 pedia dois geradores de fronteira de famílias distintas porque
+> alimentavam a MATRIZ EXPERIMENTAL de v1: ablação entre condições, com o
+> segundo braço controlando idiossincrasia de provedor. Essa matriz não existe
+> mais (MIGRATION.md; v2 é uma suíte de regressão). A pergunta que resta para
+> um modelo de API é DIAGNÓSTICA — o gargalo é a arquitetura ou o gerador? —
+> e um modelo capaz a responde. Roda-se um braço (piloto: `openai/gpt-6-luna`
+> via OpenRouter, escolha do mantenedor por custo). Um segundo braço de outra
+> família só se justifica pela regra de decisão registrada em
+> `report-notes.md` ("PREDIÇÃO REGISTRADA — braço de API"): se o primeiro
+> OSCILAR, para descartar "é só este modelo". A redução é de escopo, não de
+> rigor: o controle de família existia para uma comparação que não se faz
+> mais.
+
 **Decisão**: dois de fronteira acessados por API, de famílias distintas, mais
 **Qwen2.5-Coder 7B (Q4_K_M via Ollama)** como gerador local.
 

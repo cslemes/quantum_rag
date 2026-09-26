@@ -271,6 +271,9 @@ Um diagnóstico incorreto é pior que nenhum — ancora o modelo numa direção 
 - O ambiente canônico declarado só passou a corresponder à realidade após emenda
 - Qualquer demonstração apoiada num check `circular=True` não sustenta nada sobre
   corretude
+- O braço de API é um retrato, não uma medição reprodutível: sem análogo de
+  reset, sem controle do estado do servidor, e o modelo pode mudar sob o mesmo
+  identificador; o braço local é o reprodutível
 - Replay-identidade não é independência: toda execução anterior a F28 rodou com
   estado de servidor atravessando tarefas, então comparações por tarefa entre
   execuções com prompts diferentes (incluindo T090c) e a diferença entre seeds
