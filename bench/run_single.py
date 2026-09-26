@@ -79,6 +79,10 @@ def run_task(task_path: Path, *, seed: int, max_iter: int | None = None) -> Agen
 
     It matters concretely: in the last clean suite run `ghz_3q` succeeds on
     seed 2 and fails on 1 and 3. A demo without a stated seed is a coin flip.
+    [F29: that run predates per-run reset (F28), so seed 2 inherited seed 1's
+    server state and the difference may be history, not seed. Stating the
+    seed is still right, for comparability; "seed 2 is the one that works" is
+    under test.]
     """
     task = TaskSpec.model_validate_json(task_path.read_text())
     oracle = _load_oracle(task)

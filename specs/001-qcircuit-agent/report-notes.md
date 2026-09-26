@@ -1875,7 +1875,12 @@ tinha sequer uma flag para escolher o seed, então não havia como tornar a
 observação comparável mesmo sabendo do problema.
 
 **E o efeito é grande, não marginal.** Na última execução limpa, `ghz_3q`
-tem sucesso **apenas no seed 2** e falha em 1 e 3. Uma demonstração por
+tem sucesso **apenas no seed 2** e falha em 1 e 3. **[F29: medido no
+protocolo contaminado de F28, em que o seed 2 herdava o estado do seed 1 — a
+diferença pode ser história, não seed. Declarar o seed continua certo por
+comparabilidade (o ponto deste achado); "o seed 2 é o que funciona" é
+conselho possivelmente derivado de um artefato, sob teste na predição
+`9ce9b42`.]** Uma demonstração por
 `run_single` sem seed explícito falharia pelo motivo errado — não porque o
 sistema não resolve GHZ, mas porque saiu num seed que não converge.
 
@@ -2604,6 +2609,79 @@ DE REPLAY MEDIDO: ZERO"; F15; F18; F19.
 
 ---
 
+### F29 — Uma refutação é compatível com um instrumento quebrado tanto quanto uma confirmação: o espelho de F16
+
+**O que aconteceu**: o orientador propôs que, sob `temperature=0`, os três
+seeds por tarefa seriam redundantes — o que cortaria a suíte para um terço e
+resolveria SC-007. A hipótese foi testada e **refutada** com números que
+pareciam decisivos: em ~66% das tarefas os três seeds produziam código
+diferente, com o MESMO padrão nas duas execuções completas, e dois dos quatro
+sucessos (`ghz_3q`, `qaoa_maxcut_4q_perturbed`) só existiam nos seeds 2 ou 3.
+A refutação sustentou duas decisões: manter os 3 seeds ("cortá-los custa 50%
+dos sucessos") e o conselho de demonstração de F20 ("`ghz_3q` só converge no
+seed 2").
+
+**O instrumento estava quebrado.** Os seeds de uma tarefa rodavam em
+sequência sobre o mesmo estado de servidor (F28): o seed 2 herdava o cache
+deixado pelo seed 1. A diferença entre seeds era, no mínimo em parte,
+diferença de HISTÓRIA. E a concordância entre as duas execuções — o que fazia
+a refutação parecer sólida — era replay: as duas repetiam a mesma sequência
+de chamadas, então reproduziam o mesmo artefato. Sob reset por run, as duas
+tarefas examinadas deram os três seeds idênticos. Se o seed tem algum efeito
+é a predição registrada em `9ce9b42`, ainda não lida; **este achado não
+depende dela**: mesmo que o seed tenha efeito real, a evidência usada para
+refutar a hipótese não distinguia efeito de seed de efeito de história, e não
+era evidência de nada.
+
+**A assimetria que F16 deixou pela metade**: F16 diz que uma confirmação é
+compatível com o experimento íntegro E com o experimento quebrado de um jeito
+que produz o padrão esperado. **A refutação também é.** Um instrumento
+quebrado refuta com a mesma facilidade com que confirma — aqui, porque
+introduzia variação exatamente no eixo testado (entre seeds) por uma causa
+que não era o seed.
+
+**Por que o erro é mais provável no lado da refutação**: rejeitar uma
+hipótese PARECE mais seguro que aceitá-la. Aceitar é acreditar em algo;
+rejeitar é descartar algo, e descartar tem a aparência de conservadorismo —
+"não assumimos que os seeds eram redundantes, testamos, e não eram". Nada no
+ato de descartar o torna autoverificável. A refutação foi recebida sem o
+escrutínio que uma confirmação do mesmo tamanho teria recebido, e virou base
+de duas decisões — uma de custo (3 h 26 min em vez de ~1 h 10 min) e um
+conselho operacional — porque "o resultado conservador" não pareceu pedir
+controle.
+
+**O controle que teria pegado**: o mesmo par (tarefa, seed) em duas ordens
+diferentes. Se a diferença entre seeds fosse efeito de seed, ela não mudaria
+com a ordem; se fosse história, mudaria. É um controle de ARGUMENTO
+ESTRUTURAL, no sentido de F16 — "o seed é uma entrada da chamada; a ordem não
+é" —, e custava 12 runs. Não foi feito porque a refutação não pareceu
+precisar dele.
+
+**O par, que é mais útil que cada metade**:
+
+> **F16**: um controle que dispara vale mais que uma hipótese que confirma —
+> porque uma confirmação é compatível com um instrumento quebrado.
+>
+> **F29**: e uma refutação também. O instrumento tem de ser validado
+> independentemente da direção do resultado. Nomear o que NÃO PODE mudar
+> protege contra confirmações falsas; nomear o que ESTE INSTRUMENTO NÃO
+> CONSEGUE SEPARAR protege contra refutações falsas.
+
+A regra operacional que o par dá: **antes de aceitar um resultado em
+qualquer direção, perguntar que outra causa produziria a mesma variação no
+eixo medido, e se o protocolo a mantém fixa.** Aqui: variação entre seeds;
+outra causa, história de chamadas; mantida fixa, não.
+
+**Onde entra no relatório**: capítulo de metodologia, imediatamente depois de
+F16 e como sua segunda metade. É também a correção pública de uma
+recomendação que o próprio relatório havia dado ao orientador.
+
+**Fonte**: "Os seeds NÃO são redundantes sob `temperature=0`" (a refutação);
+F20 (o conselho de demonstração); F28 (o mecanismo); checagem de
+independência `75ffb6d1b523bbe8`/`3692b5d527adc945`; predição `9ce9b42`; F16.
+
+---
+
 ### F16 — Um controle que dispara vale mais que uma hipótese que confirma
 
 **O achado mais transferível deste projeto, e não é sobre computação
@@ -3021,7 +3099,9 @@ sistema, não ruído.
 > seed 1. Parte da diferença entre seeds pode ser história, não seed. A
 > concordância entre run A e run B é replay e não separa as duas causas. A
 > checagem de independência com ordem de seeds invertida sob `reset_per_run`
-> separa.
+> separa. **A refutação desta seção não era evidência (F29)**, qualquer que
+> seja o resultado da predição `9ce9b42`: o instrumento não separava efeito de
+> seed de efeito de história.
 
 **O que a dimensão de seed compra (run A):**
 
@@ -3412,6 +3492,33 @@ parametrizados (VQE/QAOA/QUBO), que disparam o bug 19.
 2. 19 runs não mediram o sistema, mediram bugs nossos. As taxas acima têm
    denominador 341, e os 19 aparecem separados, nunca diluídos.
 3. `verificado@1 = 0,0%` sobre 341 runs é um zero real, não ausência de dado.
+4. **Precisão (corrigida 2026-09-26, F29)**: as 341 runs NÃO são 341
+   sorteios independentes — são ~3 por tarefa em 119 tarefas, e a tarefa é a
+   unidade de amostragem. Isto vale qualquer que seja o resultado da predição
+   `9ce9b42`: seeds de uma mesma tarefa são correlacionados de qualquer modo;
+   se forem redundantes, o n efetivo é exatamente o número de tarefas.
+   Intervalos de 95%, sorteio independente vs. bootstrap por tarefa (5.000
+   reamostragens):
+
+   | taxa | independente (n=341) | por tarefa | n efetivo |
+   |---|---|---|---|
+   | sucesso 6/341 = 1,8% | [0,8%, 3,8%] | [0,3%, 3,8%] | ≈206 |
+   | `compila@1` 37/341 = 10,9% | [8,0%, 14,6%] | [7,3%, 14,6%] | ≈259 |
+   | `verificado@1` 0/341 | [0, 1,1%] | [0, 3,1%] (Wilson, 119 tarefas) | 119 |
+   | esgotou MAX_ITER 331/341 | [94,7%, 98,4%] | [94,7%, 98,8%] | ≈250 |
+   | import faltando, 112/287 `failed_static` | [33,6%, 44,8%] | [34,9%, 43,3%] | ≥287 |
+   | `ImportError`, 112/287 `failed_static` | [33,6%, 44,8%] | [33,9%, 44,3%] | ≈340 |
+
+   Nenhum intervalo tinha sido reportado para estas taxas; o que se corrige
+   é a precisão IMPLÍCITA de reportá-las sobre 341 como se fossem sorteios.
+   O n efetivo das taxas de desfecho (~200-260) fica ENTRE 119 e 341 porque,
+   no protocolo antigo, os seeds variavam — e variavam em parte pela
+   contaminação de F28, de modo que mesmo esse n efetivo descreve um processo
+   contaminado. As proporções da distribuição de falhas quase não mudam: a
+   causa da falha varia pouco dentro de uma tarefa. **O resultado de
+   determinismo não é afetado**: ali cada duplicata testa replay, que é o que
+   ele afirma. Regra daqui em diante: toda taxa desta suíte é reportada com
+   intervalo POR TAREFA.
 4. Fidelidade média sai `n/a`: nenhum oráculo distribucional chegou a rodar,
    consequência de 84% parar em `failed_static`.
 

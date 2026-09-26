@@ -168,6 +168,11 @@ baixo é diagnóstico, não resultado.*
 1,8% de sucesso; 84% param antes da verificação funcional; 331 de 335 falhas
 esgotam as cinco tentativas.
 
+**Precisão**: toda taxa com intervalo POR TAREFA (119 tarefas), não por run —
+as ~3 runs por tarefa não são sorteios independentes (F29). Ex.: sucesso 1,8%,
+IC 95% [0,3%, 3,8%] por tarefa, contra [0,8%, 3,8%] tratando 341 como
+independentes.
+
 **A leitura**: o gargalo não é o modelo errar a física — é que ele raramente
 chega lá. E o loop, quando engaja, praticamente nunca converge.
 
@@ -237,7 +242,9 @@ instâncias, todas de **estado ambiente herdado**.
 
 ### 6.5 Medir o que se pensa estar medindo
 
-- Um controle que dispara vale mais que uma hipótese que confirma
+- Um controle que dispara vale mais que uma hipótese que confirma — e uma
+  refutação é tão compatível com um instrumento quebrado quanto uma confirmação
+  (F16 + F29: o par)
 - Reconhecer o padrão esperado não é evidência (cometido duas vezes)
 - N fontes de não-determinismo em série
 - Teste fora do regime de produção passa, por melhor que seja — e o regime
