@@ -2520,6 +2520,13 @@ qualquer quantidade de revisão de desenho teria.
 
 ## D20 — Critério de reprodutibilidade em duas camadas (emenda a SC-008)
 
+> **Emenda (2026-09-26, F28).** O piso de 0/360 medido depois desta decisão é
+> replay-identidade sob sequência de chamadas fixa, não independência entre
+> tarefas: com o unload do modelo feito uma vez por suíte, o cache de
+> prompt/KV do Ollama atravessa tarefas e muda a saída. As execuções passam a
+> usar `reset_per_run: true` (padrão em `RunConfig`), e a medição de SC-008
+> o exige.
+
 **Decisão**: SC-008 deixa de ser um limiar único de 5% e passa a ter duas
 camadas com critérios de naturezas diferentes: **igualdade exata (0%)** para o
 que controlamos, e **piso de ruído medido e reportado** para o que não

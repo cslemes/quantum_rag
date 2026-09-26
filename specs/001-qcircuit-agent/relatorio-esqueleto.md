@@ -173,7 +173,18 @@ chega lá. E o loop, quando engaja, praticamente nunca converge.
 
 ### 5.2 Determinismo
 
-0/360 em quatro medidas, com o protocolo que o viabiliza.
+**0/360 replay-idênticos sob uma sequência de chamadas fixa**, em quatro
+medidas, com o protocolo que o viabiliza. É um resultado forte — poucos
+sistemas com LLM no laço podem afirmá-lo — e é exatamente isso: a mesma
+execução, repetida com a mesma ordem de tarefas, se reproduz byte a byte.
+
+**Não** foi mostrado, e no protocolo original é falso, que o resultado de uma
+(tarefa, seed) independe das outras: o cache de prompt/KV do servidor de
+inferência carrega estado de uma tarefa para a seguinte e muda a saída a
+`temperature=0` (F28). Apresentar aqui o protocolo corrigido
+(`reset_per_run`), a medição de independência que o valida, e o custo
+aceito por ele (segunda emenda a SC-007). Redação anterior desta seção
+("0/360 em quatro medidas") implicava uma independência nunca medida.
 
 ### 5.3 Recuperação
 
@@ -229,7 +240,9 @@ instâncias, todas de **estado ambiente herdado**.
 - Um controle que dispara vale mais que uma hipótese que confirma
 - Reconhecer o padrão esperado não é evidência (cometido duas vezes)
 - N fontes de não-determinismo em série
-- Teste fora do regime de produção passa, por melhor que seja
+- Teste fora do regime de produção passa, por melhor que seja — e o regime
+  tem de corresponder à pergunta, não só ao ambiente: o piso zero foi medido
+  em produção, mas por replay, e a pergunta era independência (F19, F28)
 
 ### 6.6 Diagnóstico e reparo
 
@@ -251,6 +264,10 @@ Um diagnóstico incorreto é pior que nenhum — ancora o modelo numa direção 
 - O ambiente canônico declarado só passou a corresponder à realidade após emenda
 - Qualquer demonstração apoiada num check `circular=True` não sustenta nada sobre
   corretude
+- Replay-identidade não é independência: toda execução anterior a F28 rodou com
+  estado de servidor atravessando tarefas, então comparações por tarefa entre
+  execuções com prompts diferentes (incluindo T090c) e a diferença entre seeds
+  dentro de uma execução estão confundidas
 
 [FONTE: `report-notes.md`, Threats to Validity — já escrito]
 

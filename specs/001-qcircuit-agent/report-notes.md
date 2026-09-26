@@ -1836,6 +1836,17 @@ mecanismos em vez de lembretes: o que finalmente pegou o defeito não foi
 lembrar da regra, foi um procedimento (rodar o piloto em duas execuções frias)
 que a impunha.
 
+**Quinta instância (F28, 2026-09-26)**, e a que mostra que "regime de
+produção" não basta como regra: o piso de ruído zero foi medido com duas
+execuções completas, frias, no ambiente real — exatamente o que esta entrada
+prescreve — e ainda assim no regime errado. As duas repetiam a mesma
+sequência de chamadas, então testavam "a mesma execução se repete?"; a
+pergunta de que o portão e toda comparação antes/depois dependem é "uma
+tarefa independe das outras?". O teste passou e a pergunta não foi feita. A
+regra se refina: o regime tem de corresponder à PERGUNTA, não só ao
+ambiente — e a pergunta de uma comparação envolve dois históricos
+diferentes, que um replay nunca produz.
+
 **Fonte**: cinco testes de determinismo isolados (todos verdes); pilotos
 `5dfdc4d31e6d9f68` e `b2dab2cf17c16b39` (frios, 15% de divergência de
 sequência, 5/20 códigos diferentes); teste do ponto de chamada do planner
@@ -2545,6 +2556,14 @@ análise errada: a suíte trata (tarefa, seed) como independentes, e não são.
 3. SC-008 e o portão de T101b: o piso "zero" vale para replays da mesma
    configuração, não para comparações antes/depois — que é o uso do portão.
 
+**É a quinta instância de F19.** A checagem de piso zero foi feita num regime
+— replay de uma sequência de chamadas idêntica — que não correspondia à
+pergunta que importava, que era se as tarefas são independentes. O teste
+passou, e a pergunta não foi feita. Diferente das quatro anteriores, aqui o
+teste era caro, completo e no ambiente de produção; o regime errado não era
+o ambiente, era a HISTÓRIA de chamadas, que as duas execuções compartilhavam
+por construção.
+
 **A contramedida disponível**: unload por (tarefa, seed), para que cada run
 dependa só da própria história. Custa um carregamento de modelo por run
 (segundos; +5-10 min no subconjunto de 48, +30-60 min na suíte de 360 — o
@@ -2554,7 +2573,7 @@ custo, então não é decidida unilateralmente.
 **Fonte**: `results/f5a69657457574a3` (S0), `results/4c19589509bcf833`
 (checagem), duas execuções isoladas de `qaoa_maxcut_4q_perturbed`
 (2026-09-26); `bench/runner.py::reset_generator_state`; "PISO DE RUÍDO
-MEDIDO: ZERO"; F15; F18; F19.
+DE REPLAY MEDIDO: ZERO"; F15; F18; F19.
 
 ---
 
@@ -2856,12 +2875,19 @@ interpretável.
 
 ---
 
-### PISO DE RUÍDO MEDIDO: ZERO. O sistema é determinístico (runs `99960870239e97e7` e `7de38e77ac071bd3`, 2026-09-22)
+### PISO DE RUÍDO DE REPLAY MEDIDO: ZERO — 0/360 idênticos sob sequência de chamadas fixa (runs `99960870239e97e7` e `7de38e77ac071bd3`, 2026-09-22)
 
-> **Qualificado por F28 (2026-09-26)**: o zero é de REPLAY — as duas execuções
-> tinham o mesmo histórico de chamadas. A saída de uma tarefa depende da tarefa
-> anterior no mesmo estado de servidor, então o zero não vale para comparações
-> entre execuções com prompts diferentes.
+> **Corrigido em 2026-09-26 (F28).** Título original: "PISO DE RUÍDO MEDIDO:
+> ZERO. O sistema é determinístico". O que foi mostrado é **0/360
+> replay-idênticos sob uma sequência de chamadas fixa**: as duas execuções
+> tinham a mesma ordem de tarefas e, portanto, o mesmo histórico de estado no
+> servidor em cada ponto. Continua sendo um resultado forte — poucos sistemas
+> com LLM no laço podem afirmá-lo. O que a redação original implicava, e que
+> NUNCA foi medido, é que o resultado de uma (tarefa, seed) independe das
+> demais. Não independe: com o unload feito uma vez por suíte, o cache de
+> prompt/KV do Ollama leva estado de uma tarefa para a seguinte e muda a
+> saída a `temperature=0` (F28). As afirmações abaixo que dependiam da
+> independência estão marcadas no próprio lugar.
 
 **Duas execuções completas, mesmo código, mesmo corpus, cache frio nas duas.
 Divergência em TODAS as medidas: 0.**
@@ -2897,7 +2923,11 @@ sequência, registrada porque o erro do meio é instrutivo:
    repetido, carga/descarga do modelo, prompts intercalados). Nenhuma delas
    era o regime de produção. Escrevi F19 e violei F19 na conclusão seguinte.
 3. *"É controlável, e o sistema é determinístico"* — medido no regime de
-   produção, 0/360.
+   produção, 0/360. **[Corrigido, F28: o que se mediu é replay-identidade
+   sob sequência fixa. Era o regime de produção para a pergunta "a mesma
+   execução se repete?", e não para "uma tarefa independe das outras?" — a
+   que o portão e toda comparação antes/depois fazem. Quarta posição,
+   portanto, e a mesma lição de F19.]**
 
 O que tornou (2) falso foi um protocolo, não uma descoberta: descarregar o
 modelo antes da execução e fixar `keep_alive` para impedir recarga no meio.
@@ -2913,6 +2943,14 @@ como está: qualquer mudança por tarefa É uma mudança real, e sair com códig
 1 numa regressão não gera falso positivo nenhum. A camada estatística seria
 complexidade paga para resolver um problema medido como inexistente.
 
+> **Retirada condicionada (F28).** A premissa era "o piso é zero"; o zero é de
+> replay. Uma comparação antes/depois muda prompts, e sob contaminação entre
+> tarefas uma mudança real na tarefa k se espalha para k+1..N — o diff por
+> tarefa vira mancha em vez de ponto, e a função do portão (localizar a
+> regressão numa tarefa) falha. Com `reset_per_run` (padrão desde F28), a
+> retirada volta a valer SE a independência for medida; até essa medição,
+> T101b não está resolvida.
+
 O que o portão PRECISA ganhar, em vez disso, é a garantia de que as duas
 execuções comparadas foram produzidas sob o protocolo que torna o zero
 válido: recusar a comparação quando `lib_versions` divergir nos campos
@@ -2924,7 +2962,9 @@ de F8/F10, aplicado à comparação em vez de ao veredito.
 **O que isto destrava**: a comparação antes/depois de T090c pode ser refeita
 com validade. Todos os deltas pequenos declarados ininterpretáveis em
 "Threats to validity" tornam-se mensuráveis — não porque o ruído foi
-estimado, mas porque foi ELIMINADO.
+estimado, mas porque foi ELIMINADO. **[Corrigido, F28: só sob
+`reset_per_run`. Refazer T090c no protocolo antigo reproduziria a
+contaminação cruzada, porque a correção muda os prompts.]**
 
 ---
 
@@ -2948,6 +2988,13 @@ seed mesmo com `temperature=0` — a decodificação não é argmax puro. E o
 efeito é **determinístico**: run A e run B concordam nos três números e nas
 mesmas tarefas, o que confirma que seed é uma entrada reprodutível do
 sistema, não ruído.
+
+> **Confundido (F28).** Os seeds 1, 2 e 3 de uma tarefa rodaram em
+> sequência sobre o mesmo estado de servidor: o seed 2 herdava a história do
+> seed 1. Parte da diferença entre seeds pode ser história, não seed. A
+> concordância entre run A e run B é replay e não separa as duas causas. A
+> checagem de independência com ordem de seeds invertida sob `reset_per_run`
+> separa.
 
 **O que a dimensão de seed compra (run A):**
 
@@ -3070,6 +3117,18 @@ entre braços no mesmo subconjunto não precisam de estimativa de ruído. Três
 braços: **S0** (código e corpus atuais), **S1** (corpus 1.2), **S2** (corpus
 1.2 + corretor). A suíte completa roda uma vez, depois de S2, só para o número
 ponta a ponta.
+
+> **Emenda de protocolo (2026-09-26), texto registrado acima mantido como
+> escrito.** (1) A frase sobre o piso zero estava errada: o zero é de replay
+> (F28), e sem reset por run o estrato B se moveria por efeito do estrato A.
+> Os três braços rodam com `reset_per_run: true`; o S0 original
+> (`f5a69657`) foi descartado como braço e é refeito sob o mesmo protocolo,
+> ANTES de qualquer mudança no corpus. Métricas, estratos, previsões e
+> condições de refutação não mudam. (2) A suíte completa deixa de ser parte
+> da sequência: roda se houver tempo, é reportada à parte, e nada é
+> condicionado a ela — a própria predição diz que o número ponta a ponta
+> provavelmente não se move, e o corpus é corrigido porque está errado, não
+> porque o efeito foi medido.
 
 **Métricas**: (m1) taxa de erros ensinados pelo corpus — `ImportError` de
 símbolo ausente no runtime mas presente no corpus antigo, mais
@@ -3369,12 +3428,14 @@ uma falha de RAG se diagnostica, e é independente de qualquer tamanho de
 efeito.
 
 **A versão medida ficou barata e está disponível** (não feita aqui; a
-interface tem prioridade): a suíte é determinística (0/360), `analysis/
-compare.py` já faz comparação por tarefa com recusa quando as condições
-diferem, e o nó de recuperação pode ser desligado. Duas execuções completas
-sob o protocolo controlado dariam o efeito do RAG com o mesmo rigor que
-qualquer outro número deste projeto — e, com piso de ruído zero, qualquer
-diferença observada seria real.
+interface tem prioridade): a suíte é replay-idêntica (0/360 sob sequência
+de chamadas fixa), `analysis/compare.py` já faz comparação por tarefa com
+recusa quando as condições diferem, e o nó de recuperação pode ser
+desligado. Duas execuções completas sob o protocolo controlado dariam o
+efeito do RAG com o mesmo rigor que qualquer outro número deste projeto.
+**[Corrigido, F28: "qualquer diferença observada seria real" exige
+`reset_per_run`; desligar o retrieval muda todos os prompts, e no protocolo
+antigo cada tarefa carregaria o efeito das anteriores.]**
 
 **Fonte**: `estado-e-aprendizados.md` §5 — este achado NÃO está registrado
 em `research.md`; recuperado do único outro documento de estado do projeto
@@ -3418,6 +3479,17 @@ Tudo que limita o que pode ser afirmado a partir deste desenho experimental.
   contra asserções que descreviam seus próprios 25%). Qualquer número ou
   demonstração que dependa de uma checagem com `circular=True` não sustenta
   nada sobre corretude.
+- **A replay-identidade não é independência (F28).** O que se mostrou é
+  0/360 idênticos sob uma sequência de chamadas fixa — forte, e raro em
+  sistemas com LLM no laço. Não se mostrou, e é falso no protocolo em que
+  todas as execuções até 2026-09-26 rodaram, que o resultado de uma (tarefa,
+  seed) independe das anteriores: o estado de cache do servidor atravessa
+  tarefas e muda a saída a `temperature=0`. Toda comparação por tarefa entre
+  execuções com prompts diferentes — T090c incluída — carrega essa
+  contaminação, e a diferença entre seeds medida dentro de uma execução
+  mistura efeito de seed com efeito de história. A partir de F28 as
+  execuções usam `reset_per_run`; números anteriores a isso não devem ser
+  comparados por tarefa com números posteriores.
 - **Zeros são robustos; deltas pequenos não são (F15, F19).** `verificado@1 =
   0,0%` sobre 341 runs é um zero REAL: ruído de amostragem pode mover um
   número, não pode fabricar 341 ausências de sucesso na primeira tentativa. A

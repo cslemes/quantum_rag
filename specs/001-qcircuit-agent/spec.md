@@ -314,7 +314,18 @@ transforma as 120 tarefas já construídas no ativo de qualidade do produto.
   (F18). Medido a frio: 3 h 26 min, em duas execuções independentes (205m47s e
   205m45s). Cortar seeds para caber em 3 h foi testado e rejeitado: custaria 50%
   das tarefas com sucesso, porque sob `temperature=0` o seed ainda altera a
-  saída e os 3 seeds são cobertura real, não redundância.
+  saída e os 3 seeds são cobertura real, não redundância. **[F28: essa
+  diferença entre seeds foi medida com os seeds rodando em sequência sobre o
+  mesmo estado de servidor, então mistura efeito de seed com efeito de
+  história; a checagem de independência a separa.]**
+  **2ª emenda (2026-09-26), por PROTOCOLO e não por medição — F28**: a suíte é
+  medida com `reset_per_run: true` (unload do modelo antes de cada (tarefa,
+  seed)). A razão é substantiva e anterior a qualquer número: sem isso a saída
+  de uma tarefa depende da anterior, e o portão de `compare.py` não consegue
+  localizar uma regressão numa tarefa. O custo (uma carga de modelo por run) é
+  ACEITO como consequência do protocolo, e **o teto de 4 h não é reajustado a
+  ele**: se a suíte exceder 4 h sob o protocolo, SC-007 é reportado como
+  reprovado, com a causa. Ver report-notes.md, "Segunda emenda a SC-007".
 - **SC-008** (emendado — ver research.md D20 e report-notes.md F15/F17/F19):
   duas execuções da suíte sobre o mesmo código, corpus e configuração são
   comparadas em DUAS camadas, porque só uma delas está sob nosso controle:
@@ -330,6 +341,10 @@ transforma as 120 tarefas já construídas no ativo de qualidade do produto.
     e **todo efeito alegado tem de exceder esse piso**.
   - A medição de SC-008 EXIGE limpar `.cache/llm` entre as duas execuções
     (F18) — sem isso o resultado é 0% por construção.
+  - E EXIGE `reset_per_run` (F28). Duas execuções com a mesma ordem de tarefas
+    medem replay-identidade; uma comparação antes/depois muda prompts, e sem
+    reset por run a mudança numa tarefa se propaga às seguintes. O 0/360 de
+    2026-09-22 é replay-identidade sob sequência fixa, não independência.
 - **SC-009**: 100% das referências da suíte passam pela verificação
   independente.
 
@@ -340,7 +355,7 @@ transforma as 120 tarefas já construídas no ativo de qualidade do produto.
 > | critério | última alteração | status |
 > |---|---|---|
 > | SC-001 … SC-006, SC-009 | 2026-09-11, antes da 1ª execução (2026-09-19) | **independente** |
-> | SC-007 | 2026-09-23, após medir 3 h 26 min | **descritivo** — emendado pós-medição |
+> | SC-007 | 2026-09-23, após medir 3 h 26 min | **descritivo** — emendado pós-medição. A 2ª emenda (2026-09-26, F28) muda o PROTOCOLO de medição e não o teto, então não altera este status nem o repete |
 > | SC-008 | 2026-09-23, após medir a divergência | **descritivo** — emendado pós-medição |
 >
 > As duas emendas estão argumentadas (ver report-notes.md e research.md D20) e

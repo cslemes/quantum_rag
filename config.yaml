@@ -27,3 +27,9 @@ tasks: all
 max_iter: 5
 
 results_dir: results
+
+# Unload the model before EVERY (task, seed) — F28. Without it, Ollama's
+# prompt/KV cache carries state from one task to the next and a task's result
+# depends on the task before it, so a per-task comparison cannot localize a
+# regression. Costs one model load per run (SC-007, second amendment).
+reset_per_run: true

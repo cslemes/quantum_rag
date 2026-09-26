@@ -66,6 +66,16 @@ class RunConfig(BaseModel):
     tasks: list[str] | str = "all"
     max_iter: int = Field(default_factory=lambda: settings.max_iter)
     results_dir: Path = Field(default_factory=lambda: settings.results_dir)
+    # Unload the model before EVERY (task, seed), not once per suite (F28).
+    # Ollama's prompt/KV cache carries state from one task to the next and
+    # changes the answer at temperature 0, so without this a task's result
+    # depends on which task ran before it: a change to task k moves k+1..N,
+    # and a per-task comparison (analysis/compare.py) smears instead of
+    # localizing. Costs one model load per run — the SC-007 amendment in
+    # report-notes.md records that cost as a consequence of the protocol.
+    # Part of the config, so it is recorded with the results and changes the
+    # run_id.
+    reset_per_run: bool = True
 
     @classmethod
     def load(cls, path: Path) -> "RunConfig":
@@ -402,11 +412,14 @@ def run_suite(
     tasks_dir: Path = TASKS_DIR,
     usage: Usage | None = None,
     lib_versions: dict[str, str] | None = None,
+    reset_state: Callable[[], None] | None = None,
 ) -> Path:
     """Validates every configured reference, then runs the suite. Returns the
     JSONL path. `task_runner` and `lib_versions` are injectable so the
     Principle IV block can be tested without a sandbox, an LLM or a live
-    Ollama (T100)."""
+    Ollama (T100). `reset_state` is called before every run when
+    `config.reset_per_run`; left None on the live path, it unloads the
+    configured model."""
     tasks = load_tasks(config, tasks_dir)
     failures = verify_references(tasks)
     if failures:
@@ -445,7 +458,9 @@ def run_suite(
             # (F15).
             "ollama_temperature": str(settings.ollama_temperature),
             "ollama_num_ctx": str(settings.ollama_num_ctx),
-            "generator_state": "reset_before_run",
+            "generator_state": "reset_before_each_run"
+            if config.reset_per_run
+            else "reset_before_suite",
             # A guard whose result is not recorded is only half a guard.
             # Verified EXACTLY here and nowhere else: the check needs the
             # model loaded, `reset_generator_state` unloads it, and calling
@@ -456,10 +471,16 @@ def run_suite(
         }
     usage = usage or Usage()
     runner = task_runner or _graph_runner(config, usage)
+    if reset_state is None and task_runner is None:
+
+        def reset_state() -> None:
+            reset_generator_state(settings.ollama_base_url, config.model)
 
     with jsonl.open("a") as sink:
         for task in tasks:
             for seed in config.seeds:
+                if config.reset_per_run and reset_state is not None:
+                    reset_state()
                 usage.reset()
                 started = time.perf_counter()
                 state = _run_one(runner, task, seed, config.max_iter)

@@ -26,3 +26,6 @@ tasks:
   - qaoa_maxcut_4q_perturbed
 max_iter: 5
 results_dir: results
+
+# F28 — see config.yaml. All three arms (S0, S1, S2) run under it.
+reset_per_run: true
