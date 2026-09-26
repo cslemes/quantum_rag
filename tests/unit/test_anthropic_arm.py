@@ -57,4 +57,6 @@ def test_the_ollama_protocol_must_be_turned_off_explicitly() -> None:
     config has to say they do not apply, not have them silently skipped."""
     with pytest.raises(ValueError, match="reset_per_run: false"):
         RunConfig(provider="anthropic", model="claude-sonnet-5")
-    RunConfig(provider="anthropic", model="claude-sonnet-5", reset_per_run=False, protocol_canary=[])
+    RunConfig(
+        provider="anthropic", model="claude-sonnet-5", reset_per_run=False, protocol_canary=[]
+    )
