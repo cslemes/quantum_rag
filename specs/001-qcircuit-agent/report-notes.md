@@ -2272,6 +2272,228 @@ sequência medida ao vivo no container; F16; F22.
 
 ---
 
+### F24 — `library_version="1.2.4"` estava em todos os 1.019 chunks, e o conteúdo não era da 1.2.4
+
+**O que o campo afirmava**: todo ponto da coleção `qdocs` carrega
+`library_version="1.2.4"`, e o retriever filtra por ele (`target_version`,
+T035 existe para que esse filtro seja rápido). A leitura natural é "o corpus
+documenta a versão que o runtime tem".
+
+**O que o conteúdo era**: `ingest.py` raspa as páginas SEM versão da
+documentação (`/api/qiskit/circuit_library`), que servem a versão MAIS
+RECENTE (2.x), e carimba em cada chunk a constante `LIBRARY_VERSION`. O campo
+nunca foi derivado do conteúdo nem conferido contra o runtime; foi atribuído.
+Verificado contra o Qiskit instalado (1.2.4):
+
+- **24 classes indexadas não existem no runtime** — `GraphStateGate`,
+  `PhaseOracleGate`, `FullAdderGate`, `HalfAdderGate`, `AndGate`, `OrGate`,
+  `MCMTGate`, `IntegerComparatorGate`, `WeightedSumGate`,
+  `PauliProductRotationGate`, … — além de funções 2.x como `efficient_su2`,
+  `pauli_two_design`, `excitation_preserving`, `unitary_overlap`,
+  `hamiltonian_variational_ansatz`, e métodos como `QuantumCircuit.box`.
+- **Um símbolo existe nas duas versões com NATUREZA diferente**:
+  `qiskit.circuit.library.grover_operator` é, na 1.2.4, um **submódulo**
+  (o arquivo `grover_operator.py`); na 2.x é uma **função**. O corpus
+  documenta `grover_operator(oracle, state_preparation=None, ...)`. O import
+  funciona, a chamada levanta `TypeError: 'module' object is not callable`.
+  Idem `phase_estimation`.
+
+**O custo medido no baseline `ce9614fa3a6f60a6`**: **27 dos 287
+`failed_static` (9,4%) terminaram num erro ensinado pelo corpus** — 5
+`ImportError` de símbolo 2.x, **21 dos 28 `TypeError`** (20 `grover_operator`,
+1 `phase_estimation`: o modo de falha modal de `TypeError` inteiro é este) e 1
+`AttributeError` (`qc.box`). Em todas as tentativas: 56 `ImportError` e 94
+`'module' object is not callable`, em 28 runs. Nesses casos `retry_retrieval`
+não é só ineficaz: **é a causa**, e repeti-lo reapresenta a mesma página.
+Amostrados também os 12 `QiskitError` finais (rótulo de Pauli `"Z0"`,
+dimensão de `StatePreparation`, norma de amplitude, formas incompatíveis):
+**nenhum** corresponde a uso documentado na 2.x — são erros do modelo. Idem
+`GR`/`GRZ` sem `phi` (a assinatura no corpus é a mesma da 1.2.4) e
+`cu1`/`cu3`/`cphase` (removidos na 1.0; memória do pré-treino, não do corpus).
+
+**A versão fixada estava disponível o tempo todo**: a documentação expõe
+URLs versionadas (`/docs/en/api/qiskit/1.2/...`, 200). O índice
+`1.2/circuit_library` lista 126 páginas da biblioteca e **nenhuma** de
+`GraphStateGate`, `PhaseOracleGate` ou `grover_operator`;
+`1.2/qiskit.circuit.library.grover_operator` responde 404. A correção real é
+raspar a versão fixada, não filtrar a 2.x — um filtro de importabilidade
+deixaria passar `grover_operator` (importável, natureza errada) e qualquer
+mudança de assinatura, e seria mitigação parcial.
+
+**Por que é o mesmo defeito de F21, e não um descuido de ingestão**: o campo
+foi GRAVADO, nada o CONFERIU, e ele AFIRMAVA algo sobre a origem do conteúdo
+que o conteúdo não sustentava. T033 ("adicionar metadados `library_version`")
+está marcada como feita e está feita — o campo existe. O que nunca existiu foi
+a pergunta "este chunk é mesmo da 1.2.4?". Um filtro por um campo não
+verificado é pior que nenhum filtro: dá ao retriever, e a quem lê o código, a
+garantia de que a versão está controlada. É F8 no nível do corpus: um campo
+estruturado dizendo o contrário da realidade, e todo o resto confiando no
+campo.
+
+**Contramedida**: (1) ingestão a partir das URLs `/1.2/`; (2) o campo passa a
+ser CHECADO na ingestão — todo símbolo de topo indexado precisa resolver no
+runtime fixado para um objeto do tipo documentado (classe/função, não
+submódulo), e falha aborta a ingestão em vez de pular (F13: tolerância
+silenciosa sobre a variável independente do trabalho); (3) M1 (`recall@8`)
+reavaliado, como D17 exige a cada mudança significativa do corpus.
+
+**Fonte**: coleção `qdocs` (1.019 pontos, payloads extraídos 2026-09-25);
+`src/qcagent/retrieval/ingest.py` (`LIBRARY_VERSION`, `_INDEX_PAGES`);
+runtime `~/.venvs/qcagent`, qiskit 1.2.4; baseline `ce9614fa3a6f60a6`; F8;
+F13; F21.
+
+---
+
+### F25 — Retrieval não entrega conhecimento negativo: 104 dos 112 "símbolos inexistentes" nunca existiram, e nenhuma página diz isso
+
+**A leitura anterior** (baseline, F14): as duas linhas de 39% dos
+`failed_static` eram OPOSTAS — `NameError` sobre símbolo existente
+(retrieval não acrescenta um `import`) e `ImportError` sobre símbolo
+inexistente, "onde `retry_retrieval` é a ação certa, mais documentação pode
+corrigir". A correção de T090c separou a primeira e deixou a segunda roteada
+para retrieval.
+
+**Verificado símbolo a símbolo** (112 runs cuja última tentativa foi
+`ImportError`, contra o runtime 1.2.4 e contra o corpus):
+
+| classe | runs | exemplos |
+|---|---|---|
+| **nunca existiu** em versão nenhuma do Qiskit | **104 (92,9%)** | `H` 26, `RZ` 24, `CNOTGate` 20, `CNOT` 12, `RY` 7, `Hadamard` 7 |
+| ensinado pelo corpus 2.x (F24) | 5 (4,5%) | `GraphStateGate`, `PhaseOracleGate` |
+| existe, módulo/natureza errados | 2 | `SparsePauliOp` de `circuit.library`; `initialize` |
+| **removido** — o caso `u3` | **1 (0,9%)** | `PauliSumOp` |
+
+Sobre todas as 570 tentativas com `ImportError` (36 símbolos): 499 (87,5%)
+nunca existiram, 56 (9,8%) vieram do corpus, 12 eram o módulo errado, 2
+removidos.
+
+**Por que retrieval não podia corrigir**: o caso `u3` funcionou porque `u3`
+EXISTIU e foi removido — há uma página que diz "removido, use `circuit.u()`",
+e retrieval tem uma correção para encontrar. `H` nunca existiu; **o corpus
+documenta o que existe, não o que não existe**, e nenhuma página contradiz
+`from qiskit.circuit.library import H`. A informação necessária — "`H` não é
+um símbolo deste módulo; `HGate` é" — é conhecimento negativo, e um corpus de
+documentação não o contém por construção.
+
+**A consequência medida**: depois de uma tentativa falhar num símbolo
+inventado, a tentativa seguinte importa **o mesmo símbolo de novo em 60%**
+das transições no baseline, e entre 58% e 68% nas seis execuções completas
+existentes (`ce9614fa`, `6cf69f6a`, `487eb611`, `5a4be658`, `7de38e77`,
+`99960870`). A linha de 39% de "símbolo inexistente" foi roteada, antes e
+depois de T090c, para uma ação que em ~99% dos casos não tinha correção a
+oferecer — a mesma falha estrutural que T090c consertou na outra linha, não
+identificada nesta.
+
+**Correção a uma hipótese que eu havia levantado**: supus que a consulta de
+retrieval derivava do símbolo ausente, fazendo de `H` uma consulta patológica
+de um caractere. Não deriva: `retriever.py::_build_query_text` concatena
+enunciado, requisitos e o `retrieval_hint` do crítico. O que o crítico
+efetivamente escreveu no hint não é verificável — ver F27.
+
+**A saída de desenho**: derivar a correção do RUNTIME em vez de esperar que a
+documentação a contenha — o mecanismo de `u3` generalizado, e o de
+`MissingImport` (T090c) estendido. A fonte de verdade é o namespace do Qiskit
+instalado, nunca a lista de símbolos indexada (F24: ela contém símbolos que o
+runtime não tem). Protótipo sobre os 36 símbolos observados: resolve **105
+dos 112 runs (94%)** e 524 das 570 tentativas (92%) com três regras
+determinísticas — tabela de aliases (F26), sufixo `Gate`, normalização de
+caixa/sublinhado. Os não resolvidos (`HamiltonianVariationalAnsatz`,
+`PhaseExp`, `PauliSumOp`, …) não têm equivalente na 1.2.4.
+
+**Sobre a taxonomia**: a divisão que importa não é "inventado vs obsoleto" —
+obsoleto já tem categoria (`DeprecatedAPI`) e mecanismo próprios, e
+distinguir inventado de removido exigiria o histórico de versões, que não está
+indexado, para separar 104 de 1. A divisão é pela AÇÃO disponível: há um
+símbolo real próximo no runtime (correção determinística, `retry_generation`)
+ou não há (`HallucinatedSymbol`, retrieval como hoje).
+
+**Fonte**: baseline `ce9614fa3a6f60a6`; as seis execuções completas acima;
+`src/qcagent/validators/static.py::_importable_symbols`;
+`src/qcagent/nodes/retriever.py`; "Exemplo trabalhado: o caso `u3`"; F3; F14;
+F24.
+
+---
+
+### F26 — Os símbolos inventados não são aleatórios: são o vocabulário do PennyLane aplicado ao Qiskit
+
+**O padrão**: dos 499 `ImportError` sobre símbolo que nunca existiu no Qiskit
+(todas as tentativas do baseline), conferidos contra o PennyLane 0.38
+instalado no mesmo venv:
+
+| origem do nome | tentativas | símbolos |
+|---|---|---|
+| **nome EXATO de operação do PennyLane** | **261 (52%)** | `RZ` 118, `CNOT` 48, `Hadamard` 44, `RY` 36, `PauliZ` 9, `X` 4, `PauliX` 1, `RX` 1 |
+| nome do PennyLane + sufixo `Gate` do Qiskit | 94 (19%) | `CNOTGate` 85, `HadamardGate` 5, `PauliZGate` 2, `ToffoliGate` 2 |
+| `H` — não é nome do PennyLane 0.38 | 121 (24%) | provavelmente o método `qc.h` em maiúscula, ou notação de livro-texto |
+| outros | 23 (5%) | `HamiltonianVariationalAnsatz`, `CU3`, `PhaseExp`, … |
+
+**71% dos símbolos inventados são a nomenclatura de outro framework**, às
+vezes híbrida com a convenção do Qiskit (`CNOTGate` = nome do PennyLane com o
+sufixo do Qiskit). Não é alucinação no sentido de nome sem origem: é
+**transferência de vocabulário entre bibliotecas do mesmo domínio**, vinda do
+pré-treino — o PennyLane não está no corpus (`source` ∈ {`qiskit_api`,
+`migration_guide`}).
+
+**Por que isto importa para a correção**: explica por que uma tabela curta de
+aliases resolve o que busca aproximada não resolveria. `difflib` entre
+`Hadamard` e `HGate` não acha nada; entre `CNOT` e `CXGate`, também não — os
+nomes não são grafias próximas, são NOMES DE OUTRO SISTEMA para o mesmo
+objeto. A tabela é um mapeamento entre vocabulários, e é pequena porque o
+vocabulário de portas é pequeno.
+
+**Por que importa fora deste projeto**: num domínio com vários frameworks
+concorrentes para as mesmas operações, o erro dominante de um gerador de código
+não é inventar — é confundir qual framework está escrevendo. Isso sugere uma
+classe de mitigação que retrieval não oferece: fixar o vocabulário do
+framework-alvo no prompt, ou traduzir entre vocabulários na validação.
+
+**O que NÃO está estabelecido**: a atribuição é por coincidência de nome, não
+por evidência causal. `RZ`/`RY`/`X` também são notação de livro-texto, e parte
+dos 52% pode vir daí; o que separa as hipóteses é `Hadamard` e `PauliZ`, que
+não são notação de livro-texto e são nomes exatos do PennyLane. `H` (24%) é a
+exceção que o padrão não explica, e está registrado como tal.
+
+**Fonte**: baseline `ce9614fa3a6f60a6`; `pennylane` 0.38.0 no venv
+`qcagent`; F25.
+
+---
+
+### F27 — O trace de cada run é acumulado e descartado, e era exatamente o que o diagnóstico de F25 precisava
+
+**O que aconteceu**: para saber se `retry_retrieval` falhou em corrigir `H`
+por falta de conteúdo ou por consulta ruim, era preciso ver o que o crítico
+pediu (`retrieval_hint`) e o que o retriever devolveu. Nada disso existe nos
+resultados. `AgentState.trace` acumula, a cada nó, a consulta enviada, o
+número de chunks e as decisões — e `RunRecord` (`bench/schema.py`) persiste
+24 campos, nenhum deles o trace, a `CriticDecision`, o hint ou os ids dos
+chunks recuperados. Ao fim do run, tudo isso é descartado.
+
+**Consequência**: o diagnóstico post-hoc do comportamento de retrieval é
+IMPOSSÍVEL em qualquer run já feito — incluindo os 2.160 das seis execuções completas. A hipótese "a consulta
+derivada de `H` é patológica" só pôde ser corrigida lendo o código do
+retriever; se verificá-la exigisse dado, não haveria como. F25 se apoia no
+conteúdo do corpus, não no comportamento observado do retriever, por falta de
+escolha.
+
+**A ironia**: o próprio código já enuncia a regra — em `state.py`, sobre
+`ErrorRecord`: *"a failure mode that only appears in a trace nobody persists
+is a failure mode nobody measures."* Ela foi aplicada aos erros do planner e
+não ao trace inteiro. É F11 mais uma vez (regra enunciada sobre uma instância
+não se propaga) e F21 numa forma nova: F21 era informação gravada e nunca
+checada; esta é informação **coletada e jogada fora** — o dado existiu em
+memória durante o run e nunca chegou ao disco.
+
+**Contramedida (barata)**: persistir o trace no `RunRecord`, ou no mínimo, por
+iteração, a `CriticDecision` (ação, `rationale`, `retrieval_hint`) e os
+`doc_id` dos chunks recuperados. O custo é espaço em disco; não há custo de
+LLM nem de tempo de execução.
+
+**Fonte**: `src/qcagent/state.py` (`trace`, comentário de `ErrorRecord`);
+`bench/schema.py::RunRecord`; `src/qcagent/nodes/retriever.py`; F11; F21;
+F25.
+
+---
+
 ### F16 — Um controle que dispara vale mais que uma hipótese que confirma
 
 **O achado mais transferível deste projeto, e não é sobre computação
@@ -2751,6 +2973,77 @@ controle já construído e ignorado.
 tarefa previa — paralelizar por tarefa (o `WorkerPool` suporta, D1b) ou
 reduzir seeds. Não decidida unilateralmente: muda o que a suíte mede. Ver
 "Open questions".
+
+---
+
+### PREDIÇÃO REGISTRADA — corpus na versão fixada (T111), depois corretor de símbolo (T113), medidos SEPARADAMENTE — escrita antes de qualquer teste (2026-09-26)
+
+**Por que em duas etapas e medidas entre elas**: as duas intervenções atuam no
+mesmo caminho, e o corretor consertaria erros que o corpus criou. Medidas
+juntas, o efeito do corretor sairia inflado e nenhuma das duas teria efeito
+atribuível. Ordem: corpus primeiro (remove a causa), corretor depois (trata o
+que o corpus não pode conter, F25).
+
+**Subconjunto, não a suíte**: a métrica de mecanismo não precisa das 120
+tarefas. 16 tarefas × 3 seeds = 48 runs (~25 min a frio, contra 3 h 26 min),
+em dois estratos tirados da execução `99960870239e97e7`:
+
+- **Estrato A — erros ensinados pelo corpus** (8): `dj_constant_4q`,
+  `dj_constant_4q_perturbed`, `dj_balanced_4q`, `simon_6q_perturbed`,
+  `grover_3q`, `grover_4q`, `ising_weighted_maxcut_4q`,
+  `ising_field_coupling_4q_perturbed`.
+- **Estrato B — só símbolos inventados** (8): `bell_phi_plus_2q`, `ghz_5q`,
+  `qft_5q`, `w_state_5q`, `qpe_4q`, `bv_4q`, `reversible_half_adder_4q`,
+  `qaoa_maxcut_4q_perturbed`.
+
+O piso de ruído medido é zero (runs `99960870`/`7de38e77`), então diferenças
+entre braços no mesmo subconjunto não precisam de estimativa de ruído. Três
+braços: **S0** (código e corpus atuais), **S1** (corpus 1.2), **S2** (corpus
+1.2 + corretor). A suíte completa roda uma vez, depois de S2, só para o número
+ponta a ponta.
+
+**Métricas**: (m1) taxa de erros ensinados pelo corpus — `ImportError` de
+símbolo ausente no runtime mas presente no corpus antigo, mais
+`'module' object is not callable`, mais `AttributeError` de método 2.x;
+(m2) **taxa de repetição do mesmo símbolo** — fração das transições
+`ImportError(s)` → tentativa seguinte que importa `s` de novo; (m3)
+`compila@1`; (m4) sucesso e `esgotou MAX_ITER`.
+
+| métrica | S0 → S1 (corpus) prevê | S1 → S2 (corretor) prevê |
+|---|---|---|
+| m1, estrato A | **cai para ~0** | já ~0; não pode subir |
+| m2, estrato B | **não muda** (CONTROLE: o corpus não contém nem contradiz `H`) | **cai para perto de zero** |
+| m2, estrato A | cai (sai a contribuição do corpus) | cai no que restar |
+| `compila@1` | pode mudar (a tentativa 1 lê o corpus novo) | **não pode mudar** (CONTROLE: o corretor atua em tentativas ≥ 2) |
+| sucesso / `esgotou MAX_ITER` | move pouco | **move pouco — ver abaixo** |
+
+**Por que o sucesso ponta a ponta provavelmente NÃO se move, declarado
+antes**: o precedente direto é `MissingImport` (T090c). Aquela correção estava
+certa — a classe estava mal roteada, a ação nova era a certa — e
+`esgotou MAX_ITER` foi de 98,8% para 98,9%. Dois mecanismos já medidos
+explicam, e os dois se aplicam aqui: (1) resolver um erro estático só revela o
+seguinte, e o seguinte costuma ser semântico; (2) o reparo é REGENERATIVO — o
+reparo incremental (T090d) não foi implementado — e o histórico
+`MissingImport, WrongGateDecomposition, WrongGateDecomposition, MissingImport`
+mostra o modelo perdendo, ao regenerar, a correção que tinha acabado de
+aplicar. Um `HGate` corrigido na tentativa 2 pode voltar a `H` na tentativa
+4. Se isso acontecer, m2 cai menos do que o previsto, e a causa é a
+oscilação, não o corretor — o que é distinguível olhando se a reincidência é
+imediata (corretor falhou) ou após uma tentativa limpa (oscilação).
+
+**Condições de refutação:**
+
+1. **m1 não cair no estrato A em S1** — o corpus não era a causa desses
+   erros, e F24 superestima seu custo.
+2. **m2 cair no estrato B em S1** — o controle disparou: algo além do corpus
+   mudou entre S0 e S1 (F15/F18), e a comparação S0→S1 está contaminada.
+3. **m2 não cair no estrato B em S2** — o modelo não obedece a uma correção
+   explícita de símbolo, e a premissa do corretor (a informação faltante era
+   o nome) está errada.
+4. **`compila@1` mudar entre S1 e S2** — contaminação, como em F15.
+5. **sucesso subir substancialmente em S2** — não refuta nada, mas contraria
+   o precedente de `MissingImport`, e a explicação teria de ser procurada
+   antes de ser creditada ao corretor (F6).
 
 ---
 

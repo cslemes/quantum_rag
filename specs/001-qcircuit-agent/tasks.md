@@ -112,7 +112,7 @@ para todas, incluindo os vereditos de falha.
 
 ## Phase 4: User Story 2 — Evitar interfaces obsoletas (P1)
 
-**Status**: ✅ **IMPLEMENTADA**. Preservada sem alteração.
+**Status**: ✅ **IMPLEMENTADA**; reaberta por T111/T113 (F24, F25).
 
 **Goal**: eliminar uso de API depreciada via recuperação versionada.
 
@@ -135,6 +135,16 @@ para todas, incluindo os vereditos de falha.
 - [X] **T040b** [US2] Escrever teste do caso crítico em `tests/unit/test_hybrid.py` — consulta contendo `RZGate` traz o chunk de `RZGate` acima do de `RXGate`. Se falhar, o ramo esparso não contribui: verificar o modifier IDF antes de trocar o modelo denso
 - [X] **T041** [US2] Escrever `analysis/eval_retrieval.py` — `recall@8` e MRR; **portão M1: recall@8 ≥ 0.85**
 - [X] **T042** [US2] Escrever `tests/integration/test_us2_flow.py` cobrindo os 3 cenários de aceitação da US2
+
+**Reaberta em 2026-09-26 (F24–F27)**: o corpus era da documentação 2.x
+carimbada como 1.2.4, e o laço de reparo não tem conhecimento negativo sobre
+símbolos inventados. Ordem obrigatória: T111 → medir S1 → T113 → medir S2
+(predição registrada em `report-notes.md`, "corpus na versão fixada").
+
+- [ ] **T111** [US2] Ingerir a documentação da versão FIXADA: URLs `/docs/en/api/qiskit/1.2/...` em `ingest.py` (`_SOURCES`, `_INDEX_PAGES`, marcador de href de `_discover_symbol_urls`, que hoje não casaria com o segmento `/1.2/`). **Verificar `library_version` em vez de atribuí-lo** (F24): todo símbolo de topo indexado deve resolver no runtime fixado para um objeto da natureza documentada (classe/função — submódulo reprova, é o caso `grover_operator`); falha ABORTA a ingestão (F13). Reavaliar M1 (`recall@8`) e corrigir consultas de `tests/retrieval/queries.jsonl` que apontem para símbolos 2.x
+- [ ] **T112** [US7] Persistir o trace no `RunRecord` — no mínimo, por iteração, `CriticDecision` (ação, `rationale`, `retrieval_hint`) e os `doc_id` recuperados (F27). Precede as medições S0/S1/S2, para que elas sejam as primeiras diagnosticáveis
+- [ ] **T113** [US2] Corretor de símbolo derivado do RUNTIME, nunca da lista indexada (F25): `ImportError` sobre símbolo ausente → vizinho real por tabela de aliases de vocabulário (F26), sufixo `Gate`, normalização de caixa/sublinhado; correção determinística injetada, `retry_generation`. Nova categoria `UnknownSymbol` (há vizinho) vs `HallucinatedSymbol` (não há), atualizar `data-model.md`. Excluir submódulos de `_importable_symbols()` — hoje ela devolve 143 nomes que são módulos, o que também afeta `MissingImport`
+- [ ] **T114** [US7] Medir S0, S1, S2 no subconjunto de 48 runs (16 tarefas × 3 seeds, estratos A/B) e a suíte completa uma vez após S2; registrar contra a predição
 
 **Checkpoint (M1)**: recuperação validada isoladamente. `recall@8` = 0,9524 (D17-1). ✅
 
