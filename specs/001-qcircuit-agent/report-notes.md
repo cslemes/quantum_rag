@@ -3236,6 +3236,68 @@ imediata (corretor falhou) ou após uma tentativa limpa (oscilação).
 
 ---
 
+### PREDIÇÃO REGISTRADA — os seeds são redundantes sob `reset_per_run` (2026-09-26), escrita ANTES de ler o S0 refeito
+
+**Estado no momento da escrita**: o S0 refeito sob `reset_per_run` (config
+`config.subset.yaml`, 16 tarefas × 3 seeds) já estava rodando — foi lançado
+antes desta predição ser pedida — e **nenhuma saída dele foi lida**. Esta
+entrada é commitada antes da leitura; o hash do commit precede o do
+resultado.
+
+**Origem**: na checagem de independência de F28, sob reset por run, os 3
+seeds de cada uma das 2 tarefas produziram o MESMO `final_code`. Duas tarefas
+não sustentam nada; esta predição diz o que 16 decidem.
+
+**Mecanismo proposto**: sob reset por run, o seed do run só entra nas
+chamadas ao LLM (opção `seed` do Ollama) e na chave do cache de disco — os
+validadores usam seeds FIXOS próprios (simulador, `seed_transpiler`, os seeds
+1-3 de Hellinger, `random_statevector`), verificado no código. A
+`temperature=0` a decodificação é gulosa, e o seed não deveria ter onde agir.
+A diferença entre seeds medida antes ("Os seeds NÃO são redundantes") teria
+sido CONTAMINAÇÃO CRUZADA: o seed 2 herdava o estado de servidor do seed 1.
+
+**Predição (H-red)**: no S0 refeito, **16/16 tarefas** têm os três seeds
+byte-idênticos em `final_code`, sequência de erros e trace.
+
+**Refutação, declarada antes**: **uma única tarefa** com seeds divergentes
+refuta a redundância absoluta. O mecanismo é binário — na decodificação
+gulosa o seed age ou não age —, então não há limiar tolerante a exceções: uma
+exceção significa que o seed tem efeito, e aí o que se reporta é quantas
+tarefas e onde a divergência começa (o trace de T112 localiza). Divergência
+entre seeds de uma mesma tarefa também não pode ser atribuída a ordem, porque
+F28 mostrou 6/6 de independência de ordem sob o mesmo protocolo.
+
+**Limite de generalização**: 16 tarefas escolhidas por outro critério
+(estratos A/B). Confirmação sobre as 120 exige uma execução completa; a suíte
+noturna condicional (fora da sequência) mede isso sem custo adicional, e até
+lá a afirmação vale para o subconjunto.
+
+**Consequências SE confirmada — registradas agora para não serem
+racionalizadas depois:**
+
+1. **SC-007 passa sem tocar o teto nem otimizar a espera.** 360 → 120 runs:
+   ~69 min de geração (3 h 26 min / 3) + 120 × ~6,5 s de reset ≈ **1 h 20
+   min**. Ainda assim é uma mudança de protocolo (`seeds: [1]`) e é decisão
+   do mantenedor, não consequência automática.
+2. **Duas decisões anteriores se invertem.** (a) A manutenção dos 3 seeds foi
+   justificada por "cortá-los custa 50% dos sucessos" (`ghz_3q` só no seed 2,
+   `qaoa_maxcut_4q_perturbed` só no 2 ou 3). Se essa variação era
+   contaminação, a justificativa é nula. (b) O conselho de F20 e da docstring
+   de `bench/run_single.py` — "`ghz_3q` succeeds on seed 2 and fails on 1 and
+   3. A demo without a stated seed is a coin flip" — é conselho derivado de um
+   artefato: sob o protocolo novo, o seed não é o que decide.
+3. **O tamanho amostral efetivo de toda TAXA do baseline cai para 120.** Três
+   seeds redundantes são redundância tripla, não três sorteios; intervalos
+   calculados com n=360 eram estreitos demais. (O resultado de determinismo
+   não é afetado: ali as duplicatas testam replay, que é o que ele afirma.)
+   Ver "Correção da precisão reportada", que NÃO depende desta predição.
+
+**Se refutada**: os 3 seeds são cobertura real sob o protocolo novo, a
+decisão de mantê-los se sustenta por outra razão que a original, e SC-007
+continua dependendo da otimização da espera ou reprova por minutos.
+
+---
+
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
 
 **Este é o ponto de referência do Princípio III**: o número contra o qual toda
