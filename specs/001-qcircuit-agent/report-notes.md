@@ -3376,6 +3376,51 @@ racionalizadas depois:**
 decisão de mantê-los se sustenta por outra razão que a original, e SC-007
 continua dependendo da otimização da espera ou reprova por minutos.
 
+### RESULTADO — CONFIRMADA: 16/16 tarefas com os três seeds byte-idênticos (S0 refeito, `21494e564a3a119c`, 2026-09-26)
+
+Commit limpo `e489ec3`, `generator_state=reset_before_each_run`,
+`qdocs_points=1019` (corpus antigo), cache de disco frio. Para **todas** as 16
+tarefas, os seeds 1, 2 e 3 produziram `final_code`, sequência de erros e
+trace idênticos. Nenhuma exceção; a condição de refutação (uma tarefa
+divergente) não ocorreu.
+
+**O que isto estabelece, e o que não**: no subconjunto, sob o protocolo novo,
+o seed não tem efeito — o que é o esperado mecanicamente para decodificação
+gulosa. A diferença de ~66% entre seeds medida antes era, portanto, efeito do
+protocolo contaminado (F28), não do seed; F29 deixa de ser uma possibilidade
+e passa a ser o caso para estas 16 tarefas. A generalização para as 120 fica
+com a execução completa (condicional, noturna), como registrado.
+
+**Consequências, na forma registrada antes da leitura:**
+
+1. **SC-007**: uma suíte de 120 runs (`seeds: [1]`) caberia em ~1 h 20 min.
+   É mudança de protocolo e **decisão do mantenedor**; não aplicada aqui.
+2. **As duas decisões se invertem**: a justificativa dos 3 seeds ("cortar
+   custa 50% dos sucessos") é nula para o subconjunto — `qaoa_maxcut_4q_perturbed`
+   tem sucesso nos TRÊS seeds agora; e o conselho "`ghz_3q` só converge no
+   seed 2" é derivado de artefato até prova em contrário (`ghz_3q` não está
+   no subconjunto).
+3. **n efetivo**: sob o protocolo novo, o n efetivo de uma execução é
+   exatamente o número de tarefas. Isto se aplica AGORA aos braços deste
+   experimento: S0, S1 e S2 têm **16 unidades, não 48**, e toda contagem de
+   `analysis/symbol_arms.py` é três cópias de um mesmo desfecho. Os braços
+   S1/S2 mantêm os 3 seeds registrados — trocar o protocolo no meio do
+   experimento seria pior que o custo, e os seeds repetidos replicam H-red
+   de graça sob o corpus novo e sob o corretor —, mas os resultados são
+   reportados por tarefa.
+
+**Contraste que mede o tamanho do problema de F28**: o S0 contaminado
+(`f5a69657`) e o S0 limpo diferem em desfecho, não só em detalhe — estrato B
+teve 8 sucessos lá e 3 aqui; m2 no estrato B foi 57% lá e 81% aqui. A
+contaminação movia resultados, não apenas ruído na margem.
+
+**Linha de base limpa para T114 (S0, por tarefa = contagens ÷ 3):**
+
+| estrato | m1 (ensinados pelo corpus) | runs c/ m1 | m2 repetição | `compila@1` | sucesso | esgotou |
+|---|---|---|---|---|---|---|
+| A | 16 tentativas | 5/8 tarefas | 8/12 = 67% | 1/8 | 0/8 | 8/8 |
+| B | 0 | 0/8 | 17/21 = 81% | 1/8 | 1/8 | 7/8 |
+
 ---
 
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
