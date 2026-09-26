@@ -3772,6 +3772,24 @@ seu valor ficaria restrito a geradores sem raciocínio, como o local.
 > mensagem do provedor no erro; a tentativa tinha perdido o "Limit 8000,
 > Requested 17075" para um "413 Payload Too Large" sem corpo.
 
+> **Segunda emenda antes de qualquer execução válida (2026-09-26): o braço
+> passa a `gpt-6-luna` pela API DA OPENAI DIRETAMENTE** (escolha do
+> mantenedor; Groq inviável neste plano, OpenRouter bloqueado pelo proxy).
+> Sondado antes (custo ~US$ 0,0015):
+> - limites: 200.000 tokens/min e 500 req/min; um prompt de 14.010 tokens é
+>   aceito — o modo de falha do Groq não se repete;
+> - **`temperature: 0` é REJEITADO** ("só o padrão (1) é suportado"). O braço
+>   AMOSTRA a temperatura 1, contra 0 no qwen. Não há como igualar; a
+>   diferença entra na tabela de paridade, e torna L2 — o piso de ruído — a
+>   parte mais importante do protocolo;
+> - `reasoning_effort` aceita `none | low | medium | high | xhigh`. **L0 roda
+>   com `none`: raciocínio DESLIGADO de fato** (0 tokens de raciocínio na
+>   sonda), então L1 × L0 separa PRESENÇA de raciocínio, e a terceira leitura
+>   é testável por inteiro — ao contrário do Groq;
+> - a ressalva de "não é fronteira" vale como registrada para o Luna.
+> Configurações: `config.openai-L1.yaml` / `-L2` (idênticas, esforço `high`) e
+> `-L0` (esforço `none`); seed 1; cache de disco limpo antes de cada braço.
+
 **Como os três se leem juntos**, nomeado antes para não ser escolhido depois:
 - L1 × L2 → o piso: fração de tarefas cujo desfecho (status) muda entre duas
   execuções idênticas, e a variação da métrica de oscilação. Uma diferença
