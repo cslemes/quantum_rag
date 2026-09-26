@@ -312,7 +312,8 @@ def make_critic_node(
                 generation_hint=(
                     f"{correction.reason}. Replace that import with exactly this line:\n\n"
                     f"    {correction.import_line}\n\n"
-                    f"and use `{correction.replacement}` wherever the code used `{correction.symbol}`. "
+                    f"and use `{correction.replacement}` wherever the code used "
+                    f"`{correction.symbol}`. "
                     "Keep the rest of the circuit as it is — the gates themselves were "
                     "not what failed. Include EVERY import the code needs."
                 ),
