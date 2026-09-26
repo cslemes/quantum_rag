@@ -3,7 +3,7 @@
 # two strata, chosen from run 99960870239e97e7 before any arm ran.
 #   Stratum A — errors taught by the 2.x corpus (F24)
 #   Stratum B — invented symbols only (F25); control for S0->S1
-model: claude-opus-5
+model: claude-sonnet-5
 provider: anthropic
 seeds: [1, 2, 3]
 tasks:

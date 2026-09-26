@@ -27,7 +27,7 @@ class _StubMessages:
 
 
 def _client() -> tuple[AnthropicClient, _StubMessages]:
-    client = AnthropicClient(api_key="test", model_id="claude-opus-5")
+    client = AnthropicClient(api_key="test", model_id="claude-sonnet-5")
     stub = _StubMessages()
     client._client = SimpleNamespace(messages=stub)  # type: ignore[assignment]
     return client, stub
@@ -43,7 +43,7 @@ def test_thinking_and_effort_are_explicit_and_headroom_is_added() -> None:
     assert stub.kwargs["max_tokens"] == 512 + THINKING_HEADROOM_TOKENS
     assert "temperature" not in stub.kwargs  # rejected by the model
     assert response.text == "qc = 1"  # thinking blocks are not the answer
-    assert response.cost_usd == pytest.approx((1000 * 5 + 200 * 25) / 1e6)
+    assert response.cost_usd == pytest.approx((1000 * 2 + 200 * 10) / 1e6)
     assert client.stop_reasons == {"end_turn": 1}
 
 
@@ -56,5 +56,5 @@ def test_the_ollama_protocol_must_be_turned_off_explicitly() -> None:
     """Reset and canary are properties of the local Ollama server (F28); the
     config has to say they do not apply, not have them silently skipped."""
     with pytest.raises(ValueError, match="reset_per_run: false"):
-        RunConfig(provider="anthropic", model="claude-opus-5")
-    RunConfig(provider="anthropic", model="claude-opus-5", reset_per_run=False, protocol_canary=[])
+        RunConfig(provider="anthropic", model="claude-sonnet-5")
+    RunConfig(provider="anthropic", model="claude-sonnet-5", reset_per_run=False, protocol_canary=[])

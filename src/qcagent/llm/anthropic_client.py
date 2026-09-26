@@ -23,9 +23,13 @@ _TRANSIENT_EXCEPTIONS = (
 _PRICING_PER_MTOK: dict[str, tuple[float, float]] = {
     "claude-sonnet-4-5": (3.00, 15.00),
     "claude-opus-5": (5.00, 25.00),
+    # The frontier arm's model: the cheapest current-generation frontier-class
+    # model (maintainer's choice, 2026-09-26). Adaptive thinking and effort
+    # levels as on Opus 5; sampling parameters rejected, and none are sent.
+    "claude-sonnet-5": (2.00, 10.00),
 }
 
-# Thinking is on by default on Claude Opus 5 and shares `max_tokens` with the
+# Thinking runs adaptively on Claude Sonnet 5 / Opus 5 and shares `max_tokens` with the
 # visible answer. The nodes size `max_tokens` for the VISIBLE output of a
 # model that does not think (critic 512, planner 2048, generator 4096); passed
 # through unchanged, a thinking model would be cut off mid-thought. The
@@ -37,7 +41,7 @@ EFFORT: Final = "high"
 
 
 class AnthropicClient(BaseLLMClient):
-    def __init__(self, api_key: str, model_id: str = "claude-opus-5") -> None:
+    def __init__(self, api_key: str, model_id: str = "claude-sonnet-5") -> None:
         if model_id not in _PRICING_PER_MTOK:
             # A run whose cost cannot be computed is not allowed to start
             # (constitution: every API-costed run is extrapolated from a pilot).
