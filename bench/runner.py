@@ -25,11 +25,11 @@ import traceback
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import httpx
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from qdrant_client import QdrantClient
 
 from bench.schema import RunRecord, TaskSpec
@@ -66,6 +66,11 @@ class RunConfig(BaseModel):
     """`config.yaml` — the source of truth for one regression run."""
 
     model: str = Field(default_factory=lambda: settings.ollama_model)
+    # Which API serves `model`. "anthropic" is the frontier arm: it answers
+    # "is the bottleneck the architecture or the generator?" with every LLM
+    # role (planner, generator, critic) served by the frontier model and
+    # everything else — corpus, validators, routing, corrector — unchanged.
+    provider: Literal["ollama", "anthropic"] = "ollama"
     seeds: list[int] = Field(default_factory=lambda: [1, 2, 3])
     # Task ids to run, or "all" for every task under bench/tasks/.
     tasks: list[str] | str = "all"
@@ -93,6 +98,20 @@ class RunConfig(BaseModel):
         default_factory=lambda: ["qaoa_maxcut_4q_perturbed", "dj_constant_4q"]
     )
     canary_seeds: list[int] = Field(default_factory=lambda: [1, 2, 3])
+
+    @model_validator(mode="after")
+    def _ollama_only_protocol(self) -> "RunConfig":
+        # The reset and the canary are about Ollama's server state (F28). The
+        # Anthropic API is not deterministic and has no state to unload, so
+        # a byte-identical canary would fail by construction, and a reset
+        # would unload an unrelated local model. Stated in the config rather
+        # than silently skipped, so the record says which protocol applied.
+        if self.provider == "anthropic" and (self.reset_per_run or self.protocol_canary):
+            raise ValueError(
+                "provider 'anthropic' requires reset_per_run: false and protocol_canary: [] "
+                "— both are properties of the local Ollama server (F28)"
+            )
+        return self
 
     @classmethod
     def load(cls, path: Path) -> "RunConfig":
@@ -508,26 +527,38 @@ def run_suite(
         lib_versions = {
             **lib_versions,
             "qdocs_points": str(require_populated_index(QdrantClient(url=settings.qdrant_url))),
-            # Recorded because it CHANGES THE NUMBERS and is invisible
-            # otherwise: a run at temperature 0 and one at the model default
-            # are not comparable, and nothing in the results would say so
-            # (F15).
-            "ollama_temperature": str(settings.ollama_temperature),
-            "ollama_num_ctx": str(settings.ollama_num_ctx),
-            "generator_state": "reset_before_each_run"
-            if config.reset_per_run
-            else "reset_before_suite",
-            # A guard whose result is not recorded is only half a guard.
-            # Verified EXACTLY here and nowhere else: the check needs the
-            # model loaded, `reset_generator_state` unloads it, and calling
-            # it again later would re-warm the model and change the state the
-            # run starts from — which is the protocol the 0/360 determinism
-            # was measured under.
-            "gpu_offload": f"{verify_gpu_offload(settings.ollama_base_url, config.model):.0%}",
+            "generator_provider": config.provider,
         }
+        if config.provider == "anthropic":
+            from qcagent.llm.anthropic_client import EFFORT, THINKING_HEADROOM_TOKENS
+
+            lib_versions |= {
+                "anthropic_thinking": "adaptive",
+                "anthropic_effort": EFFORT,
+                "anthropic_thinking_headroom": str(THINKING_HEADROOM_TOKENS),
+            }
+        else:
+            lib_versions |= {
+                # Recorded because it CHANGES THE NUMBERS and is invisible
+                # otherwise: a run at temperature 0 and one at the model default
+                # are not comparable, and nothing in the results would say so
+                # (F15).
+                "ollama_temperature": str(settings.ollama_temperature),
+                "ollama_num_ctx": str(settings.ollama_num_ctx),
+                "generator_state": "reset_before_each_run"
+                if config.reset_per_run
+                else "reset_before_suite",
+                # A guard whose result is not recorded is only half a guard.
+                # Verified EXACTLY here and nowhere else: the check needs the
+                # model loaded, `reset_generator_state` unloads it, and calling
+                # it again later would re-warm the model and change the state the
+                # run starts from — which is the protocol the 0/360 determinism
+                # was measured under.
+                "gpu_offload": f"{verify_gpu_offload(settings.ollama_base_url, config.model):.0%}",
+            }
     usage = usage or Usage()
     runner = task_runner or _graph_runner(config, usage)
-    if reset_state is None and task_runner is None:
+    if reset_state is None and task_runner is None and config.provider == "ollama":
 
         def reset_state() -> None:
             reset_generator_state(settings.ollama_base_url, config.model)
@@ -608,16 +639,22 @@ def _graph_runner(config: RunConfig, usage: Usage) -> TaskRunner:
     LLM wrapped for accounting and one `WorkerPool` shared across the whole
     suite (D1b: the pool exists so process startup is paid once, not per
     task)."""
-    llm = AccountingLLM(
-        OllamaClient(
+    inner: BaseLLMClient
+    if config.provider == "anthropic":
+        from qcagent.llm.anthropic_client import AnthropicClient
+
+        if not settings.anthropic_api_key:
+            raise RuntimeError("provider 'anthropic' needs ANTHROPIC_API_KEY in the environment")
+        inner = AnthropicClient(settings.anthropic_api_key, config.model)
+    else:
+        inner = OllamaClient(
             settings.ollama_base_url,
             config.model,
             settings.ollama_num_ctx,
             settings.ollama_temperature,
-        ),
-        usage,
-    )
-    reset_generator_state(settings.ollama_base_url, config.model)
+        )
+        reset_generator_state(settings.ollama_base_url, config.model)
+    llm = AccountingLLM(inner, usage)
     qdrant = QdrantClient(url=settings.qdrant_url)
     embedder = FastEmbedEmbedder()
     pool = WorkerPool(size=settings.worker_pool_size, recycle_after=settings.worker_recycle_after)
