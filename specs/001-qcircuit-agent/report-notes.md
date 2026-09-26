@@ -3431,6 +3431,15 @@ com a execução completa (condicional, noturna), como registrado.
    de graça sob o corpus novo e sob o corretor —, mas os resultados são
    reportados por tarefa.
 
+**Decisão tomada (mantenedor, 2026-09-26)**: suíte com **um seed** (120 runs)
+MAIS um canário de protocolo — 2 tarefas rápidas × 3 seeds, byte-idênticas,
+verificado antes de toda execução e gravado em `lib_versions`; se divergir, a
+suíte recusa rodar e deixa `PROTOCOL_CHECK_FAILED.txt` com o ponto de
+divergência. A redundância dos seeds é CONSEQUÊNCIA do protocolo de reset
+funcionar: se a contaminação voltar, os seeds voltam a divergir. É uma
+invariante, e uma invariante ganha um mecanismo, não 240 runs redundantes
+pagando por um canário — F11 aplicado à própria suíte.
+
 **Contraste que mede o tamanho do problema de F28**: o S0 contaminado
 (`f5a69657`) e o S0 limpo diferem em desfecho, não só em detalhe — estrato B
 teve 8 sucessos lá e 3 aqui; m2 no estrato B foi 57% lá e 81% aqui. A

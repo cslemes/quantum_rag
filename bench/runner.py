@@ -57,6 +57,11 @@ class UnverifiedReferenceError(RuntimeError):
     the whole list, and stopping at the first hides the scale."""
 
 
+class ProtocolIntegrityError(RuntimeError):
+    """Raised when the protocol canary's seeds diverge — see
+    RunConfig.protocol_canary."""
+
+
 class RunConfig(BaseModel):
     """`config.yaml` — the source of truth for one regression run."""
 
@@ -76,6 +81,18 @@ class RunConfig(BaseModel):
     # Part of the config, so it is recorded with the results and changes the
     # run_id.
     reset_per_run: bool = True
+    # Protocol canary (F28, F29). Under reset_per_run the three seeds of a
+    # task are byte-identical (16/16 in every arm of T114), which is why the
+    # suite runs one seed. That identity is an INVARIANT of the protocol: if
+    # cross-task contamination returns, or a server upgrade makes the seed
+    # matter at temperature 0, seeds start to differ — and one seed stops
+    # being a sample of anything. So it is checked before every suite, on a
+    # few fast tasks, instead of paid for with 240 redundant runs (F11: a rule
+    # that matters gets a mechanism, not a reminder).
+    protocol_canary: list[str] = Field(
+        default_factory=lambda: ["qaoa_maxcut_4q_perturbed", "dj_constant_4q"]
+    )
+    canary_seeds: list[int] = Field(default_factory=lambda: [1, 2, 3])
 
     @classmethod
     def load(cls, path: Path) -> "RunConfig":
@@ -405,6 +422,42 @@ def _run_one(runner: TaskRunner, task: TaskSpec, seed: int, max_iter: int) -> Ag
         return _harness_error_state(task, seed, "running the graph")
 
 
+def _fingerprint(state: AgentState) -> tuple[str, list[str], list[dict]]:
+    messages = [
+        e["message"] if isinstance(e, dict) else e.message for e in state.get("error_history", [])
+    ]
+    trace = json.loads(json.dumps(state.get("trace", []), default=repr))
+    return state.get("code", ""), messages, trace
+
+
+def verify_protocol(
+    runner: TaskRunner,
+    tasks: Iterable[TaskSpec],
+    seeds: list[int],
+    max_iter: int,
+    reset_state: Callable[[], None] | None,
+) -> list[str]:
+    """Runs each canary task once per seed and returns one message per task
+    whose seeds diverge, naming the first trace step where they part (F28:
+    the trace is what located the original contamination in minutes)."""
+    failures: list[str] = []
+    for task in tasks:
+        prints = {}
+        for seed in seeds:
+            if reset_state is not None:
+                reset_state()
+            prints[seed] = _fingerprint(_run_one(runner, task, seed, max_iter))
+        base = seeds[0]
+        for seed in seeds[1:]:
+            if prints[seed] == prints[base]:
+                continue
+            a, b = prints[base][2], prints[seed][2]
+            step = next((i for i, (x, y) in enumerate(zip(a, b, strict=False)) if x != y), None)
+            where = f"trace step {step} ({a[step].get('node')})" if step is not None else "output"
+            failures.append(f"{task.task_id}: seed {seed} differs from seed {base} at {where}")
+    return failures
+
+
 def run_suite(
     config: RunConfig,
     *,
@@ -413,13 +466,16 @@ def run_suite(
     usage: Usage | None = None,
     lib_versions: dict[str, str] | None = None,
     reset_state: Callable[[], None] | None = None,
+    check_protocol: bool = False,
 ) -> Path:
     """Validates every configured reference, then runs the suite. Returns the
     JSONL path. `task_runner` and `lib_versions` are injectable so the
     Principle IV block can be tested without a sandbox, an LLM or a live
     Ollama (T100). `reset_state` is called before every run when
     `config.reset_per_run`; left None on the live path, it unloads the
-    configured model."""
+    configured model. `check_protocol` runs the protocol canary first
+    (`main()` always sets it) and raises ProtocolIntegrityError, running
+    nothing, if its seeds diverge."""
     tasks = load_tasks(config, tasks_dir)
     failures = verify_references(tasks)
     if failures:
@@ -475,6 +531,29 @@ def run_suite(
 
         def reset_state() -> None:
             reset_generator_state(settings.ollama_base_url, config.model)
+
+    if check_protocol and config.protocol_canary:
+        canary = load_tasks(config.model_copy(update={"tasks": config.protocol_canary}), tasks_dir)
+        canary_failures = verify_protocol(
+            runner,
+            canary,
+            config.canary_seeds,
+            config.max_iter,
+            reset_state if config.reset_per_run else None,
+        )
+        if canary_failures:
+            # Left in the run directory: the refusal is itself a result.
+            (out_dir / "PROTOCOL_CHECK_FAILED.txt").write_text("\n".join(canary_failures) + "\n")
+            raise ProtocolIntegrityError(
+                "protocol canary: seeds diverge, so one seed is not a sample of anything "
+                "(cross-task contamination is back, or the seed now matters at "
+                "temperature 0 — F28, F29). Refusing to run:\n  " + "\n  ".join(canary_failures)
+            )
+        lib_versions = {
+            **lib_versions,
+            "protocol_canary": f"passed: {len(canary)} task(s) x {len(config.canary_seeds)} "
+            "seeds byte-identical",
+        }
 
     with jsonl.open("a") as sink:
         for task in tasks:
@@ -595,7 +674,11 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{len(tasks)} task(s), {len(config.seeds)} seed(s): every reference verified")
     if args.verify_only:
         return 0
-    run_suite(config)
+    try:
+        run_suite(config, check_protocol=True)
+    except ProtocolIntegrityError as exc:
+        print(f"REFUSING TO RUN: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 

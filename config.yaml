@@ -13,9 +13,14 @@
 # Generator under test. Any model the configured Ollama server serves.
 model: qwen2.5-coder:7b
 
-# One run per (task, seed). Three seeds is what SC-007's 3h budget was sized
-# for at 120 tasks; fewer seeds is the first lever if a run overruns (T102).
-seeds: [1, 2, 3]
+# ONE seed (2026-09-26). Under reset_per_run the three seeds of a task were
+# byte-identical in every arm of T114 (16/16, three times): at temperature 0
+# the seed does not act, and the ~66% seed difference measured before was
+# cross-task contamination (F28, F29). Three seeds were three copies. The
+# invariant that justifies one seed is checked before every suite by the
+# protocol canary (protocol_canary / canary_seeds, see bench/runner.py) —
+# if it fails, the suite refuses to run.
+seeds: [1]
 
 # "all" = every task under bench/tasks/ (120: 60 canonical + 60 perturbed).
 # A list of task_ids runs exactly those, and an unknown id is an error rather

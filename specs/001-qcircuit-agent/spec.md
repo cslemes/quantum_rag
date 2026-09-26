@@ -326,6 +326,12 @@ transforma as 120 tarefas já construídas no ativo de qualidade do produto.
   ACEITO como consequência do protocolo, e **o teto de 4 h não é reajustado a
   ele**: se a suíte exceder 4 h sob o protocolo, SC-007 é reportado como
   reprovado, com a causa. Ver report-notes.md, "Segunda emenda a SC-007".
+  **Decisão de escopo (2026-09-26, mantenedor)**: a suíte roda **um seed**
+  (120 runs, ~1 h 20 min estimado). Sob `reset_per_run` os três seeds foram
+  byte-idênticos em 16/16 tarefas em todos os braços de T114 (F29); três seeds
+  eram três cópias. A invariante que justifica um seed é verificada antes de
+  cada execução pelo canário de protocolo (2 tarefas × 3 seeds, byte-idênticos,
+  senão a suíte recusa rodar). O teto de 4 h não muda.
 - **SC-008** (emendado — ver research.md D20 e report-notes.md F15/F17/F19):
   duas execuções da suíte sobre o mesmo código, corpus e configuração são
   comparadas em DUAS camadas, porque só uma delas está sob nosso controle:
