@@ -3421,6 +3421,37 @@ contaminação movia resultados, não apenas ruído na margem.
 | A | 16 tentativas | 5/8 tarefas | 8/12 = 67% | 1/8 | 0/8 | 8/8 |
 | B | 0 | 0/8 | 17/21 = 81% | 1/8 | 1/8 | 7/8 |
 
+### T111 aplicada — corpus reindexado na versão fixada, e M1 reavaliado com a verdade-base congelada (2026-09-26)
+
+**Ingestão**: 170 páginas de `/docs/en/api/qiskit/1.2/`, **875 chunks**, 0
+falhas de verificação contra o runtime, 0 páginas puladas, 6 avisos (todos
+atributos de instância, esperados). Snapshot da coleção antiga preservado
+antes (`qdocs-8057096986406956-2026-09-26-01-24-51.snapshot`); a lista dos
+181 ids da coleção antiga sem correspondente no runtime está em
+`analysis/data/corpus_2x_only.json`.
+
+**Procedimento da verdade-base, declarado ANTES de ver os resultados no corpus
+novo**: (1) textos das 63 consultas congelados — nenhuma editada, adicionada
+ou removida; (2) alvos classificados contra o RUNTIME fixado, não contra o
+corpus: 0 de 63 alvos e 0 `also_correct` ausentes na 1.2.4, logo nenhuma
+exclusão; (3) alvo ausente do corpus novo contaria como erro e lacuna de
+cobertura, nunca seria removido — no ensaio a seco, todos os 63 alvos e
+`also_correct` estavam presentes; (4) `also_correct` não cresce depois de ver
+o corpus novo; (5) mesmo conjunto medido nos dois corpora.
+
+| corpus | recall@8 | MRR | exact_identifier | intent_phrasing |
+|---|---|---|---|---|
+| antigo (2.x rotulado 1.2.4, 1.019) | 0,9524 (60/63) | 0,7196 | 1,0000 | 0,9400 |
+| **1.2 (875)** | **0,9365 (59/63)** | **0,7152** | 1,0000 | 0,9200 |
+
+**Portão M1 (≥ 0,85): PASSA.** Erros no corpus novo: `QuantumCircuit.rx`,
+`QuantumCircuit.rz`, `QuantumCircuit.to_gate`, `QuantumCircuit.to_instruction`.
+Qual consulta virou não é determinável: a avaliação antiga só gravou o
+agregado, não o resultado por consulta — o mesmo padrão de F27, em escala
+menor. A queda de uma consulta sobre 63 não é distinguível de nada; o que o
+número estabelece é que corrigir a versão do corpus não custou a
+recuperação.
+
 ---
 
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
