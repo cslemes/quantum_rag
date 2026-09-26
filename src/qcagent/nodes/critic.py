@@ -301,7 +301,9 @@ def make_critic_node(
                     "not what failed. Include EVERY import the code needs."
                 ),
             )
-        elif error_type == "UnknownSymbol" and (correction := _unknown_symbol_fix(state)) is not None:
+        elif (
+            error_type == "UnknownSymbol" and (correction := _unknown_symbol_fix(state)) is not None
+        ):
             # Negative knowledge, derived from the runtime (F25): no retrieved
             # page could say this, and an LLM paraphrase could only add error.
             decision = CriticDecision(
