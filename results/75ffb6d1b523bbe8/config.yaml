@@ -1,0 +1,11 @@
+max_iter: 5
+model: qwen2.5-coder:7b
+reset_per_run: true
+results_dir: results
+seeds:
+- 1
+- 2
+- 3
+tasks:
+- dj_constant_4q
+- qaoa_maxcut_4q_perturbed

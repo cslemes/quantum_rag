@@ -2570,6 +2570,33 @@ dependa só da própria história. Custa um carregamento de modelo por run
 que pesa contra o teto de 4 h de SC-007). Muda o que a suíte mede e o seu
 custo, então não é decidida unilateralmente.
 
+**Decidido e validado (2026-09-26)**: `reset_per_run: true`, padrão em
+`RunConfig` e em `config.yaml` — para a suíte inteira, não só para o
+experimento, porque o argumento do estrato B vale para o produto: o portão de
+`compare.py` existe para localizar uma regressão numa tarefa, e sob
+contaminação uma mudança real na tarefa 3 se espalha para 4..120. **Checagem
+de independência**: as mesmas 6 (tarefa, seed) em duas ordens — tarefas
+invertidas E seeds invertidos, cache de disco frio em cada ordem
+(`75ffb6d1b523bbe8`, `3692b5d527adc945`) — saíram **6/6 byte-idênticas,
+trace incluído**. Sob o protocolo novo, o resultado de uma (tarefa, seed) não
+depende da ordem. É n=6: suficiente para mostrar que o mecanismo foi
+removido, não para afirmar independência sobre 360.
+
+**Observação lateral, não conclusão**: sob reset por run, os 3 seeds de cada
+uma das 2 tarefas produziram o MESMO `final_code`. No S0 antigo,
+`qaoa_maxcut_4q_perturbed` tinha o seed 1 falhando e os seeds 2 e 3 com
+sucesso; agora os três têm sucesso, idênticos. Se isso se sustentar, a
+diferença entre seeds medida em "Os seeds NÃO são redundantes" era em boa
+parte história, não seed — e os 3 seeds seriam em boa parte redundantes sob
+o protocolo novo. Duas tarefas não sustentam isso; o S0 refeito (16 tarefas
+× 3 seeds) mede.
+
+**Proveniência imperfeita, registrada**: as duas execuções da checagem
+gravaram `git_sha=41517c1`, commit que NÃO continha o código de reset que
+elas rodaram (estava no working tree, commitado depois em `7d0468f`).
+`git_sha()` não detectava árvore suja; passou a marcar `-dirty` (`aca59d2`) —
+F21 aplicado à proveniência.
+
 **Fonte**: `results/f5a69657457574a3` (S0), `results/4c19589509bcf833`
 (checagem), duas execuções isoladas de `qaoa_maxcut_4q_perturbed`
 (2026-09-26); `bench/runner.py::reset_generator_state`; "PISO DE RUÍDO
@@ -3038,6 +3065,40 @@ interno acabou de se revelar determinante para a saída (F19). O zero medido
 depende de uma execução sequencial com estado resetado. Paralelizar trocaria
 reprodutibilidade — o resultado mais forte deste projeto — por 90 min de
 parede. Moeda errada.
+
+---
+
+### Segunda emenda a SC-007 — por PROTOCOLO, não por medição (F28, 2026-09-26)
+
+**O que muda**: o protocolo sob o qual SC-007 é medido, não o teto. A suíte
+passa a rodar com `reset_per_run: true` — unload do modelo antes de cada
+(tarefa, seed).
+
+**Por que isto NÃO é a mesma manobra da primeira emenda, duas vezes**: a
+primeira ajustou um LIMIAR a uma MEDIÇÃO — 3 h virou 4 h depois de medir 3 h
+26 min — e F23 já a classifica como descritiva: ela descreve o sistema, não o
+restringe. Esta segunda muda o PROTOCOLO por uma razão substantiva e anterior
+a qualquer número: sem reset por run, a saída de uma tarefa depende da
+anterior (F28), e o portão de `compare.py` não consegue localizar uma
+regressão — a função pela qual a suíte existe. O custo é uma CONSEQUÊNCIA
+aceita do protocolo, não o motivo da mudança. Se o custo tivesse de caber no
+teto, o teto seria reajustado outra vez — e seria a mesma manobra. Por isso:
+
+**O teto de 4 h NÃO é reajustado ao custo do reset.** Medido na checagem de
+independência: ~3 s de espera fixa após o pedido de unload, mais ~3,5 s de
+recarga do modelo na primeira chamada de cada run — **~6-7 s por run, ~+40
+min sobre 360 runs**, o que coloca a suíte em torno de **4 h 05 min** e
+provavelmente REPROVA SC-007 por poucos minutos. Se reprovar, é reportado
+como reprovado, com a causa. Duas saídas legítimas existem e nenhuma é mexer
+no teto: (1) substituir a espera fixa de 3 s por uma consulta ao estado do
+servidor (`/api/ps`) até o descarregamento se confirmar — engenharia, não
+critério; (2) se o S0 refeito confirmar que os seeds são redundantes sob o
+protocolo novo (F28, observação lateral), a pergunta sobre o número de seeds
+é reaberta com dados que a primeira emenda não tinha. A segunda é decisão
+de escopo e não é tomada aqui.
+
+**Status F23**: SC-007 continua descritivo pela primeira emenda; esta não o
+agrava nem o repete, porque não toca o limiar.
 
 ---
 
