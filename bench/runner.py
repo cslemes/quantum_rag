@@ -70,7 +70,7 @@ class RunConfig(BaseModel):
     # "is the bottleneck the architecture or the generator?" with every LLM
     # role (planner, generator, critic) served by the frontier model and
     # everything else — corpus, validators, routing, corrector — unchanged.
-    provider: Literal["ollama", "anthropic", "openrouter"] = "ollama"
+    provider: Literal["ollama", "anthropic", "openrouter", "groq"] = "ollama"
     # OpenRouter only: the reasoning effort sent with every call. A config
     # field, not a constant, because the reasoning-off arm exists to separate
     # model capability from the reasoning effect — the value must be in the
@@ -550,6 +550,14 @@ def run_suite(
                 "openrouter_reasoning_headroom": str(orc.REASONING_HEADROOM_TOKENS),
                 "openrouter_pinned_provider": orc._PINNED_PROVIDER[config.model],
             }
+        elif config.provider == "groq":
+            from qcagent.llm import openrouter_client as orc
+
+            lib_versions |= {
+                "groq_reasoning_effort": config.reasoning_effort,
+                "groq_temperature": "0",
+                "groq_reasoning_headroom": str(orc.REASONING_HEADROOM_TOKENS),
+            }
         else:
             lib_versions |= {
                 # Recorded because it CHANGES THE NUMBERS and is invisible
@@ -668,6 +676,18 @@ def _graph_runner(config: RunConfig, usage: Usage) -> TaskRunner:
             settings.fronteira_b_api_key,
             config.model,
             settings.fronteira_b_base_url or DEFAULT_BASE_URL,
+            effort=config.reasoning_effort,
+        )
+    elif config.provider == "groq":
+        from qcagent.llm.groq_client import DEFAULT_BASE_URL as GROQ_URL
+        from qcagent.llm.groq_client import GroqClient
+
+        if not settings.fronteira_b_api_key:
+            raise RuntimeError("provider 'groq' needs FRONTEIRA_B_API_KEY in the environment")
+        inner = GroqClient(
+            settings.fronteira_b_api_key,
+            config.model,
+            settings.fronteira_b_base_url or GROQ_URL,
             effort=config.reasoning_effort,
         )
     else:

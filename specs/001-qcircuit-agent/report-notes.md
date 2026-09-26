@@ -3733,6 +3733,29 @@ seu valor ficaria restrito a geradores sem raciocínio, como o local.
 | **L2** | idêntico a L1 | **piso de ruído do braço**: `temperature` não é suportado, o modelo roda no padrão do provedor e pode amostrar. Sem réplica, 16 runs não dão estimativa de variância e nenhuma diferença Luna × qwen tem barra de erro. O braço qwen não precisou disso porque seus seeds são redundantes (120/120); o Luna não tem essa garantia |
 | **L0** | idêntico a L1 com raciocínio desligado/mínimo (o menor valor que a API aceitar, verificado por sonda antes) | separa CAPACIDADE DO MODELO do EFEITO DO RACIOCÍNIO |
 
+> **Emenda antes de qualquer execução (2026-09-26): o modelo passa a ser
+> `openai/gpt-oss-120b` via Groq** (escolha do mantenedor; o OpenRouter ficou
+> inacessível do sandbox — o proxy remove o cabeçalho `Authorization`). Texto
+> acima mantido; o que muda:
+> - **A ressalva sobre "modelo de fronteira" vale igualmente**: gpt-oss-120b é
+>   o modelo de pesos abertos da OpenAI de 2025, com raciocínio — capaz, mas
+>   não a fronteira de 2026. "Oscila" continua AMBÍGUO e levaria a um modelo
+>   de nível de fronteira, não à promoção de T090d.
+> - **L0 é esforço `low`, não raciocínio desligado**: a API rejeita qualquer
+>   valor fora de `low | medium | high` (sondado). L1 × L0 separa QUANTIDADE de
+>   raciocínio, não presença; a terceira leitura só é testada em parte.
+> - **Paridade melhor que a do Luna**: `temperature: 0` e `seed` são aceitos e
+>   enviados, como no qwen. O Groq serve o modelo ele mesmo — não há
+>   redirecionamento de provedor a fixar. Contexto 131k; tokenizador o200k.
+> - **Limite de 8.000 tokens/minuto** (cabeçalhos da resposta): cada braço leva
+>   ~1,5 h. O cliente espera o reset informado pelo provedor em um 429 antes de
+>   tentar de novo, para que cota não vire `infrastructure_error`. Um limite
+>   DIÁRIO não aparece nos cabeçalhos; se existir e for atingido, aparecerá
+>   como `infrastructure_error` e será reportado como tal.
+> - **Custo**: o Groq não devolve custo por chamada, e o preço não pôde ser
+>   lido do sandbox. A tabela usada (US$ 0,15 / 0,60 por M) é NÃO VERIFICADA;
+>   no plano gratuito a cobrança real é zero. Reportado como estimativa.
+
 **Como os três se leem juntos**, nomeado antes para não ser escolhido depois:
 - L1 × L2 → o piso: fração de tarefas cujo desfecho (status) muda entre duas
   execuções idênticas, e a variação da métrica de oscilação. Uma diferença

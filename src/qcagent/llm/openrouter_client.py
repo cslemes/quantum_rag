@@ -17,6 +17,7 @@ kind F15 found in `temperature`:
   Anthropic client needed.
 """
 
+import re
 import time
 from typing import Final
 
@@ -66,10 +67,8 @@ class OpenRouterClient(BaseLLMClient):
         self.finish_reasons: dict[str, int] = {}
         self.served_by: dict[str, int] = {}
 
-    def _generate_impl(
-        self, *, system: str, prompt: str, seed: int, max_tokens: int
-    ) -> LLMResponse:
-        body = {
+    def _body(self, *, system: str, prompt: str, seed: int, max_tokens: int) -> dict:
+        return {
             "model": self.model_id,
             "messages": [
                 {"role": "system", "content": system},
@@ -82,11 +81,22 @@ class OpenRouterClient(BaseLLMClient):
             "seed": seed,
             "provider": {"order": [self.provider], "allow_fallbacks": False},
         }
+
+    def _generate_impl(
+        self, *, system: str, prompt: str, seed: int, max_tokens: int
+    ) -> LLMResponse:
+        body = self._body(system=system, prompt=prompt, seed=seed, max_tokens=max_tokens)
         start = time.perf_counter()
         try:
             response = self._http.post(f"{self._base_url}/chat/completions", json=body)
         except (httpx.TimeoutException, httpx.TransportError) as exc:
             raise TransientProviderError(str(exc)) from exc
+        if response.status_code == 429:
+            # Wait out the provider's own reset before the base class retries:
+            # its backoff tops out at 30 s, and a per-minute token limit can
+            # need longer — otherwise a throttled call becomes an
+            # infrastructure_error and the run is lost to a quota, not a result.
+            time.sleep(_reset_seconds(response.headers))
         if response.status_code in _TRANSIENT_STATUS:
             raise TransientProviderError(f"HTTP {response.status_code}: {response.text[:200]}")
         response.raise_for_status()
@@ -125,3 +135,19 @@ class OpenRouterClient(BaseLLMClient):
     def _cost(self, input_tokens: int, output_tokens: int) -> float:
         input_per_mtok, output_per_mtok = _PRICING_PER_MTOK[self.model_id]
         return (input_tokens * input_per_mtok + output_tokens * output_per_mtok) / 1_000_000
+
+
+def _reset_seconds(headers: httpx.Headers, cap: float = 90.0) -> float:
+    """Seconds until the limit resets, from `retry-after` or the
+    `x-ratelimit-reset-*` headers ("6.149s", "1m26.4s"); capped."""
+    if (retry_after := headers.get("retry-after")) is not None:
+        try:
+            return min(float(retry_after), cap)
+        except ValueError:
+            pass
+    waits = []
+    for name in ("x-ratelimit-reset-tokens", "x-ratelimit-reset-requests"):
+        value = headers.get(name)
+        if value and (m := re.fullmatch(r"(?:(\d+)m)?([\d.]+)s", value)):
+            waits.append(int(m.group(1) or 0) * 60 + float(m.group(2)))
+    return min(min(waits) if waits else 5.0, cap)
