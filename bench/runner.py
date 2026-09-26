@@ -79,6 +79,13 @@ class RunConfig(BaseModel):
     # model capability from the reasoning effect — the value must be in the
     # record and change the run_id.
     reasoning_effort: str = "high"
+    # Ollama only: where the Ollama server is, overriding OLLAMA_BASE_URL.
+    # The RunPod arm points this at an SSH tunnel (http://localhost:<port>)
+    # to an Ollama bound to localhost inside the pod: generation remote,
+    # verification local — the same split as the API arms, so the model is the
+    # only variable. `generator_host` names where it ran, for the record.
+    ollama_base_url: str | None = None
+    generator_host: str = "local"
     seeds: list[int] = Field(default_factory=lambda: [1, 2, 3])
     # Task ids to run, or "all" for every task under bench/tasks/.
     tasks: list[str] | str = "all"
@@ -120,6 +127,10 @@ class RunConfig(BaseModel):
                 "— both are properties of the local Ollama server (F28)"
             )
         return self
+
+    @property
+    def ollama_url(self) -> str:
+        return self.ollama_base_url or settings.ollama_base_url
 
     @classmethod
     def load(cls, path: Path) -> "RunConfig":
@@ -522,7 +533,7 @@ def run_suite(
     # record says which generator produced it), so it is a parameter — a run
     # with an injected task_runner has no such server to ask.
     if lib_versions is None:
-        lib_versions = collect_lib_versions(ollama_base_url=settings.ollama_base_url)
+        lib_versions = collect_lib_versions(ollama_base_url=config.ollama_url)
         # The retrieval corpus is part of what produced these numbers, so it
         # belongs in the record beside the library versions (Principle III).
         #
@@ -536,6 +547,7 @@ def run_suite(
             **lib_versions,
             "qdocs_points": str(require_populated_index(QdrantClient(url=settings.qdrant_url))),
             "generator_provider": config.provider,
+            "generator_host": config.generator_host,
         }
         if config.provider == "anthropic":
             from qcagent.llm.anthropic_client import EFFORT, THINKING_HEADROOM_TOKENS
@@ -586,14 +598,14 @@ def run_suite(
                 # it again later would re-warm the model and change the state the
                 # run starts from — which is the protocol the 0/360 determinism
                 # was measured under.
-                "gpu_offload": f"{verify_gpu_offload(settings.ollama_base_url, config.model):.0%}",
+                "gpu_offload": f"{verify_gpu_offload(config.ollama_url, config.model):.0%}",
             }
     usage = usage or Usage()
     runner = task_runner or _graph_runner(config, usage)
     if reset_state is None and task_runner is None and config.provider == "ollama":
 
         def reset_state() -> None:
-            reset_generator_state(settings.ollama_base_url, config.model)
+            reset_generator_state(config.ollama_url, config.model)
 
     if check_protocol and config.protocol_canary:
         canary = load_tasks(config.model_copy(update={"tasks": config.protocol_canary}), tasks_dir)
@@ -714,12 +726,12 @@ def _graph_runner(config: RunConfig, usage: Usage) -> TaskRunner:
         )
     else:
         inner = OllamaClient(
-            settings.ollama_base_url,
+            config.ollama_url,
             config.model,
             settings.ollama_num_ctx,
             settings.ollama_temperature,
         )
-        reset_generator_state(settings.ollama_base_url, config.model)
+        reset_generator_state(config.ollama_url, config.model)
     llm = AccountingLLM(inner, usage)
     qdrant = QdrantClient(url=settings.qdrant_url)
     embedder = FastEmbedEmbedder()
@@ -790,7 +802,7 @@ def main(argv: list[str] | None = None) -> int:
         if config.reset_per_run and config.provider == "ollama":
 
             def reset() -> None:
-                reset_generator_state(settings.ollama_base_url, config.model)
+                reset_generator_state(config.ollama_url, config.model)
 
         canary_failures = verify_protocol(
             runner, canary, config.canary_seeds, config.max_iter, reset

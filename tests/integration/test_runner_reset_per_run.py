@@ -62,3 +62,14 @@ def test_the_policy_is_part_of_the_run_id() -> None:
     on = RunConfig(reset_per_run=True).model_dump(mode="json")
     off = RunConfig(reset_per_run=False).model_dump(mode="json")
     assert make_run_id(on, sha="x") != make_run_id(off, sha="x")
+
+
+def test_the_ollama_url_can_point_elsewhere_and_is_recorded() -> None:
+    """The RunPod arm points Ollama at an SSH tunnel; the default stays the
+    configured local server, and where generation ran goes in the record."""
+    from qcagent.config import settings
+
+    assert RunConfig().ollama_url == settings.ollama_base_url
+    remote = RunConfig(ollama_base_url="http://localhost:11435", generator_host="runpod:RTX 4090")
+    assert remote.ollama_url == "http://localhost:11435"
+    assert remote.generator_host == "runpod:RTX 4090"

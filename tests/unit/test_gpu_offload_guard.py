@@ -80,7 +80,7 @@ def test_the_suite_records_what_the_guard_measured() -> None:
 
     source = Path("bench/runner.py").read_text()
     assert '"gpu_offload"' in source
-    assert source.count("verify_gpu_offload(settings.ollama_base_url") == 1, (
+    assert source.count("verify_gpu_offload(config.ollama_url") == 1, (
         "called exactly once: the check needs the model loaded, the reset unloads it, "
         "and a second call would re-warm it and change the state the run starts from"
     )

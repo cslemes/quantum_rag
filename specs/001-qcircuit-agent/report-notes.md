@@ -3933,6 +3933,66 @@ entra como mudança deliberada, com execução nova de referência.
 
 ---
 
+### PREDIÇÃO REGISTRADA — braço RunPod (modelo de pesos abertos auto-hospedável), escrita antes de criar qualquer pod (2026-09-26)
+
+**A pergunta**: D10 escolheu um gerador LOCAL por custo e privacidade. O
+braço de API mostrou que a arquitetura funciona com um gerador capaz — mas
+PROPRIETÁRIO e REMOTO. Um modelo de pesos abertos, que se pode hospedar,
+também resolve? Se sim, a conclusão preserva a motivação original: "é preciso
+hardware melhor, não uma API proprietária" — um resultado mais forte para o
+relatório que o do braço de API.
+
+**Desenho, para que o MODELO seja a única variável:**
+- **Só o Ollama roda no RunPod**; o app, a recuperação e toda a verificação
+  continuam locais. Geração remota, verificação local — a mesma divisão dos
+  braços de API. Rodar a pilha inteira lá mudaria também o ambiente de
+  verificação e confundiria as duas coisas.
+- **Mesmo cliente, mesmos parâmetros do braço qwen local**: `OllamaClient`,
+  prompts idênticos por construção, `temperature=0`, `num_ctx=16384`, mesmo
+  `num_predict` por nó, mesma versão do Ollama (0.34.4, fixada no pod). O
+  que muda: o modelo e a GPU.
+- **O servidor é nosso → `reset_per_run` e o canário de protocolo se
+  aplicam.** Este braço é REPRODUTÍVEL, ao contrário do braço de API (um
+  retrato): capacidade e reprodutibilidade no mesmo braço, o que nenhum outro
+  braço deste projeto tinha.
+- **Endpoint seguro**: o proxy HTTP do RunPod (`<pod>-<porta>.proxy.runpod.net`)
+  NÃO é autenticado — quem tiver a URL usa, e o Ollama não tem autenticação
+  própria. Então nenhuma porta HTTP é exposta: o Ollama escuta em localhost
+  dentro do pod e é alcançado por TÚNEL SSH com autenticação por chave (par de
+  chaves gerado só para isto). A saída SSH do sandbox foi verificada.
+- **Modelo**: `qwen3-coder:30b` (MoE 30B-A3B, ~19 GB) numa GPU de 24 GB —
+  mesma família do braço local, o tamanho seguinte da geração atual.
+
+**Pré-condições que INTERROMPEM o braço se falharem** (verificadas antes das
+16 tarefas, cada uma registrada):
+1. `ollama ps` mostra **100% GPU** — uma execução com offload para CPU não
+   mede o modelo, mede o hardware (D10c);
+2. o **canário de protocolo passa** no pod remoto (2 tarefas × 3 seeds
+   byte-idênticos) — prova que a reprodutibilidade vale lá também.
+
+**Ramos, com critérios fixados agora** (16 tarefas, seed 1; Luna L1/L2 =
+15-16/16, piso ~1):
+- **igual ao Luna**: sucesso ≥ 14/16 e ~0 `ImportError` de símbolo inventado
+  → **a manchete**: a arquitetura funciona com qualquer gerador capaz,
+  inclusive um que se pode auto-hospedar;
+- **parcial**: sucesso 4-13/16 → gradiente de capacidade; reportar quais
+  classes de erro restam (símbolos inventados? física? oscilação?);
+- **como o qwen 7B**: sucesso ≤ 3/16 → um modelo aberto deste porte não
+  basta; o limiar de capacidade está acima dele.
+
+**Minha expectativa, registrada para poder estar errada**: PARCIAL tendendo a
+alto. Um modelo coder de 2025 deve conhecer a API do Qiskit 1.x muito melhor
+que o 7B, então a classe de símbolos inventados cai fortemente; mas o acerto
+na primeira tentativa fica abaixo do Luna, e o laço de reparo passa a ser de
+fato exercitado — o que torna este braço o primeiro a medir se um gerador
+capaz OSCILA quando precisa reparar (o Luna quase nunca precisou).
+
+**Custo**: taxa horária da GPU × tempo de parede do pod (download do modelo +
+canário + 16 runs), reportados os dois; o pod é encerrado imediatamente
+depois. "Menos de um dólar" é parte do achado e é medido, não estimado.
+
+---
+
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
 
 **Este é o ponto de referência do Princípio III**: o número contra o qual toda
