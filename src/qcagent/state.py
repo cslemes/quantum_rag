@@ -246,6 +246,7 @@ ERROR_TAXONOMY = frozenset(
         "DeprecatedAPI",
         "HallucinatedSymbol",
         "MissingImport",
+        "UnknownSymbol",
         "SyntaxError",
         "TranspilationFailure",
         "CircuitSerializationFailure",

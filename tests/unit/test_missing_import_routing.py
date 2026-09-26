@@ -79,8 +79,10 @@ def test_a_real_symbol_that_was_not_imported_is_a_missing_import(stderr, expecte
 @pytest.mark.parametrize(
     "stderr",
     [
-        "ImportError: cannot import name 'CNOTGate' from 'qiskit.circuit.library'",
-        "ImportError: cannot import name 'Hadamard' from 'qiskit.circuit.library'",
+        # No real symbol is near these — the ones that have one (`CNOTGate`,
+        # `Hadamard`) are UnknownSymbol now, see test_unknown_symbol.py.
+        "ImportError: cannot import name 'PhaseExp' from 'qiskit.circuit.library'",
+        "ImportError: cannot import name 'HamiltonianVariationalAnsatz' from 'qiskit.circuit'",
         "NameError: name 'Frobnicator' is not defined",
         "AttributeError: 'QuantumCircuit' object has no attribute 'hadamard'",
     ],
@@ -114,7 +116,7 @@ def test_missing_import_routes_to_generation_not_retrieval() -> None:
 
 
 def test_hallucinated_symbol_still_routes_to_retrieval() -> None:
-    state = _state("ImportError: cannot import name 'CNOTGate' from 'qiskit.circuit.library'")
+    state = _state("ImportError: cannot import name 'PhaseExp' from 'qiskit.circuit.library'")
     action, error_type = route_action(state["static"], None, None, None, 1, 5, [])
 
     assert error_type == "HallucinatedSymbol"
