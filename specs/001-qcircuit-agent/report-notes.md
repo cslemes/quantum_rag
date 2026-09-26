@@ -3615,6 +3615,26 @@ estabelecida.
   correção de todas as importações de uma vez como passo barato anterior a
   ele.
 
+### RESULTADO S3 — T115 (todas as importações de uma vez), `1eb35fad922ec8ef`, 2026-09-26
+
+Commit `41a7b21`, 1 seed (redundância confirmada 120/120), mesmo subconjunto
+e corpus. Contra o seed 1 de S2, por tarefa:
+
+| | S2 | S3 |
+|---|---|---|
+| tentativas `ImportError`, estrato B | 29 | 25 |
+| símbolo corrigido volta depois de outra tentativa, B | 14 | 13 |
+| `compila@1` A / B (controle de ORDEM: a tentativa 1 precede o corretor) | 2/8, 0/8 | 2/8, 0/8 |
+| sucesso | 0/16 | 1/16 |
+
+T115 faz o que se propôs — corrige todos os símbolos inventados de uma vez —
+e a oscilação quase não se move (14 → 13). Isso confirma a separação de S2:
+a oscilação que resta é regenerativa, fora do alcance de qualquer correção de
+importação. `qaoa_maxcut_4q_perturbed` passou a ter sucesso e
+`simon_6q_perturbed` regrediu de semântico para estático; com n=16, nenhuma
+das duas é efeito. Este é o braço qwen comparável a qualquer braço de
+fronteira rodado no mesmo código.
+
 ---
 
 ### EXECUÇÃO COMPLETA sob o protocolo novo (`9e19fa1225e65c9d`, 2026-09-26) — reportada à parte, nada condicionado a ela
