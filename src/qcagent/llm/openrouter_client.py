@@ -99,7 +99,16 @@ class OpenRouterClient(BaseLLMClient):
             time.sleep(_reset_seconds(response.headers))
         if response.status_code in _TRANSIENT_STATUS:
             raise TransientProviderError(f"HTTP {response.status_code}: {response.text[:200]}")
-        response.raise_for_status()
+        if response.is_error:
+            # Carry the provider's own message: `raise_for_status()` drops the
+            # body, and the body is the diagnosis — Groq's 413 says "Request
+            # too large ... TPM: Limit 8000, Requested 17075", which the first
+            # Groq attempt lost to a bare "413 Payload Too Large".
+            raise httpx.HTTPStatusError(
+                f"HTTP {response.status_code} from {self._base_url}: {response.text[:500]}",
+                request=response.request,
+                response=response,
+            )
         latency_s = time.perf_counter() - start
         data = response.json()
 

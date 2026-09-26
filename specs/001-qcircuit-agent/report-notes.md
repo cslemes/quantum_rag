@@ -3756,6 +3756,22 @@ seu valor ficaria restrito a geradores sem raciocínio, como o local.
 >   lido do sandbox. A tabela usada (US$ 0,15 / 0,60 por M) é NÃO VERIFICADA;
 >   no plano gratuito a cobrança real é zero. Reportado como estimativa.
 
+> **Primeira tentativa L1 (`e131ab519d08688e`, 2026-09-26): falha de
+> INTEGRAÇÃO, interrompida — o ramo "falha de modo estranho" da regra de
+> decisão.** 5 runs, todos `harness_error` com `413 Payload Too Large` na
+> primeira chamada do GERADOR (as do planner passaram). Diagnóstico por sonda
+> direta: o Groq recusa qualquer requisição individual maior que o limite
+> POR MINUTO inteiro desta chave — "Request too large … TPM: Limit 8000,
+> Requested 17075". O prompt do gerador (8 chunks recuperados + tarefa +
+> erro) passa de 8.000 tokens. Hipótese anterior (o `max_tokens` com a
+> folga de raciocínio contava) refutada pela sonda: 16.096 com prompt
+> pequeno passa. Custo estimado da tentativa: ~US$ 0,005. Neste plano o
+> gpt-oss-120b NÃO PODE receber os prompts que o braço qwen recebeu, e
+> encurtá-los quebraria a paridade da qual a comparação depende — então o
+> braço não roda assim. Correção lateral: o cliente passou a carregar a
+> mensagem do provedor no erro; a tentativa tinha perdido o "Limit 8000,
+> Requested 17075" para um "413 Payload Too Large" sem corpo.
+
 **Como os três se leem juntos**, nomeado antes para não ser escolhido depois:
 - L1 × L2 → o piso: fração de tarefas cujo desfecho (status) muda entre duas
   execuções idênticas, e a variação da métrica de oscilação. Uma diferença

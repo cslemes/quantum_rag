@@ -86,3 +86,10 @@ def test_reset_parsing(headers: dict, seconds: float) -> None:
 def test_the_config_must_turn_off_the_ollama_protocol() -> None:
     with pytest.raises(ValueError, match="reset_per_run: false"):
         RunConfig(provider="groq", model="openai/gpt-oss-120b")
+
+
+def test_a_non_transient_error_keeps_the_providers_message() -> None:
+    body = '{"error":{"message":"Request too large ... TPM: Limit 8000, Requested 17075"}}'
+    client = _client(lambda r: httpx.Response(413, text=body))
+    with pytest.raises(httpx.HTTPStatusError, match="Limit 8000, Requested 17075"):
+        client._generate_impl(system="s", prompt="p", seed=1, max_tokens=10)
