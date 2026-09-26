@@ -3607,6 +3607,46 @@ estabelecida.
 
 ---
 
+### EXECUÇÃO COMPLETA sob o protocolo novo (`9e19fa1225e65c9d`, 2026-09-26) — reportada à parte, nada condicionado a ela
+
+Commit `df596b7` (corpus 1.2, `reset_before_each_run`, corretor T113; ANTES
+de T115), `seeds: [1, 2, 3]`, 360 runs, 0 `harness_error`.
+
+**1. Generalização de H-red (predição `9ce9b42`): CONFIRMADA sobre as 120
+tarefas.** 120/120 com os três seeds byte-idênticos em código, erros e trace.
+A redundância medida no subconjunto vale para a suíte inteira — o que
+sustenta a decisão de `seeds: [1]` tomada antes deste resultado.
+
+**2. SC-007 com 3 seeds sob o protocolo novo: 260 min 22 s — REPROVADO**
+contra o teto de 4 h, por 20 min. Pior que a estimativa registrada (~4 h 05
+min): o custo do reset por run foi de ~54 min sobre 3 h 26 min, não ~40.
+Ressalva: durante a execução rodaram, na mesma máquina, a suíte de testes
+(~30 s, várias vezes) e checagens estáticas; a contenção é pequena e não foi
+medida. Reportado como reprovado, com a causa, como a segunda emenda exigia.
+Com `seeds: [1]` a execução seguinte deve levar ~1 h 30 min (1/3 + canário);
+isso é medido, não assumido, na próxima execução.
+
+**3. Números ponta a ponta — linha de base nova, por tarefa (n = 120, IC 95%
+Wilson):**
+
+| métrica | valor | IC 95% |
+|---|---|---|
+| sucesso | 1/120 = 0,8% | [0,1%, 4,6%] |
+| `compila@1` | 20/120 = 16,7% | [11,1%, 24,3%] |
+| `verificado@1` | 0/120 | [0, 3,1%] |
+| alcançou veredito semântico | 34/120 = 28,3% | [21,0%, 37,0%] |
+| esgotou MAX_ITER | 119/120 = 99,2% | [95,4%, 99,9%] |
+
+**Não comparável por tarefa com o baseline de 2026-09-19** (`ce9614fa`):
+protocolo (contaminação cruzada lá, F28), corpus (2.x lá, F24), código
+(roteamento, corretor) e n efetivo (F29) diferem todos. Como descrição: a
+fração que chega ao veredito semântico é maior aqui (28% contra ~16% lá), e o
+sucesso continua na casa de 1%. O gargalo medido em S2 — oscilação por reparo
+regenerativo — é consistente com 99% esgotando as cinco tentativas, e é o que
+T090d endereça.
+
+---
+
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
 
 **Este é o ponto de referência do Princípio III**: o número contra o qual toda
