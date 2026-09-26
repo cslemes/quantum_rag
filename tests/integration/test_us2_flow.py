@@ -295,6 +295,7 @@ def test_scenario2_deprecated_api_triggers_a_real_requery_before_regenerating(
     assert proxy.query_points_calls == 2
     retriever_trace = [t for t in result["trace"] if t.get("node") == "retriever"]
     assert [t["queried"] for t in retriever_trace] == [True, True]
+    assert all(len(t["doc_ids"]) == t["n_chunks"] for t in retriever_trace if t["queried"])
 
 
 # -- Scenario 3: obsolete material reaches the generator explicitly labeled -

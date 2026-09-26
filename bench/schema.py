@@ -72,6 +72,12 @@ class RunRecord(BaseModel):
     # can be audited for what it claimed, not only for its status.
     guarantee_report: dict | None = None
     error_history: list[dict]
+    # Per-node trace of the run (AgentState.trace): critic decisions with
+    # rationale and hints, retrieval queries and the doc_ids returned. It used
+    # to be accumulated and discarded, which made retrieval behaviour
+    # undiagnosable after the fact (F27). Defaults to [] so records written
+    # before this field existed still load.
+    trace: list[dict] = []
     input_tokens: int
     output_tokens: int
     num_ctx: int | None = None  # D10b — valor efetivo, não o configurado

@@ -76,6 +76,9 @@ def make_retriever_node(
                     "queried": True,
                     "query": query_text,
                     "n_chunks": len(chunks),
+                    # Which documents, in rank order — what the generator
+                    # actually saw (F27).
+                    "doc_ids": [c.doc_id for c in chunks],
                 }
             ],
         }

@@ -321,7 +321,19 @@ def make_critic_node(
 
         return {
             "decision": decision,
-            "trace": [{"node": "critic", "action": decision.action, "error_type": error_type}],
+            # rationale and both hints are persisted (RunRecord.trace, F27):
+            # without them a retry_retrieval that failed cannot be told apart
+            # from one that asked for the wrong thing.
+            "trace": [
+                {
+                    "node": "critic",
+                    "action": decision.action,
+                    "error_type": error_type,
+                    "rationale": decision.rationale,
+                    "retrieval_hint": decision.retrieval_hint,
+                    "generation_hint": decision.generation_hint,
+                }
+            ],
         }
 
     return critic

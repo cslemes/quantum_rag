@@ -254,3 +254,34 @@ def test_critic_node_abort_rationale_distinguishes_repeat_from_max_iter(tmp_path
     assert "duas tentativas" in result["decision"].rationale
     assert "atingiu MAX_ITER" not in result["decision"].rationale
     assert llm.calls == 0
+
+
+def test_critic_trace_carries_rationale_and_hints(tmp_path: Path) -> None:
+    """F27: the trace is persisted so a failed retry_retrieval can be diagnosed
+    afterwards — which needs WHAT the critic asked for, not only the action."""
+    llm = ScriptedLLMClient(['{"rationale": "símbolo inventado", "hint": "HGate"}'], tmp_path)
+    node = make_critic_node(llm, max_iter=5)
+    state = {
+        "static": StaticResult(
+            parsed=True,
+            executed=False,
+            transpiled=False,
+            error=ErrorRecord(
+                iteration=0,
+                stage="static",
+                error_type="HallucinatedSymbol",
+                message="ImportError: cannot import name 'H' from 'qiskit.circuit.library'",
+            ),
+        ),
+        "assertion_results": [],
+        "semantic": None,
+        "resource": None,
+        "iteration": 0,
+        "error_history": [],
+        "code": "from qiskit.circuit.library import H",
+    }
+    (entry,) = node(state)["trace"]
+    assert entry["action"] == "retry_retrieval"
+    assert entry["rationale"] == "símbolo inventado"
+    assert entry["retrieval_hint"] == "HGate"
+    assert entry["generation_hint"] is None

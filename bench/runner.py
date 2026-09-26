@@ -318,6 +318,10 @@ def _record(
         resource=dump(resource),
         guarantee_report=report.model_dump(mode="json") if report is not None else None,
         error_history=[e.model_dump(mode="json") for e in state.get("error_history", [])],
+        # Round-tripped through JSON with repr() as the fallback: the trace is
+        # free-form per node, and one non-serializable value must not cost
+        # the whole record the way circuit_qpy did (bug 14).
+        trace=json.loads(json.dumps(state.get("trace", []), default=repr)),
         input_tokens=usage.input_tokens,
         output_tokens=usage.output_tokens,
         num_ctx=usage.num_ctx,
