@@ -70,7 +70,10 @@ class RunConfig(BaseModel):
     # "is the bottleneck the architecture or the generator?" with every LLM
     # role (planner, generator, critic) served by the frontier model and
     # everything else — corpus, validators, routing, corrector — unchanged.
-    provider: Literal["ollama", "anthropic", "openrouter", "groq"] = "ollama"
+    provider: Literal["ollama", "anthropic", "openrouter", "groq", "openai"] = "ollama"
+    # OpenAI only: send temperature=0 (qwen parity). Off unless a probe showed
+    # the model accepts it — reasoning models commonly reject it.
+    send_temperature: bool = False
     # OpenRouter only: the reasoning effort sent with every call. A config
     # field, not a constant, because the reasoning-off arm exists to separate
     # model capability from the reasoning effect — the value must be in the
@@ -550,6 +553,14 @@ def run_suite(
                 "openrouter_reasoning_headroom": str(orc.REASONING_HEADROOM_TOKENS),
                 "openrouter_pinned_provider": orc._PINNED_PROVIDER[config.model],
             }
+        elif config.provider == "openai":
+            from qcagent.llm import openrouter_client as orc
+
+            lib_versions |= {
+                "openai_reasoning_effort": config.reasoning_effort,
+                "openai_temperature": "0" if config.send_temperature else "not sent",
+                "openai_reasoning_headroom": str(orc.REASONING_HEADROOM_TOKENS),
+            }
         elif config.provider == "groq":
             from qcagent.llm import openrouter_client as orc
 
@@ -677,6 +688,17 @@ def _graph_runner(config: RunConfig, usage: Usage) -> TaskRunner:
             config.model,
             settings.fronteira_b_base_url or DEFAULT_BASE_URL,
             effort=config.reasoning_effort,
+        )
+    elif config.provider == "openai":
+        from qcagent.llm.openai_client import OpenAIClient
+
+        if not settings.openai_api_key:
+            raise RuntimeError("provider 'openai' needs OPENAI_API_KEY in the environment")
+        inner = OpenAIClient(
+            settings.openai_api_key,
+            config.model,
+            effort=config.reasoning_effort,
+            send_temperature=config.send_temperature,
         )
     elif config.provider == "groq":
         from qcagent.llm.groq_client import DEFAULT_BASE_URL as GROQ_URL

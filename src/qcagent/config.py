@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     fronteira_a_model: str = "claude-sonnet-4-5"
 
+    # OpenAI API directly (the Fronteira B arm since 2026-09-26). Separate from
+    # fronteira_b_api_key, which holds the Groq key.
+    openai_api_key: str | None = None
+
     # Fronteira B — distinct model family, provider-agnostic (D10)
     fronteira_b_api_key: str | None = None
     fronteira_b_base_url: str | None = None
