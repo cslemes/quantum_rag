@@ -1,0 +1,9 @@
+max_iter: 5
+model: qwen2.5-coder:7b
+results_dir: results
+seeds:
+- 1
+- 2
+- 3
+tasks:
+- qaoa_maxcut_4q_perturbed

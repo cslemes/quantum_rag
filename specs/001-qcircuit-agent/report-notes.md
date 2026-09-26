@@ -2494,6 +2494,70 @@ F25.
 
 ---
 
+### F28 — O piso de ruído zero media REPLAY, não independência: a saída de uma tarefa depende da tarefa que rodou antes dela
+
+**Como apareceu**: antes de reindexar o corpus (T111), uma checagem de
+premissa — o piso zero tinha sido medido com Ollama 0.34.1, o host agora roda
+0.34.4. Seis runs de S0 (`f5a69657457574a3`) repetidos a frio
+(`4c19589509bcf833`, config só com `dj_constant_4q` e
+`qaoa_maxcut_4q_perturbed`): `dj_constant_4q` saiu **byte-idêntico nos 3
+seeds, trace incluído**; `qaoa_maxcut_4q_perturbed` divergiu **nos 3**, e 2
+viraram de `success` para `failed_static`.
+
+**Onde diverge** (o trace persistido por T112 permitiu achar em minutos): no
+PRIMEIRO passo, o planner, cujo prompt é só o enunciado, mesmo seed,
+`temperature=0`. Uma execução escreveu `gate_set = ["Hadamard", ...]`, a
+outra `["H", ...]`.
+
+**A causa, isolada**: a mesma tarefa rodada SOZINHA, duas vezes, cada uma
+depois do unload do modelo → **idêntica nas duas**, e igual ao planner de S0.
+Precedida de `dj_constant_4q` no mesmo estado de servidor → diferente.
+`bench/runner.py::reset_generator_state` descarrega o modelo **uma vez por
+execução da suíte**, não por (tarefa, seed); a partir daí, o cache interno de
+prompt/KV do Ollama carrega estado de uma tarefa para a seguinte, e esse
+estado muda a resposta. A docstring da função já descrevia o mecanismo entre
+EXECUÇÕES ("the second inherits the first's cache"); ele age igualmente entre
+TAREFAS dentro de uma execução.
+
+**O que isso faz com o piso de ruído zero** (runs `99960870`/`7de38e77`):
+aquelas duas execuções tinham a mesma ordem de tarefas e o mesmo histórico de
+chamadas, então reproduziram o mesmo estado de servidor em cada ponto. O zero
+mediu **determinismo de replay** — mesma história, mesma saída — e não que o
+resultado de uma tarefa independe das outras. O número está certo; a leitura
+"o sistema é determinístico, diferenças entre braços dispensam estimativa de
+ruído" estava errada, e foi escrita por mim na predição de T111/T113.
+
+**Por que isto é mais grave que ruído**: ruído se cancela; isto não. Qualquer
+intervenção que mude o prompt da tarefa k muda o estado herdado pela tarefa
+k+1, que muda sem ter sido tocada. Em S0→S1 o corpus novo altera o contexto
+de TODAS as tarefas, então o estrato B — o controle — se moveria por efeito
+do estrato A, e o controle dispararia sem que nada nele tivesse mudado. É o
+mesmo desenho de falha de F15 (um parâmetro implícito do servidor) e de F18
+(uma memoização entre o experimento e o sistema), agora com a unidade de
+análise errada: a suíte trata (tarefa, seed) como independentes, e não são.
+
+**Consequências**:
+1. Toda comparação por tarefa entre execuções com qualquer diferença de
+   prompt — incluindo T090c (`ce9614fa` → `6cf69f6a`) — está confundida por
+   contaminação cruzada, além do ruído de F15 já registrado.
+2. S0 (`f5a69657`) não serve como braço de comparação: precisa ser refeito
+   sob a mesma política de reset que S1 e S2 usarem.
+3. SC-008 e o portão de T101b: o piso "zero" vale para replays da mesma
+   configuração, não para comparações antes/depois — que é o uso do portão.
+
+**A contramedida disponível**: unload por (tarefa, seed), para que cada run
+dependa só da própria história. Custa um carregamento de modelo por run
+(segundos; +5-10 min no subconjunto de 48, +30-60 min na suíte de 360 — o
+que pesa contra o teto de 4 h de SC-007). Muda o que a suíte mede e o seu
+custo, então não é decidida unilateralmente.
+
+**Fonte**: `results/f5a69657457574a3` (S0), `results/4c19589509bcf833`
+(checagem), duas execuções isoladas de `qaoa_maxcut_4q_perturbed`
+(2026-09-26); `bench/runner.py::reset_generator_state`; "PISO DE RUÍDO
+MEDIDO: ZERO"; F15; F18; F19.
+
+---
+
 ### F16 — Um controle que dispara vale mais que uma hipótese que confirma
 
 **O achado mais transferível deste projeto, e não é sobre computação
@@ -2793,6 +2857,11 @@ interpretável.
 ---
 
 ### PISO DE RUÍDO MEDIDO: ZERO. O sistema é determinístico (runs `99960870239e97e7` e `7de38e77ac071bd3`, 2026-09-22)
+
+> **Qualificado por F28 (2026-09-26)**: o zero é de REPLAY — as duas execuções
+> tinham o mesmo histórico de chamadas. A saída de uma tarefa depende da tarefa
+> anterior no mesmo estado de servidor, então o zero não vale para comparações
+> entre execuções com prompts diferentes.
 
 **Duas execuções completas, mesmo código, mesmo corpus, cache frio nas duas.
 Divergência em TODAS as medidas: 0.**

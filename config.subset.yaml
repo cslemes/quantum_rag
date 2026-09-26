@@ -1,0 +1,28 @@
+# Mechanism-measurement subset for T114 (report-notes.md, "PREDIÇÃO
+# REGISTRADA — corpus na versão fixada"). NOT the regression suite: 16 tasks in
+# two strata, chosen from run 99960870239e97e7 before any arm ran.
+#   Stratum A — errors taught by the 2.x corpus (F24)
+#   Stratum B — invented symbols only (F25); control for S0->S1
+model: qwen2.5-coder:7b
+seeds: [1, 2, 3]
+tasks:
+  # A
+  - dj_constant_4q
+  - dj_constant_4q_perturbed
+  - dj_balanced_4q
+  - simon_6q_perturbed
+  - grover_3q
+  - grover_4q
+  - ising_weighted_maxcut_4q
+  - ising_field_coupling_4q_perturbed
+  # B
+  - bell_phi_plus_2q
+  - ghz_5q
+  - qft_5q
+  - w_state_5q
+  - qpe_4q
+  - bv_4q
+  - reversible_half_adder_4q
+  - qaoa_maxcut_4q_perturbed
+max_iter: 5
+results_dir: results
