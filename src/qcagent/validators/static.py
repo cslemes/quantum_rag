@@ -8,6 +8,8 @@ import hashlib
 import importlib
 import io
 import re
+import types
+from dataclasses import dataclass
 from functools import lru_cache
 
 from qiskit import __version__ as qiskit_version
@@ -69,7 +71,13 @@ def _importable_symbols() -> dict[str, str]:
         except ImportError:  # pragma: no cover - a missing optional dependency
             continue
         for name in dir(module):
-            if not name.startswith("_"):
+            # Submodules are excluded: `qiskit.circuit.library.grover_operator`
+            # is a MODULE in 1.2.4 (a function in 2.x), importable and not
+            # callable. Suggesting `from ... import grover_operator` as a fix
+            # would hand the model the exact error F24 traced to the corpus.
+            if not name.startswith("_") and not isinstance(
+                getattr(module, name, None), types.ModuleType
+            ):
                 index.setdefault(name, module_name)
     return index
 
@@ -95,6 +103,99 @@ def missing_import_for(stderr: str) -> str | None:
     return f"from {module} import {symbol}" if module else None
 
 
+_IMPORT_ERROR_RE = re.compile(r"^ImportError: cannot import name '([^']+)' from '([^' ]+)'")
+
+# Other frameworks' names for the same gates (F26). 71% of the invented
+# symbols in the baseline were PennyLane operation names, alone or with
+# Qiskit's `Gate` suffix appended. They are not misspellings — `Hadamard` and
+# `HGate` share nothing a fuzzy matcher could use — so the mapping is a
+# vocabulary table, and a small one, because the gate vocabulary is small.
+# Only names the normalization below cannot reach are listed.
+_VOCABULARY_ALIASES = {
+    "CNOT": "CXGate",
+    "Hadamard": "HGate",
+    "PauliX": "XGate",
+    "PauliY": "YGate",
+    "PauliZ": "ZGate",
+    "Toffoli": "CCXGate",
+    "CPHASE": "CPhaseGate",
+}
+
+
+def _normal_key(name: str) -> str:
+    """Case, underscores and a trailing `gate` removed: `efficient_su2` and
+    `EfficientSU2`, `GraphStateGate` and `GraphState`, `H` and `HGate` all
+    collapse to the same key."""
+    key = name.lower().replace("_", "")
+    return key.removesuffix("gate") or key
+
+
+@lru_cache(maxsize=1)
+def _symbols_by_key() -> dict[str, str]:
+    """normal key -> real symbol. On a collision the circuit-library name
+    wins (that is where the invented gate names point), then sort order, so
+    the choice is deterministic."""
+    index = _importable_symbols()
+    ranked = sorted(index, key=lambda n: (index[n] != "qiskit.circuit.library", n))
+    by_key: dict[str, str] = {}
+    for name in ranked:
+        by_key.setdefault(_normal_key(name), name)
+    return by_key
+
+
+@dataclass(frozen=True)
+class SymbolCorrection:
+    symbol: str  # what the code tried to import
+    module: str  # where it tried to import it from
+    replacement: str  # the real symbol
+    replacement_module: str
+
+    @property
+    def import_line(self) -> str:
+        return f"from {self.replacement_module} import {self.replacement}"
+
+    @property
+    def reason(self) -> str:
+        if self.replacement == self.symbol:
+            return (
+                f"`{self.symbol}` is not in `{self.module}`; it is in `{self.replacement_module}`"
+            )
+        return (
+            f"`{self.symbol}` is not a symbol in `{self.module}` (Qiskit {qiskit_version}); "
+            f"`{self.replacement}` is"
+        )
+
+
+def symbol_correction_for(stderr: str) -> SymbolCorrection | None:
+    """The real symbol an `ImportError` was reaching for, derived from the
+    INSTALLED runtime, or None.
+
+    This is negative knowledge the corpus cannot supply (F25): documentation
+    describes what exists, so no page says "`H` is not in
+    `qiskit.circuit.library`". 104 of the 112 baseline runs that ended on an
+    ImportError named a symbol that never existed; retrieval had nothing to
+    offer, and the same symbol recurred in 58-68% of transitions. The truth
+    source is `_importable_symbols()` — never the indexed symbol list, which
+    held 2.x symbols the runtime lacks (F24).
+    """
+    match = _IMPORT_ERROR_RE.match(stderr)
+    if match is None:
+        return None
+    symbol, module = match.groups()
+    index = _importable_symbols()
+    if symbol in index:  # real, but imported from the wrong module
+        return SymbolCorrection(symbol, module, symbol, index[symbol])
+    base = symbol.removesuffix("Gate") or symbol
+    candidate = _VOCABULARY_ALIASES.get(symbol) or _VOCABULARY_ALIASES.get(base)
+    if candidate is None and f"{symbol}Gate" in index:
+        candidate = f"{symbol}Gate"
+    if candidate is None:
+        candidate = _symbols_by_key().get(_normal_key(symbol))
+    if candidate is None or candidate not in index:
+        return None
+    return SymbolCorrection(symbol, module, candidate, index[candidate])
+
+
 def _classify_sandbox_failure(stderr: str) -> str:
     """Maps a sandbox execution failure to the closed error taxonomy
     (data-model.md), grounded in plan.md's critic routing table.
@@ -117,6 +218,11 @@ def _classify_sandbox_failure(stderr: str) -> str:
     """
     if missing_import_for(stderr) is not None:
         return "MissingImport"
+    # An ImportError whose intended symbol the runtime can name. Split from
+    # HallucinatedSymbol by the ACTION available, not by whether the name
+    # was invented or removed (F25): here the fix is a specific line.
+    if symbol_correction_for(stderr) is not None:
+        return "UnknownSymbol"
     if stderr.startswith(_HALLUCINATION_EXCEPTIONS):
         return "HallucinatedSymbol"
     if "CircuitError" in stderr and "out of range" in stderr:

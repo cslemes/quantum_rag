@@ -31,7 +31,11 @@ from qcagent.state import (
     StaticResult,
 )
 from qcagent.validators.assertions import render_assertion
-from qcagent.validators.static import missing_import_for
+from qcagent.validators.static import (
+    SymbolCorrection,
+    missing_import_for,
+    symbol_correction_for,
+)
 
 Action = Literal["retry_retrieval", "retry_generation", "optimize", "abort", "done"]
 
@@ -49,6 +53,10 @@ _RETRY_GENERATION_ERRORS = {
     # the baseline run, 112 runs spent five iterations each on
     # `retry_retrieval` for exactly this failure.
     "MissingImport",
+    # An ImportError on a symbol that does not exist, where the runtime names
+    # the one intended (F25). Retrieval cannot fix it: documentation does not
+    # enumerate names that do not exist. The correction is derived instead.
+    "UnknownSymbol",
     # The circuit was built and serialized but Qiskit's own QPY reader
     # refused it (bug 21). Regenerating may produce a circuit that survives
     # the round-trip; retrieval cannot help, and the run must not crash.
@@ -191,6 +199,15 @@ def _missing_import_fix(state: AgentState) -> str | None:
     return missing_import_for(static.error.message)
 
 
+def _unknown_symbol_fix(state: AgentState) -> SymbolCorrection | None:
+    """Same contract as `_missing_import_fix`: the classifier that labeled
+    the error is the one that names the correction."""
+    static = state.get("static")
+    if static is None or static.error is None:
+        return None
+    return symbol_correction_for(static.error.message)
+
+
 def _build_hint_prompt(action: str, error_type: str | None, state: AgentState) -> str:
     error_message = ""
     for result in (state.get("static"), state.get("semantic")):
@@ -280,6 +297,20 @@ def make_critic_node(
                 generation_hint=(
                     f"The code uses a symbol it never imports. Add exactly this line "
                     f"at the top of the code:\n\n    {fix}\n\n"
+                    "Keep the rest of the circuit as it is — the gates themselves were "
+                    "not what failed. Include EVERY import the code needs."
+                ),
+            )
+        elif error_type == "UnknownSymbol" and (fix := _unknown_symbol_fix(state)) is not None:
+            # Negative knowledge, derived from the runtime (F25): no retrieved
+            # page could say this, and an LLM paraphrase could only add error.
+            decision = CriticDecision(
+                action=action,
+                rationale=f"símbolo inexistente — {fix.reason}",
+                generation_hint=(
+                    f"{fix.reason}. Replace that import with exactly this line:\n\n"
+                    f"    {fix.import_line}\n\n"
+                    f"and use `{fix.replacement}` wherever the code used `{fix.symbol}`. "
                     "Keep the rest of the circuit as it is — the gates themselves were "
                     "not what failed. Include EVERY import the code needs."
                 ),
