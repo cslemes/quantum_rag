@@ -3440,6 +3440,16 @@ funcionar: se a contaminação voltar, os seeds voltam a divergir. É uma
 invariante, e uma invariante ganha um mecanismo, não 240 runs redundantes
 pagando por um canário — F11 aplicado à própria suíte.
 
+**Validado ao vivo (2026-09-26), nos dois sentidos**: `python -m
+bench.runner --verify-protocol-only` com o protocolo de `config.yaml` →
+**passou**, 2 tarefas × 3 seeds byte-idênticos, 5 min 31 s. E o CONTROLE
+POSITIVO — o mesmo canário com `reset_per_run: false` → **falhou**, como tem
+de falhar: `dj_constant_4q` divergiu nos seeds 2 e 3 já no passo 0 (planner),
+saída com código 1. Um canário que só foi visto passar não mostrou que
+consegue falhar (F16); este mostrou. Nota: `qaoa_maxcut_4q_perturbed` NÃO
+divergiu nessa execução sem reset — a contaminação não se manifesta em toda
+tarefa toda vez, e é por isso que o canário tem duas.
+
 **Contraste que mede o tamanho do problema de F28**: o S0 contaminado
 (`f5a69657`) e o S0 limpo diferem em desfecho, não só em detalhe — estrato B
 teve 8 sucessos lá e 3 aqui; m2 no estrato B foi 57% lá e 81% aqui. A

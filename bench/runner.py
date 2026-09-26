@@ -712,6 +712,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="run the Principle IV reference check for the configured tasks and stop",
     )
+    parser.add_argument(
+        "--verify-protocol-only",
+        action="store_true",
+        help="run the protocol canary (F28/F29) against the live server and stop",
+    )
     args = parser.parse_args(argv)
 
     config = RunConfig.load(args.config)
@@ -729,6 +734,26 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{len(tasks)} task(s), {len(config.seeds)} seed(s): every reference verified")
     if args.verify_only:
         return 0
+    if args.verify_protocol_only:
+        usage = Usage()
+        runner = _graph_runner(config, usage)
+        canary = load_tasks(config.model_copy(update={"tasks": config.protocol_canary}))
+        reset = None
+        if config.reset_per_run and config.provider == "ollama":
+
+            def reset() -> None:
+                reset_generator_state(settings.ollama_base_url, config.model)
+
+        canary_failures = verify_protocol(
+            runner, canary, config.canary_seeds, config.max_iter, reset
+        )
+        for failure in canary_failures:
+            print(f"  DIVERGED {failure}", file=sys.stderr)
+        verdict = "FAILED" if canary_failures else "passed"
+        print(
+            f"protocol canary {verdict}: {len(canary)} task(s) x {len(config.canary_seeds)} seeds"
+        )
+        return 1 if canary_failures else 0
     try:
         run_suite(config, check_protocol=True)
     except ProtocolIntegrityError as exc:
