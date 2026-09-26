@@ -2736,6 +2736,28 @@ execução do sistema, verificável lendo o código, independente dos dados. Um
 controle escolhido assim é forte. Um escolhido por "isto provavelmente não
 muda muito" é só mais uma métrica.
 
+**Refinamento do corolário (2026-09-26, T114)**: três controles foram
+registrados em predições deste projeto por "argumento estrutural"; dois
+seguraram e um falhou, e a diferença entre eles é classificável ANTES de
+medir.
+
+| controle | argumento | tipo | resultado |
+|---|---|---|---|
+| `compila@1` em T090c | "a tentativa 1 ocorre antes do roteamento existir" | ORDEM DE EXECUÇÃO | segurou (disparou só por ruído real, F15) |
+| `compila@1` em S1→S2 | "a tentativa 1 ocorre antes do corretor agir" | ORDEM DE EXECUÇÃO | segurou (2/8, 0/8 → 2/8, 0/8) |
+| m2 do estrato B em S0→S1 | "o corpus não alcança o estrato B" | ALCANÇABILIDADE | falhou — o corpus alcança toda tarefa pelo retrieval |
+
+Um argumento de ORDEM é checável lendo o código: basta ver que o nó X roda
+antes do nó Y no grafo, e o que acontece em Y não pode afetar X. Um argumento
+de ALCANÇABILIDADE exige conhecer o fluxo de dados INTEIRO — todo caminho
+pelo qual a intervenção poderia chegar à métrica —, e basta um caminho
+esquecido para ele ser falso. Aqui o caminho esquecido era o mais óbvio: toda
+tarefa recupera. **Argumentos de ordem são checáveis; argumentos de
+alcançabilidade são hipóteses vestidas de controle.** Regra: um controle só
+é registrado como estrutural se o argumento for de ordem de execução; um de
+alcançabilidade é registrado como hipótese secundária, com a mesma
+disciplina de refutação que a principal, e sem o peso de um controle.
+
 **Segundo uso, não antecipado**: um controle violado CALIBRA o ruído. O salto
 de 4,7 pontos em `compila@1` estabelece o piso: nenhum efeito menor que isso
 é distinguível de ruído com n=360 nesta configuração. Isso reclassificou
