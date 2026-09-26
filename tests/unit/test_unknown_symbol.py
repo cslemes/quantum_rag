@@ -79,3 +79,50 @@ def test_routes_to_generation_with_the_exact_line_and_no_llm_call() -> None:
     assert "use `HGate` wherever the code used `H`" in decision.generation_hint
     assert "Keep the rest of the circuit as it is" in decision.generation_hint
     assert decision.retrieval_hint is None
+
+
+# --- T115: every bad import, not only the first --------------------------------
+
+# S2, qaoa_maxcut_4q_perturbed seed 1: Python reported RZ; RX was also invented.
+_TWO_BAD = """from qiskit import QuantumCircuit
+from qiskit.circuit.library import RZ, RX, PhaseExp
+qc = QuantumCircuit(4)
+"""
+
+
+def test_every_bad_import_in_the_code_is_found() -> None:
+    from qcagent.validators.static import import_corrections_for
+
+    corrections, unresolved = import_corrections_for(_TWO_BAD)
+    assert [(c.symbol, c.replacement) for c in corrections] == [("RZ", "RZGate"), ("RX", "RXGate")]
+    assert unresolved == ["`PhaseExp` from `qiskit.circuit.library`"]
+
+
+def test_the_hint_corrects_all_of_them_at_once() -> None:
+    """The oscillation S2 measured: one symbol corrected per attempt, the other
+    reintroduced. The hint now names every one the code imports."""
+    state = _state(_import_error("RZ"))
+    state["code"] = _TWO_BAD
+    hint = make_critic_node(_ExplodingLLM(), max_iter=5, seed=1)(state)["decision"].generation_hint
+
+    assert "from qiskit.circuit.library import RZGate" in hint
+    assert "from qiskit.circuit.library import RXGate" in hint
+    assert "use `RXGate` wherever the code used `RX`" in hint
+    assert "PhaseExp" in hint and "remove" in hint
+
+
+def test_a_submodule_import_is_corrected_too() -> None:
+    """`grover_operator` imports fine in 1.2.4 and is a module (F24)."""
+    from qcagent.validators.static import import_corrections_for
+
+    corrections, _ = import_corrections_for("from qiskit.circuit.library import grover_operator\n")
+    assert [c.replacement for c in corrections] == ["GroverOperator"]
+
+
+def test_unparseable_code_and_unlisted_modules_are_left_alone() -> None:
+    """Only listed modules are resolved — never a module name the generated
+    code chose — and the code is parsed, not run."""
+    from qcagent.validators.static import import_corrections_for
+
+    assert import_corrections_for("from qiskit.circuit.library import (") == ([], [])
+    assert import_corrections_for("from some_unknown_pkg import H\n") == ([], [])

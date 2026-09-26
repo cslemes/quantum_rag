@@ -33,6 +33,7 @@ from qcagent.state import (
 from qcagent.validators.assertions import render_assertion
 from qcagent.validators.static import (
     SymbolCorrection,
+    import_corrections_for,
     missing_import_for,
     symbol_correction_for,
 )
@@ -199,13 +200,42 @@ def _missing_import_fix(state: AgentState) -> str | None:
     return missing_import_for(static.error.message)
 
 
-def _unknown_symbol_fix(state: AgentState) -> SymbolCorrection | None:
+def _unknown_symbol_fix(state: AgentState) -> tuple[list[SymbolCorrection], list[str]] | None:
     """Same contract as `_missing_import_fix`: the classifier that labeled
-    the error is the one that names the correction."""
+    the error names the first correction. The rest come from the code's own
+    imports (T115) — the message only ever reveals the first bad symbol."""
     static = state.get("static")
     if static is None or static.error is None:
         return None
-    return symbol_correction_for(static.error.message)
+    first = symbol_correction_for(static.error.message)
+    if first is None:
+        return None
+    others, unresolved = import_corrections_for(state.get("code", ""))
+    return [first, *(c for c in others if c.symbol != first.symbol)], unresolved
+
+
+def _render_symbol_hint(corrections: list[SymbolCorrection], unresolved: list[str]) -> str:
+    lines = "\n".join(f"    {c.import_line}" for c in corrections)
+    uses = "; ".join(
+        f"use `{c.replacement}` wherever the code used `{c.symbol}`"
+        for c in corrections
+        if c.replacement != c.symbol
+    )
+    hint = (
+        f"{' '.join(c.reason + '.' for c in corrections)} Replace those imports with "
+        f"exactly these lines:\n\n{lines}\n\n"
+    )
+    if uses:
+        hint += f"and {uses}. "
+    if unresolved:
+        hint += (
+            f"These do not exist in the installed Qiskit and have no equivalent — remove "
+            f"them and build what they were for from real gates: {', '.join(unresolved)}. "
+        )
+    return hint + (
+        "Keep the rest of the circuit as it is — the gates themselves were not what "
+        "failed. Include EVERY import the code needs."
+    )
 
 
 def _build_hint_prompt(action: str, error_type: str | None, state: AgentState) -> str:
@@ -301,22 +331,14 @@ def make_critic_node(
                     "not what failed. Include EVERY import the code needs."
                 ),
             )
-        elif (
-            error_type == "UnknownSymbol" and (correction := _unknown_symbol_fix(state)) is not None
-        ):
+        elif error_type == "UnknownSymbol" and (fixes := _unknown_symbol_fix(state)) is not None:
             # Negative knowledge, derived from the runtime (F25): no retrieved
             # page could say this, and an LLM paraphrase could only add error.
+            corrections, unresolved = fixes
             decision = CriticDecision(
                 action=action,
-                rationale=f"símbolo inexistente — {correction.reason}",
-                generation_hint=(
-                    f"{correction.reason}. Replace that import with exactly this line:\n\n"
-                    f"    {correction.import_line}\n\n"
-                    f"and use `{correction.replacement}` wherever the code used "
-                    f"`{correction.symbol}`. "
-                    "Keep the rest of the circuit as it is — the gates themselves were "
-                    "not what failed. Include EVERY import the code needs."
-                ),
+                rationale="símbolo inexistente — " + "; ".join(c.reason for c in corrections),
+                generation_hint=_render_symbol_hint(corrections, unresolved),
             )
         else:
             prompt = _build_hint_prompt(action, error_type, state)

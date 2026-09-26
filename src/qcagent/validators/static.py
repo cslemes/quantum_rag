@@ -182,6 +182,10 @@ def symbol_correction_for(stderr: str) -> SymbolCorrection | None:
     if match is None:
         return None
     symbol, module = match.groups()
+    return _correct(symbol, module)
+
+
+def _correct(symbol: str, module: str) -> SymbolCorrection | None:
     index = _importable_symbols()
     if symbol in index:  # real, but imported from the wrong module
         return SymbolCorrection(symbol, module, symbol, index[symbol])
@@ -194,6 +198,45 @@ def symbol_correction_for(stderr: str) -> SymbolCorrection | None:
     if candidate is None or candidate not in index:
         return None
     return SymbolCorrection(symbol, module, candidate, index[candidate])
+
+
+def import_corrections_for(code: str) -> tuple[list[SymbolCorrection], list[str]]:
+    """Every `from M import X` in `code` where X does not exist in M, or is a
+    submodule there — not only the first one (T115).
+
+    Python raises on the first failing import, so the error message names one
+    symbol; in 5 of 8 S2 runs that ended on an ImportError the code imported
+    more than one. Correcting them one per attempt lets a regenerating model
+    fix one and reintroduce the other, which is the oscillation S2 measured.
+
+    Returns (corrections, unresolved) — `unresolved` are "`X` from `M`"
+    strings with no real neighbour. Only modules in `_IMPORTABLE_MODULES` are
+    resolved: the module is imported by its listed name, never by a name the
+    generated code chose, and the code itself is only PARSED, never run.
+    """
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return [], []
+    corrections: list[SymbolCorrection] = []
+    unresolved: list[str] = []
+    for node in ast.walk(tree):
+        if (
+            not isinstance(node, ast.ImportFrom)
+            or node.level
+            or node.module not in _IMPORTABLE_MODULES
+        ):
+            continue
+        module = importlib.import_module(node.module)
+        for alias in node.names:
+            obj = getattr(module, alias.name, None)
+            if alias.name == "*" or (obj is not None and not isinstance(obj, types.ModuleType)):
+                continue
+            if (correction := _correct(alias.name, node.module)) is not None:
+                corrections.append(correction)
+            else:
+                unresolved.append(f"`{alias.name}` from `{node.module}`")
+    return corrections, unresolved
 
 
 def _classify_sandbox_failure(stderr: str) -> str:
