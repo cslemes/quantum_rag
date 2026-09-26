@@ -95,7 +95,19 @@ def git_sha() -> str:
             timeout=5,
             check=True,
         )
-        return result.stdout.strip()
+        # A SHA claims "this code produced the record". With uncommitted
+        # changes to tracked files it does not, and until 2026-09-26 nothing
+        # said so: runs made mid-change recorded a commit that lacked the code
+        # they ran (F21's recorded-but-unchecked field, for provenance).
+        status = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=no"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
+        )
+        dirty = "-dirty" if status.stdout.strip() else ""
+        return result.stdout.strip() + dirty
     except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return "unknown"
 
