@@ -301,16 +301,16 @@ def make_critic_node(
                     "not what failed. Include EVERY import the code needs."
                 ),
             )
-        elif error_type == "UnknownSymbol" and (fix := _unknown_symbol_fix(state)) is not None:
+        elif error_type == "UnknownSymbol" and (correction := _unknown_symbol_fix(state)) is not None:
             # Negative knowledge, derived from the runtime (F25): no retrieved
             # page could say this, and an LLM paraphrase could only add error.
             decision = CriticDecision(
                 action=action,
-                rationale=f"símbolo inexistente — {fix.reason}",
+                rationale=f"símbolo inexistente — {correction.reason}",
                 generation_hint=(
-                    f"{fix.reason}. Replace that import with exactly this line:\n\n"
-                    f"    {fix.import_line}\n\n"
-                    f"and use `{fix.replacement}` wherever the code used `{fix.symbol}`. "
+                    f"{correction.reason}. Replace that import with exactly this line:\n\n"
+                    f"    {correction.import_line}\n\n"
+                    f"and use `{correction.replacement}` wherever the code used `{correction.symbol}`. "
                     "Keep the rest of the circuit as it is — the gates themselves were "
                     "not what failed. Include EVERY import the code needs."
                 ),
