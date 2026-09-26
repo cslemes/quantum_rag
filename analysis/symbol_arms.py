@@ -13,6 +13,13 @@ stratum of `config.subset.yaml`:
       attempt, the fraction whose next attempt imports `s` again (F25).
 - m3  compila@1 (control for the corrector: it acts on attempts >= 2).
 - m4  success rate and exhausted-MAX_ITER rate.
+- m5  repair-loop effectiveness (added 2026-09-26, before the RunPod arm):
+      of the tasks whose attempt 1 FAILED (a static or semantic error at
+      iteration 1 — planner errors and rejected inputs excluded, since no
+      code was generated), how many ended in success. The success count
+      tests the GENERATOR; this tests the ARCHITECTURE — the repair loop with
+      structured diagnostics — and is only informative for an arm that fails
+      attempt 1 often enough for the loop to engage.
 """
 
 import argparse
@@ -83,6 +90,7 @@ def score(records: list[RunRecord]) -> dict[str, float | int | None]:
     # iteration and did not succeed (config.subset.yaml: max_iter=5).
     exhausted = sum(1 for r in records if r.status != "success" and r.iterations >= 5)
     n = len(records)
+    engaged = [r for r in records if _attempt_1_failed(r)]
     return {
         "runs": n,
         "error_attempts": len(attempts),
@@ -100,7 +108,16 @@ def score(records: list[RunRecord]) -> dict[str, float | int | None]:
         else None,
         "m4_success": sum(r.status == "success" for r in records),
         "m4_exhausted": exhausted,
+        "m5_loop_engaged": len(engaged),
+        "m5_converged": sum(r.status == "success" for r in engaged),
     }
+
+
+def _attempt_1_failed(record: RunRecord) -> bool:
+    return record.status != "rejected_input" and any(
+        e.get("iteration") == 1 and e.get("stage") in ("static", "semantic")
+        for e in record.error_history
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

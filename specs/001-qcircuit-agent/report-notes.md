@@ -3980,6 +3980,54 @@ relatório que o do braço de API.
 - **como o qwen 7B**: sucesso ≤ 3/16 → um modelo aberto deste porte não
   basta; o limiar de capacidade está acima dele.
 
+**Métrica PRIMÁRIA adicionada antes de criar o pod (orientador,
+2026-09-26): tarefas que FALHARAM a tentativa 1 e CONVERGIRAM até a
+tentativa 5** (m5 em `analysis/symbol_arms.py`). Definição fixada agora:
+laço *engajado* = erro estático ou semântico na iteração 1 (erros do planner
+e `rejected_input` excluídos — não houve código); *convergiu* = engajado e
+terminou em `success` dentro de MAX_ITER=5. Reportado como k/n sobre os
+engajados, com os engajados separados por CAUSA da falha na tentativa 1:
+**semântica** (compilou, física errada) e **estática**.
+
+**Por que ela importa mais que a contagem de sucesso**: este projeto É um
+laço de reparo com diagnóstico estruturado, e o laço NUNCA foi testado de
+fato. Valores retrospectivos, mesma definição:
+
+| braço | laço engajado | convergiu |
+|---|---|---|
+| S3 qwen 7B | **16/16** | 1 |
+| L1 Luna | 2/16 | 1 |
+| L2 Luna | **0/16** | 0 |
+| L0 Luna | 1/16 | 1 |
+
+O qwen engajou o laço sempre e o laço falhou por limitação do gerador; o
+Luna quase não o engajou, porque acertou de primeira. **A contagem de sucesso
+testa o GERADOR; a contagem falhou-e-convergiu testa a ARQUITETURA.** Ela só
+é informativa num braço que caia na faixa do meio — capaz o bastante para
+compilar e usar o diagnóstico, não o bastante para acertar sempre de
+primeira. O 30B é o primeiro candidato a essa faixa.
+
+**Critérios, fixados antes** (n = tarefas engajadas):
+- **o mecanismo central funciona**: n ≥ 4 e convergiu ≥ n/2, com pelo menos
+  uma convergência a partir de falha SEMÂNTICA na tentativa 1 (física errada
+  corrigida pelo diagnóstico — o cenário que o desenho existe para servir);
+- **o laço engaja e não converge**: convergiu ≤ n/4 → o diagnóstico não
+  basta nem para um gerador capaz; T090d vira prioridade;
+- **inconclusivo**: n < 4 (o gerador acertou de primeira quase sempre — como
+  o Luna) ou convergência entre n/4 e n/2.
+
+**Consequência registrada antecipadamente, se cair no primeiro ramo**: T090d
+ganha um endereço preciso. O reparo incremental serve a modelos CAPAZES DE
+USAR O FEEDBACK MAS NÃO DE ACERTAR DE PRIMEIRA — muito mais específico que
+"trabalho futuro para geradores locais fracos", e identifica a população a
+que a intervenção serviria. (Para o qwen 7B, que não usa o feedback, o reparo
+incremental provavelmente não bastaria; para o Luna, que não precisa dele,
+não há o que servir.) Se as convergências do 30B vierem com oscilação antes
+de convergir, é ali que T090d mediria seu efeito.
+
+**Reprodutibilidade**: este braço é determinístico sob reset (canário), então
+não precisa de réplica para piso de ruído — ao contrário do braço de API.
+
 **Minha expectativa, registrada para poder estar errada**: PARCIAL tendendo a
 alto. Um modelo coder de 2025 deve conhecer a API do Qiskit 1.x muito melhor
 que o 7B, então a classe de símbolos inventados cai fortemente; mas o acerto
