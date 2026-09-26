@@ -34,4 +34,4 @@ results_dir: results
 # (defaults), which makes this arm reproducible, unlike the API arms.
 reset_per_run: true
 ollama_base_url: http://localhost:11435
-generator_host: runpod   # set to runpod:<gpu type> at launch
+generator_host: "runpod:NVIDIA RTX A5000 (EU-SE-1, secure, $0.27/h, pod 75qrd0lpj570r1)"
