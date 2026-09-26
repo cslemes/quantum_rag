@@ -3818,6 +3818,121 @@ antes de rodar; `tests/unit/test_openrouter_arm.py::test_the_messages_sent_are_b
 
 ---
 
+### RESULTADO — braço de API, `gpt-6-luna` via API da OpenAI (L1 `9422188cca9dbcdf`, L2 `03fd12066865c628`, L0 `dbb915edaf9f7e32`, 2026-09-26)
+
+Commit `9caf370`, 16 tarefas, seed 1, mesmo corpus/validadores/roteamento/
+corretor de S3. 0 `harness_error`. **Retrato, não medição reprodutível**
+(Threats): temperatura 1 imposta pela API, modelo remoto.
+
+| por tarefa (n=16) | S3 qwen | **L1** Luna, raciocínio high | **L2** = L1 | **L0** Luna, raciocínio none |
+|---|---|---|---|---|
+| sucesso | 1 | **15** | **16** | 12 |
+| `verificado@1` | 0 | 14 | 16 | 11 |
+| `compila@1` | 2 | 16 | 16 | 16 |
+| alcançou semântico | 2 | 16 | 16 | 12 |
+| esgotou MAX_ITER | 15 | 1 | 0 | 0 |
+| `rejected_input` (planner recusou) | 0 | 0 | 0 | **4** |
+| tentativas `ImportError` | 33 | **0** | **0** | **0** |
+| símbolo corrigido volta depois (oscilação) | 16 | 0 | 0 | 0 |
+| iterações médias | 4,88 | 1,31 | 1,00 | 0,81 |
+| custo (tokens medidos × preço de lista; a API não devolve custo) | — | US$ 0,041 | US$ 0,028 | US$ 0,014 |
+
+**Custo total do braço**: US$ 0,083 (L1+L2+L0) + sondas US$ 0,0015 + a
+tentativa no Groq ~US$ 0,005 a preço não verificado (provavelmente zero no
+plano gratuito). Tempo de parede: 334 s, 218 s, 78 s.
+
+**Piso de ruído (L1 × L2, configuração idêntica)**: desfecho (status) igual
+em **15/16** tarefas — uma diverge (`ising_field_coupling_4q_perturbed`:
+`failed_semantic` em L1, sucesso em L2). `final_code` byte-idêntico em só
+**3/16**: a temperatura 1 muda o CÓDIGO quase sempre e o DESFECHO raramente.
+Taxa de virada de desfecho ≈ 1/16 (IC 95% Wilson [1%, 28%] — o piso é
+grosseiro com n=16, como registrado). O custo também varia: US$ 0,041 × 0,028
+na mesma configuração (~45%).
+
+**Comparações que o piso SUSTENTA:**
+- **Luna × qwen**: sucesso 15-16/16 contra 1/16, `verificado@1` 14-16 contra
+  0 — uma diferença de ~14 tarefas contra um piso de ~1. Inequívoca.
+- **A classe de símbolos inventados desaparece**: 0 `ImportError` em 48 runs
+  de Luna contra 33 tentativas em 16 runs de qwen; oscilação 0 contra 16.
+- **Raciocínio desligado muda o PLANNER** (L0 × L1/L2): 4 tarefas recusadas
+  na entrada contra 0 — acima do piso de 1 —, mas o mecanismo é a etapa de
+  planejamento (ver F30), não a geração: **nas 12 tarefas em que gerou, o
+  L0 acertou 12**, 11 na primeira tentativa.
+
+**Comparações que o piso NÃO sustenta:** diferenças de iteração média entre
+L1, L2 e L0 (1,31 × 1,00 × 0,81); qualquer afirmação sobre uma tarefa
+isolada (a de `ising` virou entre L1 e L2); diferenças de custo entre braços
+de API; e — o mais importante — **qualquer afirmação sobre como o Luna
+REPARA**: ele precisou de reparo em no máximo 2 das 16 tarefas por braço. "Não
+oscila" é em grande parte vacuidade: não houve o que reparar. O único
+episódio longo (L1, `ising`, 5 iterações) foi física errada persistente
+(fidelidade ≤ 0,07, sem alternância entre classes de erro), não oscilação.
+
+**Leitura contra a predição e a regra de decisão registradas:**
+- **Predição do orientador ("um modelo de fronteira elimina a classe de
+  símbolos inventados e não oscila; o sucesso sobe substancialmente"):
+  CONFIRMADA, e com um modelo que nem é de fronteira.** Pela ressalva
+  registrada, esse é o ramo FORTE: se até o nível pequeno de outra família
+  resolve, o gargalo é o gerador.
+- **O que exatamente é o gargalo**: não a qualidade do reparo, e sim acertar
+  na PRIMEIRA tentativa (`verificado@1` 14-16/16 contra 0/16). O laço de
+  reparo mal é exercitado por um gerador capaz.
+- **Terceira leitura (o raciocínio faz internamente o que T090d faria):
+  NÃO favorecida.** Com raciocínio desligado (L0) o Luna ainda gera código
+  correto de primeira em 11 das 12 tarefas que gerou. O problema que T090d
+  resolveria não surge — não é o raciocínio que o substitui.
+- **Regra de decisão → "sucesso alto, sem oscilação: respondido; um segundo
+  braço acrescenta pouco". Sonnet NÃO roda.**
+- **T090d permanece trabalho futuro**, agora com escopo preciso: seu valor
+  fica restrito a geradores fracos — que é exatamente o braço local, cuja
+  motivação em D10 (custo, privacidade, soberania) é a razão de o projeto
+  ter um gerador local. A evidência que aponta para ele é a oscilação de
+  S2/S3; o braço de API diz que um gerador melhor a evita, não que o reparo
+  incremental a corrigiria.
+
+**Achado lateral de integração**: em L1, uma resposta do planner do Luna
+não passou na validação do esquema `Requirement` (`MalformedPlannerResponse`,
+tipo do campo `value`); o run seguiu. Uma ocorrência em 48 runs; registrado,
+não corrigido.
+
+---
+
+### F30 — 52 enunciados da suíte citam outra tarefa pelo nome, e só um modelo que os leu ao pé da letra revelou isso
+
+**O que aconteceu**: no braço L0 (Luna sem raciocínio), o planner RECUSOU
+quatro tarefas. Três com o mesmo motivo — `simon_6q_perturbed`: *"references
+the undefined named task "simon_6q" as the source of the standard Simon
+circuit"*. Verificado na suíte: **52 dos 120 enunciados — todos variantes
+perturbadas — citam a tarefa-base pelo `task_id`** ("the standard circuit as
+in the ising_field_coupling_4q task (…)"). Cada um também dá a especificação
+completa, então a referência é redundante; mas é um identificador interno da
+suíte vazando para o que deveria ser uma descrição autossuficiente em
+linguagem natural, e para quem não vê as outras tarefas ela é uma dependência
+indefinida.
+
+**Por que ninguém viu antes**: o qwen nunca recusou — ele raramente chegava a
+algo que dependesse de interpretar o enunciado com esse cuidado. O Luna com
+raciocínio resolveu a ambiguidade (usou a especificação completa). Só um
+modelo capaz o bastante para ler o enunciado com rigor e sem raciocínio para
+contornar a ambiguidade a tratou como o que ela é. É F19 do lado do
+instrumento de medida: o defeito estava no texto da suíte o tempo todo, e o
+gerador usado para medir era fraco demais para tropeçar nele.
+
+**Consequência**: a recusa do planner é o comportamento CORRETO segundo a
+regra do próprio planner (F9: requisitos vetam), e não uma falha do modelo em
+3 dos 4 casos. A quarta recusa (`reversible_half_adder_4q`: "XOR não pode ser
+calculado só com CNOT e Toffoli") é erro do modelo — é trivialmente possível.
+
+**Contramedida proposta, não aplicada**: reescrever os 52 enunciados sem o
+`task_id` (a especificação completa já está lá). Não aplicada agora porque
+muda a suíte no meio de uma comparação e invalida a linha de base por tarefa;
+entra como mudança deliberada, com execução nova de referência.
+
+**Fonte**: `results/dbb915edaf9f7e32` (L0, traces do planner);
+`bench/tasks/*/*_perturbed.json`; F9; F19.
+
+---
+
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
 
 **Este é o ponto de referência do Princípio III**: o número contra o qual toda

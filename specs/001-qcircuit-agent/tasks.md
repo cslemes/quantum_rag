@@ -146,6 +146,7 @@ símbolos inventados. Ordem obrigatória: T111 → medir S1 → T113 → medir S
 - [X] **T113** [US2] Corretor de símbolo derivado do RUNTIME, nunca da lista indexada (F25): `ImportError` sobre símbolo ausente → vizinho real por tabela de aliases de vocabulário (F26), sufixo `Gate`, normalização de caixa/sublinhado; correção determinística injetada, `retry_generation`. Nova categoria `UnknownSymbol` (há vizinho) vs `HallucinatedSymbol` (não há), atualizar `data-model.md`. Excluir submódulos de `_importable_symbols()` — hoje ela devolve 143 nomes que são módulos, o que também afeta `MissingImport`
 - [X] **T114** [US7] Medir S0, S1, S2 no subconjunto de 48 runs (16 tarefas × 3 seeds, estratos A/B) e a suíte completa uma vez após S2; registrar contra a predição
 - [X] **T115** [US2] — o corretor lê a MENSAGEM de erro, que revela só o primeiro símbolo inexistente; em 5 de 8 execuções de S2 terminadas em `ImportError`, o código importava mais de um. Analisar as importações do código (AST) e corrigir todas de uma vez contra `_importable_symbols()`. Barato e determinístico; não resolve a oscilação por regeneração (T090d)
+- [ ] **T116** [US7] **PROPOSTO** — reescrever os 52 enunciados perturbados que citam a tarefa-base pelo `task_id` (F30), mantendo a especificação completa que já contêm; aplicar como mudança deliberada da suíte, com nova execução de referência
 
 **Checkpoint (M1)**: recuperação validada isoladamente. `recall@8` = 0,9524 (D17-1). ✅
 

@@ -1,0 +1,31 @@
+canary_seeds:
+- 1
+- 2
+- 3
+max_iter: 5
+model: gpt-6-luna
+protocol_canary: []
+provider: openai
+reasoning_effort: high
+reset_per_run: false
+results_dir: results
+seeds:
+- 1
+send_temperature: false
+tasks:
+- dj_constant_4q
+- dj_constant_4q_perturbed
+- dj_balanced_4q
+- simon_6q_perturbed
+- grover_3q
+- grover_4q
+- ising_weighted_maxcut_4q
+- ising_field_coupling_4q_perturbed
+- bell_phi_plus_2q
+- ghz_5q
+- qft_5q
+- w_state_5q
+- qpe_4q
+- bv_4q
+- reversible_half_adder_4q
+- qaoa_maxcut_4q_perturbed
