@@ -1,0 +1,125 @@
+"""Fronteira B client — a second model family through OpenRouter (research.md D10).
+
+OpenRouter speaks the OpenAI chat-completions protocol, so this is plain
+`httpx` against `/chat/completions` (the `openai` SDK is not a dependency).
+
+Three things are pinned here that would otherwise be hidden variables of the
+kind F15 found in `temperature`:
+
+- the UPSTREAM PROVIDER. OpenRouter may route one model id to different
+  hosts (OpenAI, Azure, Bedrock for gpt-6-luna). The request names one and
+  forbids fallbacks, and the provider that actually served each call is
+  counted, so a silent reroute would show in the record;
+- reasoning EFFORT, stated rather than left to the provider default;
+- the reasoning HEADROOM: reasoning tokens share the completion budget, and
+  the nodes size `max_tokens` for a non-reasoning model's visible output
+  (critic 512), so a fixed headroom is added on top — the same fix the
+  Anthropic client needed.
+"""
+
+import time
+from typing import Final
+
+import httpx
+
+from qcagent.llm.base import BaseLLMClient, LLMResponse, TransientProviderError
+
+DEFAULT_BASE_URL: Final = "https://openrouter.ai/api/v1"
+
+# USD per million tokens (input, output), OpenRouter list prices read from
+# /api/v1/models on 2026-09-26. The measured cost OpenRouter reports per call
+# (`usage.cost`) is preferred when present; this table is the fallback and
+# the pre-run estimate.
+_PRICING_PER_MTOK: dict[str, tuple[float, float]] = {
+    "openai/gpt-6-luna": (0.10, 0.50),
+    "openai/gpt-6-sol-pro": (2.00, 10.00),
+}
+
+# The standard (non-flex, non-fast) endpoint of the model's own vendor.
+_PINNED_PROVIDER: dict[str, str] = {
+    "openai/gpt-6-luna": "openai",
+    "openai/gpt-6-sol-pro": "openai",
+}
+
+REASONING_HEADROOM_TOKENS: Final = 12_000
+EFFORT: Final = "high"
+
+_TRANSIENT_STATUS = {408, 429, 500, 502, 503, 504}
+
+
+class OpenRouterClient(BaseLLMClient):
+    def __init__(
+        self,
+        api_key: str,
+        model_id: str = "openai/gpt-6-luna",
+        base_url: str = DEFAULT_BASE_URL,
+        timeout_s: float = 300.0,
+    ) -> None:
+        if model_id not in _PRICING_PER_MTOK:
+            raise ValueError(f"no pricing recorded for {model_id!r}")
+        self.model_id = model_id
+        self.provider = _PINNED_PROVIDER[model_id]
+        self._base_url = base_url.rstrip("/")
+        self._http = httpx.Client(timeout=timeout_s, headers={"Authorization": f"Bearer {api_key}"})
+        self.finish_reasons: dict[str, int] = {}
+        self.served_by: dict[str, int] = {}
+
+    def _generate_impl(
+        self, *, system: str, prompt: str, seed: int, max_tokens: int
+    ) -> LLMResponse:
+        body = {
+            "model": self.model_id,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ],
+            "max_tokens": max_tokens + REASONING_HEADROOM_TOKENS,
+            "reasoning": {"effort": EFFORT},
+            # Accepted by the model; recorded, not relied on — an API model is
+            # not reproducible from a seed.
+            "seed": seed,
+            "provider": {"order": [self.provider], "allow_fallbacks": False},
+        }
+        start = time.perf_counter()
+        try:
+            response = self._http.post(f"{self._base_url}/chat/completions", json=body)
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            raise TransientProviderError(str(exc)) from exc
+        if response.status_code in _TRANSIENT_STATUS:
+            raise TransientProviderError(f"HTTP {response.status_code}: {response.text[:200]}")
+        response.raise_for_status()
+        latency_s = time.perf_counter() - start
+        data = response.json()
+
+        served = str(data.get("provider", "unknown"))
+        self.served_by[served] = self.served_by.get(served, 0) + 1
+        choice = data["choices"][0]
+        reason = str(choice.get("finish_reason"))
+        self.finish_reasons[reason] = self.finish_reasons.get(reason, 0) + 1
+        # None on a refusal or an empty completion: recorded as the generation
+        # failure it is, like the Anthropic arm.
+        text = choice["message"].get("content") or ""
+
+        usage = data.get("usage", {})
+        input_tokens = int(usage.get("prompt_tokens", 0))
+        output_tokens = int(usage.get("completion_tokens", 0))  # includes reasoning
+        cost = usage.get("cost")
+        cost_usd = float(cost) if cost is not None else self._cost(input_tokens, output_tokens)
+        return LLMResponse(
+            text=text,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=cost_usd,
+            latency_s=latency_s,
+            model_id=self.model_id,
+        )
+
+    def count_tokens(self, text: str) -> int:
+        # No counting endpoint. The caller uses this for the anti-truncation
+        # guard sized for a 16k local context; against a 1M-token context a
+        # conservative estimate (≈3 characters per token) is enough.
+        return len(text) // 3 + 1
+
+    def _cost(self, input_tokens: int, output_tokens: int) -> float:
+        input_per_mtok, output_per_mtok = _PRICING_PER_MTOK[self.model_id]
+        return (input_tokens * input_per_mtok + output_tokens * output_per_mtok) / 1_000_000

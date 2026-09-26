@@ -70,7 +70,7 @@ class RunConfig(BaseModel):
     # "is the bottleneck the architecture or the generator?" with every LLM
     # role (planner, generator, critic) served by the frontier model and
     # everything else — corpus, validators, routing, corrector — unchanged.
-    provider: Literal["ollama", "anthropic"] = "ollama"
+    provider: Literal["ollama", "anthropic", "openrouter"] = "ollama"
     seeds: list[int] = Field(default_factory=lambda: [1, 2, 3])
     # Task ids to run, or "all" for every task under bench/tasks/.
     tasks: list[str] | str = "all"
@@ -106,9 +106,9 @@ class RunConfig(BaseModel):
         # a byte-identical canary would fail by construction, and a reset
         # would unload an unrelated local model. Stated in the config rather
         # than silently skipped, so the record says which protocol applied.
-        if self.provider == "anthropic" and (self.reset_per_run or self.protocol_canary):
+        if self.provider != "ollama" and (self.reset_per_run or self.protocol_canary):
             raise ValueError(
-                "provider 'anthropic' requires reset_per_run: false and protocol_canary: [] "
+                f"provider {self.provider!r} requires reset_per_run: false and protocol_canary: [] "
                 "— both are properties of the local Ollama server (F28)"
             )
         return self
@@ -537,6 +537,14 @@ def run_suite(
                 "anthropic_effort": EFFORT,
                 "anthropic_thinking_headroom": str(THINKING_HEADROOM_TOKENS),
             }
+        elif config.provider == "openrouter":
+            from qcagent.llm import openrouter_client as orc
+
+            lib_versions |= {
+                "openrouter_reasoning_effort": orc.EFFORT,
+                "openrouter_reasoning_headroom": str(orc.REASONING_HEADROOM_TOKENS),
+                "openrouter_pinned_provider": orc._PINNED_PROVIDER[config.model],
+            }
         else:
             lib_versions |= {
                 # Recorded because it CHANGES THE NUMBERS and is invisible
@@ -646,6 +654,16 @@ def _graph_runner(config: RunConfig, usage: Usage) -> TaskRunner:
         if not settings.anthropic_api_key:
             raise RuntimeError("provider 'anthropic' needs ANTHROPIC_API_KEY in the environment")
         inner = AnthropicClient(settings.anthropic_api_key, config.model)
+    elif config.provider == "openrouter":
+        from qcagent.llm.openrouter_client import DEFAULT_BASE_URL, OpenRouterClient
+
+        if not settings.fronteira_b_api_key:
+            raise RuntimeError("provider 'openrouter' needs FRONTEIRA_B_API_KEY in the environment")
+        inner = OpenRouterClient(
+            settings.fronteira_b_api_key,
+            config.model,
+            settings.fronteira_b_base_url or DEFAULT_BASE_URL,
+        )
     else:
         inner = OllamaClient(
             settings.ollama_base_url,
