@@ -3452,6 +3452,60 @@ menor. A queda de uma consulta sobre 63 não é distinguível de nada; o que o
 número estabelece é que corrigir a versão do corpus não custou a
 recuperação.
 
+### RESULTADO S0 → S1 (corpus 1.2, `9c62799eaeab9a40`, 2026-09-26) — efeito principal confirmado; o CONTROLE disparou, e o defeito era do controle
+
+Commit limpo `325a1fe`, `qdocs_points=875`, `reset_before_each_run`, cache
+frio. **16/16 tarefas com os três seeds idênticos de novo** — H-red replica
+sob o corpus novo. Por tarefa (contagens ÷ 3), contra o S0 limpo
+(`21494e56`):
+
+| métrica | S0 | S1 | predição | |
+|---|---|---|---|---|
+| m1, estrato A (erros ensinados pelo corpus) | 16 tentativas, 5/8 tarefas | **0** | cai para ~0 | ✅ |
+| m2, estrato B (**CONTROLE**) | 17/21 = 81% | **16/26 = 62%** | não muda | ❌ disparou |
+| m2, estrato A | 8/12 = 67% | 4/8 = 50% | cai | ✅ (n pequeno) |
+| `compila@1` A / B | 1/8, 1/8 | 2/8, 0/8 | pode mudar | — |
+| sucesso A / B | 0/8, 1/8 | 0/8, 2/8 | move pouco | ✅ |
+| esgotou A / B | 8/8, 7/8 | 8/8, 6/8 | move pouco | ✅ |
+
+**O efeito principal é inequívoco e mecânico**: os erros ensinados pelo corpus
+(`grover_operator` não chamável, símbolos 2.x) desapareceram porque o corpus
+deixou de ensiná-los. A atribuição é direta — as páginas que os continham não
+existem no corpus 1.2.
+
+**O controle disparou, e o diagnóstico (possível pelo trace de T112) mostra
+que o defeito era do CONTROLE, não do instrumento.** Nas 8 tarefas do estrato
+B, a saída do planner é IDÊNTICA entre S0 e S1; o que difere são os chunks
+recuperados — de 4 a 7 dos 8 coincidem. O estrato B também recupera, então o
+corpus novo mudou o contexto delas e as trajetórias mudaram
+(`bell_phi_plus_2q` passou a ter sucesso; `reversible_half_adder_4q` passou a
+chegar ao semântico). A condição de refutação 2 dizia que um movimento aqui
+significaria "algo além do corpus mudou (F15/F18)". Não foi isso: a
+independência sob reset estava verificada (F28), o planner é idêntico, e a
+única diferença é o próprio corpus. **A premissa do controle estava errada.**
+Eu o justifiquei com "o corpus não contém nem contradiz `H`" — o que explica
+por que retrieval não pode CORRIGIR `H`, e não diz nada sobre se o corpus
+ALCANÇA o estrato B. Alcança, pelo retrieval, em todas as tarefas.
+
+É exatamente o corolário de F16 aplicado a mim: *"Um controle escolhido por
+argumento estrutural é forte. Um escolhido por 'isto provavelmente não muda
+muito' é só mais uma métrica."* Este foi do segundo tipo, com uma frase que
+parecia estrutural. O argumento estrutural correto teria sido: o que é
+constante entre os braços? O planner (prompt = enunciado) sim; o contexto de
+retrieval, não — para NENHUMA tarefa. Um controle de S0→S1 teria de medir
+algo anterior ao retrieval, e o único candidato é o planner, que de fato não
+mudou (16/16 idênticos).
+
+**Consequência para S1 → S2**: o controle registrado ali é `compila@1`, e o
+argumento É estrutural — a tentativa 1 ocorre antes de o corretor poder
+agir, e o corpus é o mesmo nos dois braços, logo o prompt da tentativa 1 é o
+mesmo. S2 é lido com esse controle; m2 no estrato B, alvo do corretor, é
+comparado S1 → S2 com o corpus fixo.
+
+**n**: 8 tarefas por estrato. 81% → 62% no estrato B são 4 tarefas cujas
+trajetórias mudaram; não é uma estimativa de efeito, e não é reportado como
+tal.
+
 ---
 
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
