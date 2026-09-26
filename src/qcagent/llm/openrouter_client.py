@@ -54,10 +54,12 @@ class OpenRouterClient(BaseLLMClient):
         model_id: str = "openai/gpt-6-luna",
         base_url: str = DEFAULT_BASE_URL,
         timeout_s: float = 300.0,
+        effort: str = EFFORT,
     ) -> None:
         if model_id not in _PRICING_PER_MTOK:
             raise ValueError(f"no pricing recorded for {model_id!r}")
         self.model_id = model_id
+        self.effort = effort
         self.provider = _PINNED_PROVIDER[model_id]
         self._base_url = base_url.rstrip("/")
         self._http = httpx.Client(timeout=timeout_s, headers={"Authorization": f"Bearer {api_key}"})
@@ -74,7 +76,7 @@ class OpenRouterClient(BaseLLMClient):
                 {"role": "user", "content": prompt},
             ],
             "max_tokens": max_tokens + REASONING_HEADROOM_TOKENS,
-            "reasoning": {"effort": EFFORT},
+            "reasoning": {"effort": self.effort},
             # Accepted by the model; recorded, not relied on — an API model is
             # not reproducible from a seed.
             "seed": seed,

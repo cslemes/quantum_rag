@@ -71,6 +71,11 @@ class RunConfig(BaseModel):
     # role (planner, generator, critic) served by the frontier model and
     # everything else — corpus, validators, routing, corrector — unchanged.
     provider: Literal["ollama", "anthropic", "openrouter"] = "ollama"
+    # OpenRouter only: the reasoning effort sent with every call. A config
+    # field, not a constant, because the reasoning-off arm exists to separate
+    # model capability from the reasoning effect — the value must be in the
+    # record and change the run_id.
+    reasoning_effort: str = "high"
     seeds: list[int] = Field(default_factory=lambda: [1, 2, 3])
     # Task ids to run, or "all" for every task under bench/tasks/.
     tasks: list[str] | str = "all"
@@ -541,7 +546,7 @@ def run_suite(
             from qcagent.llm import openrouter_client as orc
 
             lib_versions |= {
-                "openrouter_reasoning_effort": orc.EFFORT,
+                "openrouter_reasoning_effort": config.reasoning_effort,
                 "openrouter_reasoning_headroom": str(orc.REASONING_HEADROOM_TOKENS),
                 "openrouter_pinned_provider": orc._PINNED_PROVIDER[config.model],
             }
@@ -663,6 +668,7 @@ def _graph_runner(config: RunConfig, usage: Usage) -> TaskRunner:
             settings.fronteira_b_api_key,
             config.model,
             settings.fronteira_b_base_url or DEFAULT_BASE_URL,
+            effort=config.reasoning_effort,
         )
     else:
         inner = OllamaClient(

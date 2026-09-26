@@ -3716,6 +3716,34 @@ série GPT-6, posicionado abaixo do GPT-6 Sol". Os ramos se leem assim:
   (`openai/gpt-6-sol-pro` já está precificado, ou Sonnet 5) — não um segundo
   modelo pequeno —, e T090d NÃO é promovido com base só no Luna.
 
+**Terceira leitura, registrada antes (orientador, 2026-09-26)**: o Luna roda
+com raciocínio em esforço `high`; o qwen não raciocina. "Luna NÃO oscila"
+admite então uma terceira interpretação: ele RACIOCINA sobre o erro antes de
+regenerar, fazendo internamente o que T090d faria externamente (reparo
+incremental a partir do código anterior). Isso é diferente de "um modelo
+capaz não tem o problema": implica que T090d é um SUBSTITUTO de algo que
+modelos com raciocínio já têm — e muda se vale a pena construí-lo, porque
+seu valor ficaria restrito a geradores sem raciocínio, como o local.
+
+**Protocolo do braço, ampliado antes de rodar (três execuções, < US$ 1):**
+
+| braço | configuração | papel |
+|---|---|---|
+| **L1** | Luna, raciocínio `high`, seed 1, 16 tarefas | o braço |
+| **L2** | idêntico a L1 | **piso de ruído do braço**: `temperature` não é suportado, o modelo roda no padrão do provedor e pode amostrar. Sem réplica, 16 runs não dão estimativa de variância e nenhuma diferença Luna × qwen tem barra de erro. O braço qwen não precisou disso porque seus seeds são redundantes (120/120); o Luna não tem essa garantia |
+| **L0** | idêntico a L1 com raciocínio desligado/mínimo (o menor valor que a API aceitar, verificado por sonda antes) | separa CAPACIDADE DO MODELO do EFEITO DO RACIOCÍNIO |
+
+**Como os três se leem juntos**, nomeado antes para não ser escolhido depois:
+- L1 × L2 → o piso: fração de tarefas cujo desfecho (status) muda entre duas
+  execuções idênticas, e a variação da métrica de oscilação. Uma diferença
+  Luna × qwen (L1 × S3) só é reportada como efeito se exceder esse piso;
+  com n=16 e duas execuções, o piso é ele mesmo grosseiro, e isso é dito.
+- L1 × L0 → o efeito do raciocínio, com o modelo fixo. Se L0 oscila e L1 não,
+  a terceira leitura (raciocínio faz o papel de T090d) é a favorecida.
+- L0 × S3 → capacidade do modelo sem raciocínio contra o qwen. Se L0 não
+  oscila, a leitura "modelo capaz" é a favorecida, e o raciocínio não é
+  necessário para evitar a oscilação.
+
 **Paridade de integração — o que é igual e o que não pode ser** (checado
 antes de rodar; `tests/unit/test_openrouter_arm.py::test_the_messages_sent_are_byte_identical_to_the_qwen_arm`):
 
