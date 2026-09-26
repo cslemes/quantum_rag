@@ -3506,6 +3506,74 @@ comparado S1 → S2 com o corpus fixo.
 trajetórias mudaram; não é uma estimativa de efeito, e não é reportado como
 tal.
 
+### RESULTADO S1 → S2 (corretor, `fafbb93db8cd7c63`, 2026-09-26) — o mecanismo funciona como previsto; o laço passa a OSCILAR, e há uma segunda causa não prevista
+
+Commit limpo `513acf7`, corpus 1.2 (875), `reset_before_each_run`, cache
+frio. **16/16 com seeds idênticos** — terceira réplica de H-red. Por tarefa:
+
+| métrica | S1 | S2 | predição | |
+|---|---|---|---|---|
+| m2, estrato A | 4/8 = 50% | **0/6 = 0%** | cai no que restar | ✅ |
+| m2, estrato B (alvo) | 16/26 = 62% | **0/22 = 0%** | cai para perto de zero | ✅ |
+| `compila@1` A / B (**CONTROLE estrutural**) | 2/8, 0/8 | **2/8, 0/8** | não pode mudar | ✅ |
+| sucesso A / B | 0/8, 2/8 | **0/8, 0/8** | move pouco | ⚠️ caiu |
+| esgotou A / B | 8/8, 6/8 | 8/8, 8/8 | move pouco | ⚠️ |
+
+**Condições de refutação**: (1) m1 caiu em S1 — não refutada. (2) o controle
+de S0→S1 disparou, diagnosticado como defeito do controle (acima). (3) m2
+caiu a zero em S2 — não refutada: o modelo OBEDECE a uma correção explícita de
+símbolo. (4) `compila@1` idêntico — sem contaminação. (5) sucesso não subiu.
+
+**A distinção que a predição registrou antecipadamente** — reincidência
+imediata (o corretor falhou) versus reincidência após uma tentativa limpa
+(oscilação) —, medida sobre o seed 1 de cada tarefa:
+
+| | S0 | S1 | S2 |
+|---|---|---|---|
+| símbolo corrigido volta NA tentativa seguinte | 25 | 20 | **0** |
+| símbolo corrigido volta DEPOIS de outra tentativa | 1 | 1 | **15** |
+| tentativas com `ImportError` | 41 | 41 | 36 |
+
+O corretor faz exatamente o que se propôs; o que resta é oscilação:
+`CNOTGate, HadamardGate, CNOTGate, HadamardGate, CNOTGate`
+(`bell_phi_plus_2q`), `RZ, HadamardGate, RZ, HadamardGate, RZ`
+(`qaoa_maxcut_4q_perturbed`). Duas causas:
+
+1. **Prevista — o reparo é regenerativo** (T090d não implementado). O modelo
+   aplica a correção, regenera o código inteiro e reintroduz o símbolo
+   corrigido na tentativa anterior. É o mecanismo de H-inc, agora sem
+   ambiguidade: a correção chega, é obedecida, e é desfeita pela regeneração.
+2. **NÃO prevista — o erro revela só o primeiro símbolo.** Em **5 das 8**
+   execuções de S2 que terminaram em `ImportError`, o código final importa
+   MAIS DE UM símbolo inexistente. O Python levanta no primeiro; o corretor
+   só pode nomear esse. A informação sobre o segundo existe no CÓDIGO, não na
+   mensagem de erro — e o corretor lê a mensagem. A correção é barata e
+   determinística: analisar as importações do código (AST) e corrigir todas
+   de uma vez, contra o mesmo `_importable_symbols()`.
+
+**O sucesso caiu de 2/8 para 0/8 no estrato B** — `bell_phi_plus_2q` e
+`qaoa_maxcut_4q_perturbed`, que em S1 chegaram ao acerto por um caminho em
+que o modelo acabou acertando os imports sozinho, e em S2 oscilam até
+esgotar. Duas tarefas não são estimativa de efeito, e a predição não listou
+queda como condição de refutação; registro a direção porque ela é o
+contrário do que um leitor esperaria de "a métrica de mecanismo foi a zero".
+O precedente de `MissingImport` (98,8% → 98,9%) previa "não move"; aqui moveu
+para pior em 2 de 8, e a oscilação é a explicação candidata, não
+estabelecida.
+
+**O que a sequência de três braços estabelece** (16 tarefas, n efetivo 16):
+
+- O corpus 2.x causava uma classe inteira de erros, e corrigi-lo a eliminou
+  (16 → 0 tentativas no estrato A), sem custo de recuperação (M1 0,9365).
+- O conhecimento negativo derivado do runtime é OBEDECIDO: um símbolo
+  corrigido nunca volta na tentativa seguinte (20 → 0).
+- Nenhuma das duas correções melhorou o resultado ponta a ponta no
+  subconjunto — como a predição disse, e pela razão que ela deu: consertar o
+  erro atual expõe o seguinte, e o reparo regenerativo desfaz o anterior.
+  **O gargalo agora medido é o reparo regenerativo (T090d)**, com a
+  correção de todas as importações de uma vez como passo barato anterior a
+  ele.
+
 ---
 
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
