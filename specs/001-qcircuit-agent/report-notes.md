@@ -4208,6 +4208,43 @@ antes/depois é comparável por tarefa sem piso de ruído.
 
 ---
 
+### PREDIÇÃO REGISTRADA — remedição RunPod: R1 (T116) e R2 (T116 + T117), escrita antes de criar o pod (2026-09-27)
+
+Mesmo modelo, versão do Ollama, GPU (tipo), subconjunto e protocolo de R0
+(`bbc5b05c`). Um pod NOVO — R0 rodou noutro. R1 no commit `c5c3b0b` (T116);
+R2 no mesmo pod, depois de incorporar T117 (`d298b2c`).
+
+**R0 → R1 (só T116):**
+- 12 das 16 tarefas têm enunciado INALTERADO. Controle de estrutura: o
+  planner e a recuperação dependem só do enunciado, e o braço é
+  determinístico sob reset; logo essas 12 devem sair **byte-idênticas** a R0.
+  Isto testa também algo que o canário não testa: reprodutibilidade ENTRE
+  pods (o canário provou replay DENTRO de um pod). Se divergirem, R0 não é
+  comparável por tarefa com R1/R2, e registro isso; R1 → R2, no mesmo pod,
+  continua sendo a comparação limpa.
+- Nas 4 tarefas reescritas, nenhuma predição direcional: a mudança remove
+  uma dependência indefinida; pode ou não mudar o desfecho.
+
+**R1 → R2 (T117):**
+- **Controle de ORDEM (F16)**: `compila@1` NÃO pode mudar — a tentativa 1
+  ocorre antes de o crítico agir, e T117 só muda o crítico.
+- **Predição**: com o enunciado e a descrição do próprio circuito à vista, o
+  crítico passa a nomear o algoritmo errado; as falhas semânticas da
+  tentativa 1 passam a convergir em parte. Critério (o mesmo de R0): **o
+  mecanismo central funciona** se n ≥ 4 engajadas, convergiu ≥ n/2, e pelo
+  menos uma convergência vem de falha SEMÂNTICA na tentativa 1.
+- **Assinatura específica esperada**: nos Deutsch-Jozsa, o código deixa de
+  usar `GroverOperator` depois da primeira dica.
+- **Refutação**: se as convergências semânticas continuarem em 0, a
+  informação que faltava ao crítico não era o gargalo — o gerador não usa o
+  diagnóstico nem quando ele é certo —, e aí T090d também não resolveria
+  (editaria o código que o modelo não sabe consertar).
+
+Custo esperado: ~US$ 0,30 (setup e modelo pagos uma vez, dois braços de
+~27 min).
+
+---
+
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
 
 **Este é o ponto de referência do Princípio III**: o número contra o qual toda
