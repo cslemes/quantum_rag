@@ -147,7 +147,7 @@ símbolos inventados. Ordem obrigatória: T111 → medir S1 → T113 → medir S
 - [X] **T114** [US7] Medir S0, S1, S2 no subconjunto de 48 runs (16 tarefas × 3 seeds, estratos A/B) e a suíte completa uma vez após S2; registrar contra a predição
 - [X] **T115** [US2] — o corretor lê a MENSAGEM de erro, que revela só o primeiro símbolo inexistente; em 5 de 8 execuções de S2 terminadas em `ImportError`, o código importava mais de um. Analisar as importações do código (AST) e corrigir todas de uma vez contra `_importable_symbols()`. Barato e determinístico; não resolve a oscilação por regeneração (T090d)
 - [X] **T116** [US7] — reescrever os 52 enunciados perturbados que citam a tarefa-base pelo `task_id` (F30), mantendo a especificação completa que já contêm; aplicar como mudança deliberada da suíte, com nova execução de referência
-- [ ] **T117** [US1] **PROPOSTO** — incluir o enunciado da tarefa no prompt do crítico (`critic.py::_build_hint_prompt`), que hoje diagnostica falhas semânticas vendo só o código e "fidelidade=0.0000" e produz dicas que reforçam o algoritmo errado (F31). Sem vazamento de referência. Decisão separada: se parte do `payload` da referência pode entrar. Medir no braço RunPod (reprodutível)
+- [X] **T117** [US1] — incluir o enunciado da tarefa no prompt do crítico (`critic.py::_build_hint_prompt`), que hoje diagnostica falhas semânticas vendo só o código e "fidelidade=0.0000" e produz dicas que reforçam o algoritmo errado (F31). Sem vazamento de referência. Decisão separada: se parte do `payload` da referência pode entrar. Medir no braço RunPod (reprodutível)
 
 **Checkpoint (M1)**: recuperação validada isoladamente. `recall@8` = 0,9524 (D17-1). ✅
 
