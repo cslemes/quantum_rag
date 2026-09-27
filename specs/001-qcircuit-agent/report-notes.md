@@ -4245,6 +4245,71 @@ Custo esperado: ~US$ 0,30 (setup e modelo pagos uma vez, dois braços de
 
 ---
 
+### RESULTADO — R1 (T116) e R2 (T116 + T117), segunda sessão de pod (`2a4084f403a9435a`, `b15c1a385088051f`, 2026-09-27) — O MECANISMO CENTRAL FUNCIONA
+
+Pod `7tpm1zvbd0vhlf`: RTX A5000, Secure Cloud, CA-MTL-1, US$ 0,27/h; mesmo
+digest do modelo (`06c1097efce0`) e mesma versão do Ollama que R0; 100% GPU;
+canário byte-idêntico antes de cada braço. **Custo da sessão: US$ 0,237**
+(saldo 8,356 → 8,119; ~53 min de pod, dois braços). **Custo total do RunPod:
+US$ 0,409** (R0 0,172 + R1/R2 0,237). Pod encerrado; gasto US$ 0/h, sem pods
+nem volumes.
+
+**R0 → R1 (T116): o controle de estrutura SEGUROU, e mais do que o
+registrado.** As 12 tarefas de enunciado inalterado saíram **byte-idênticas
+a R0** — código e trace —, noutro pod, noutro datacenter (CA-MTL-1 × EU-SE-1).
+**A reprodutibilidade vale ENTRE pods**, o que o canário (replay dentro de um
+pod) não mostrava. T116 corrigiu um defeito da suíte sem mudar desfechos: as
+4 tarefas reescritas continuam falhando; sucesso 4/16.
+
+**R1 → R2 (T117):**
+
+| | R1 | R2 |
+|---|---|---|
+| sucesso | 4/16 | **9/16** |
+| `compila@1` (CONTROLE de ordem) | 11 | **11** ✅ |
+| tentativa 1 idêntica (planner + primeiro erro) | — | **16/16** ✅ |
+| laço engajado | 12 (7 semânticas) | 12 (7 semânticas) |
+| **convergiu** | 1 (de erro estático) | **6 — 5 de falha SEMÂNTICA** |
+
+**Contra o critério registrado** (n ≥ 4 engajadas, convergiu ≥ n/2, ≥ 1
+convergência semântica): n = 12, convergiu **6 = n/2**, 5 semânticas.
+**Ramo "o mecanismo central funciona" — no limite exato do critério, e
+declarado assim.** É a primeira evidência neste projeto de que o laço de
+reparo com diagnóstico estruturado faz o que foi desenhado para fazer: um
+gerador que compila, erra a física, recebe um diagnóstico certo e converge.
+
+**Assinatura registrada — confirmada como foi redigida**: nos
+Deutsch-Jozsa, o código deixa de USAR `GroverOperator` depois da primeira
+dica. A linha de import sobrevive (importado, nunca chamado — resto da
+regeneração), e os circuitos são DJ/BV corretos. A primeira dica do crítico
+agora descreve a construção pedida: *"initialize ancilla to |1> with X gate,
+apply Hadamard to all 4 qubits, apply no oracle gates (since f(x)=0), then
+apply Hadamard only to qubits 0-2"*.
+
+**Ressalva, dita agora para não ser descoberta depois**: com o enunciado à
+vista, o crítico — o mesmo 30B — em parte RE-PLANEJA a solução, não só
+diagnostica. Continua dentro da regra de informação (usa só o que o usuário
+tem), mas o ganho não é só de "diagnóstico melhor": é também de uma segunda
+passada de planejamento com o erro à vista. O relatório deve dizer isso.
+
+**Os controles**: `compila@1` 11 → 11 e tentativa 1 idêntica em 16/16 — T117
+atua só depois da tentativa 1, e nada antes dela mudou. Com o braço
+determinístico e R1/R2 no mesmo pod, a diferença de 5 tarefas é atribuível
+a T117 sem piso de ruído.
+
+**O que resta, e o endereço preciso de T090d**: das 6 falhas que geraram
+código, **5 ALTERNAM entre classes de erro** (estático ↔ semântico) — a
+assinatura da regeneração que desfaz o progresso. O caso mais claro:
+`ising_field_coupling_4q_perturbed` chega a fidelidade **0,8949** duas vezes
+e a perde para um `SyntaxError` a cada regeneração. Só
+`ising_weighted_maxcut_4q` é persistência pura. Com o diagnóstico corrigido,
+o que sobra é exatamente o que T090d trata. **T090d ganha o endereço previsto
+pelo orientador**: modelos capazes de usar o feedback (o 30B convergiu 5 de 7
+falhas semânticas) mas que perdem progresso ao regenerar. Não para o qwen 7B,
+que não usa o feedback; não para o Luna, que não precisa dele.
+
+---
+
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
 
 **Este é o ponto de referência do Princípio III**: o número contra o qual toda
