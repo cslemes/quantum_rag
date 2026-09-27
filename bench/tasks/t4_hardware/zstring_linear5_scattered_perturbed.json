@@ -1,7 +1,7 @@
 {
   "task_id": "zstring_linear5_scattered_perturbed",
   "tier": "t4",
-  "prompt": "Build the unitary produced by: (1) the standard circuit as in the zstring_linear5_scattered task (Hadamard on all 5 qubits, then the phase exp(-i*gamma*H) where H = 0.6 * Z0 * Z2 * Z4, gamma = 0.5), followed by (2) an additional RZ(pi/4) gate applied to qubit 0. This circuit will be transpiled for a 5-qubit LINEAR coupling map (qubit i only physically adjacent to qubit i-1 and i+1) — qubits 0, 2, and 4 are not adjacent on this line, so routing overhead is expected. This is a general-purpose circuit block, not a fixed starting state. No measurement.",
+  "prompt": "Build the unitary produced by: (1) the standard circuit (Hadamard on all 5 qubits, then the phase exp(-i*gamma*H) where H = 0.6 * Z0 * Z2 * Z4, gamma = 0.5), followed by (2) an additional RZ(pi/4) gate applied to qubit 0. This circuit will be transpiled for a 5-qubit LINEAR coupling map (qubit i only physically adjacent to qubit i-1 and i+1) — qubits 0, 2, and 4 are not adjacent on this line, so routing overhead is expected. This is a general-purpose circuit block, not a fixed starting state. No measurement.",
   "n_qubits": 5,
   "oracle_kind": "unitary",
   "oracle_path": "bench/oracles/zstring_linear5_scattered_perturbed.qpy",

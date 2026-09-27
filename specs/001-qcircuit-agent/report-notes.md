@@ -4041,6 +4041,38 @@ depois. "Menos de um dólar" é parte do achado e é medido, não estimado.
 
 ---
 
+### T116 aplicada — nenhum enunciado da suíte depende de outra tarefa (2026-09-27)
+
+**53 enunciados reescritos**: 52 citavam a tarefa-base pelo `task_id` (F30)
+e, na revisão, apareceu a mesma classe de defeito SEM nome — "the standard
+task", "the unperturbed task" — em 12 enunciados (um deles fora dos 52).
+Corrigir só os nomeados deixaria o defeito pela metade.
+
+**Como**: onde a especificação completa já estava no enunciado, a cláusula
+comparativa foi APAGADA ("the circuit as in the X task (spec)" → "the circuit
+(spec)"; "— the SAME target as the X task." → removida; "(3/5 = 0.6, the
+same value as the standard task's gamma)" → "(3/5 = 0.6)"). Onde a
+comparação carrega significado — instruções de reetiquetagem, "ao contrário
+da construção usual, NÃO aplique a camada final de SWAP" — a referência
+passou a "the usual (unreversed) construction", que é conhecimento comum, não
+um artefato oculto da suíte. Uma primeira versão mecânica ("the standard
+textbook construction") foi DESCARTADA na revisão: dizia "o mesmo alvo que a
+construção de livro-texto" para γ = 0,45, o que é falso — nenhum livro define
+esses parâmetros. Todas as 76 edições foram revisadas frase a frase; 5
+pediram correção manual.
+
+**Verificações**: nenhum enunciado cita outro `task_id` nem "standard/
+unperturbed task"; as 120 referências continuam verificadas (Princípio IV —
+os oráculos não mudaram, só o texto); 569 testes passam.
+
+**Comparabilidade**: 4 das 16 tarefas do subconjunto mudaram de enunciado
+(`dj_constant_4q_perturbed`, `ising_field_coupling_4q_perturbed`,
+`qaoa_maxcut_4q_perturbed`, `simon_6q_perturbed`). Toda execução anterior a
+este commit usou os enunciados antigos; comparações por tarefa através dele
+nessas 53 tarefas carregam a mudança de texto.
+
+---
+
 ### RESULTADO — braço RunPod, `qwen3-coder:30b` auto-hospedado (`bbc5b05c62a59fd4`, 2026-09-27)
 
 Commit `8c2ac36`. Pod `75qrd0lpj570r1`: RTX A5000 24 GB, Secure Cloud,
@@ -4094,6 +4126,28 @@ a do L0 (o mesmo erro sobre XOR).
 
 ---
 
+**Como este braço deve ser lido, independentemente do que vier depois
+(orientador, 2026-09-27)**: é o PRIMEIRO braço que de fato exercitou o laço de
+reparo — 12 engajamentos, 1 convergência — e a falha tem causa identificada
+(F31). Uma falha VALIDADA, com mecanismo, é mais útil para o relatório que um
+mecanismo nunca testado. Reportar assim, não como uma taxa de sucesso
+decepcionante.
+
+**Sequência decidida (mantenedor)**: T116 → T117 → remedir o braço RunPod.
+T090d NÃO é construído agora: ele trata oscilação, a falha observada é
+persistência, e a persistência é plausivelmente CAUSADA pelo crítico pedindo
+uma versão melhor da coisa errada — reparo incremental sobre Grover-quando-
+se-queria-Deutsch-Jozsa produz um Grover melhor. Corrige-se o diagnóstico e
+vê-se o que sobra para T090d.
+
+**Desenho da remedição, para não confundir as duas mudanças**: T116 muda os
+enunciados e T117 muda o crítico; uma remedição só depois das duas não
+atribuiria nada. Na MESMA sessão de pod (modelo e setup pagos uma vez): **R1**
+= código com T116 apenas; **R2** = T116 + T117. O braço é reprodutível, então
+R0 (`bbc5b05c`) → R1 → R2 é comparável por tarefa sem piso de ruído.
+
+---
+
 ### F31 — O crítico diagnostica uma falha de física sem saber qual era a tarefa, e o palpite que produz ancora o gerador no erro
 
 **O que se observou** (braço RunPod): nos três Deutsch-Jozsa, o gerador
@@ -4131,7 +4185,19 @@ SEMÂNTICOS ele é um número de fidelidade e um palpite. A única convergência
 do braço veio de um erro estático.
 
 **Contramedida proposta (T117), não aplicada**: incluir o enunciado da tarefa
-no prompt do crítico (sem vazamento de referência). Decisão separada, e do
+no prompt do crítico (sem vazamento de referência). **Regra, fixada pelo
+orientador em 2026-09-27, mais permissiva que FR-012 como estava escrito e
+compatível com ele** — *o que um usuário real teria é justo; o que só o
+benchmark tem, não*:
+- **chega ao crítico**: o enunciado da tarefa (o usuário sempre o tem);
+  propriedades do circuito GERADO — suas próprias contagens de portas, sua
+  própria distribuição de saída (descrevem o artefato, não a resposta); qual
+  asserção declarada falhou e como (o usuário a escreveu);
+- **nunca chega ao crítico**: contagens de portas esperadas, fidelidade
+  contra a referência, qualquer coisa calculada a partir do oráculo — só o
+  benchmark tem isso.
+"Seu circuito produz 25% uniformes em quatro estados" descreve o artefato e
+não vaza nada — e é exatamente a informação que teria pegado o Grover-para-DJ. Decisão separada, e do
 mantenedor: se alguma parte do payload da referência pode entrar — o que
 mudaria a suíte de "mede o produto" para "mede o laço com informação que o
 produto não tem". Medir com o mesmo braço RunPod: é reprodutível, então

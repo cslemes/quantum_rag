@@ -1,7 +1,7 @@
 {
   "task_id": "bell_psi_plus_2q_perturbed",
   "tier": "t1",
-  "prompt": "Build a 2-qubit circuit that prepares the state produced by: (1) preparing the Bell state |Psi+> = (|01> + |10>) / sqrt(2) — the same state as the standard bell_psi_plus_2q task — starting from |00>, then (2) applying the 2-qubit Quantum Fourier Transform (standard textbook definition: Hadamard and controlled-phase gates, followed by the final SWAP-reversal layer) to the resulting 2-qubit state. Return the final 2-qubit state; no measurement.",
+  "prompt": "Build a 2-qubit circuit that prepares the state produced by: (1) preparing the Bell state |Psi+> = (|01> + |10>) / sqrt(2) starting from |00>, then (2) applying the 2-qubit Quantum Fourier Transform (standard textbook definition: Hadamard and controlled-phase gates, followed by the final SWAP-reversal layer) to the resulting 2-qubit state. Return the final 2-qubit state; no measurement.",
   "n_qubits": 2,
   "oracle_kind": "statevector",
   "oracle_path": "bench/oracles/bell_psi_plus_2q_perturbed.qpy",

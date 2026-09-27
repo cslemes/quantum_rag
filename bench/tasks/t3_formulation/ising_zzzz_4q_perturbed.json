@@ -1,7 +1,7 @@
 {
   "task_id": "ising_zzzz_4q_perturbed",
   "tier": "t3",
-  "prompt": "Build the unitary produced by: (1) the standard circuit as in the ising_zzzz_4q task (Hadamard on all 4 qubits, then the phase exp(-i*gamma*H) where H = 0.5 * Z0 * Z1 * Z2 * Z3, gamma = 0.5), followed by (2) the 4-qubit Quantum Fourier Transform (standard textbook definition: Hadamard and controlled-phase gates, followed by the final SWAP-reversal layer) applied to all 4 qubits. This is a general-purpose circuit block, not a fixed starting state. No measurement.",
+  "prompt": "Build the unitary produced by: (1) the standard circuit (Hadamard on all 4 qubits, then the phase exp(-i*gamma*H) where H = 0.5 * Z0 * Z1 * Z2 * Z3, gamma = 0.5), followed by (2) the 4-qubit Quantum Fourier Transform (standard textbook definition: Hadamard and controlled-phase gates, followed by the final SWAP-reversal layer) applied to all 4 qubits. This is a general-purpose circuit block, not a fixed starting state. No measurement.",
   "n_qubits": 4,
   "oracle_kind": "unitary",
   "oracle_path": "bench/oracles/ising_zzzz_4q_perturbed.qpy",

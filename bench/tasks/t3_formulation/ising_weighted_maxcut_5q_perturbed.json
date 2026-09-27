@@ -1,7 +1,7 @@
 {
   "task_id": "ising_weighted_maxcut_5q_perturbed",
   "tier": "t3",
-  "prompt": "Build a 5-qubit circuit implementing, as a general-purpose circuit block: Hadamard on all 5 qubits, then the phase exp(-i*gamma*H) where H = sum over weighted edges of w_ij * Z_i * Z_j. This is the standard ising_weighted_maxcut_5q task's star graph with a REVERSED qubit-ordering convention: relabel every qubit index i there as (4-i) here, so the star is now centered on qubit 4 (not qubit 0): edge (4,3) weight 0.5, edge (4,2) weight -0.3, edge (4,1) weight 0.8, edge (4,0) weight 0.2. gamma = 0.4. Any correct implementation of the phase term is accepted. No measurement.",
+  "prompt": "Build a 5-qubit circuit implementing, as a general-purpose circuit block: Hadamard on all 5 qubits, then the phase exp(-i*gamma*H) where H = sum over weighted edges of w_ij * Z_i * Z_j. This is the star graph with a REVERSED qubit-ordering convention: relabel every qubit index i there as (4-i) here, so the star is now centered on qubit 4 (not qubit 0): edge (4,3) weight 0.5, edge (4,2) weight -0.3, edge (4,1) weight 0.8, edge (4,0) weight 0.2. gamma = 0.4. Any correct implementation of the phase term is accepted. No measurement.",
   "n_qubits": 5,
   "oracle_kind": "unitary",
   "oracle_path": "bench/oracles/ising_weighted_maxcut_5q_perturbed.qpy",
