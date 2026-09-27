@@ -15,6 +15,7 @@ replaced v1's 5,400-run experimental matrix across 3 generators x 5
 conditions).
 """
 
+import io
 import json
 import re
 from collections.abc import Callable
@@ -95,6 +96,11 @@ type. Your only job is to write:
 
 Respond with a single JSON object, no prose outside it:
 {"rationale": string, "hint": string}
+
+You are also given the task statement. Before anything else, check whether
+the code implements what the task asks for at all: a circuit can fail
+because it implements a different algorithm, and then the fix is to build
+the requested one, not to repair the one written.
 
 The hint's purpose depends on the action:
   - retry_retrieval: what API/version context the next retrieval query
@@ -238,12 +244,66 @@ def _render_symbol_hint(corrections: list[SymbolCorrection], unresolved: list[st
     )
 
 
+# What may reach the critic (T117, F31; maintainer's rule, 2026-09-27): what
+# a real user would have is fair — the task statement, properties of the
+# GENERATED circuit, which declared assertion failed and how. What only the
+# benchmark has is not — expected gate counts, fidelity against the
+# reference, the reference-derived error classification, anything computed
+# from the oracle. The semantic check's message and type are both
+# reference-derived, so for semantic failures they are replaced by a neutral
+# statement plus a description of the artifact itself.
+_SEMANTIC_FAILURE_NOTE = (
+    "the circuit ran, but its output does not do what the task asks (functional check failed)"
+)
+_MAX_QUBITS_FOR_DISTRIBUTION = 12
+_TOP_STATES = 6
+
+
+def describe_generated_circuit(state: AgentState) -> str:
+    """Properties of the GENERATED circuit only — its gate counts, size and
+    output distribution. Nothing here is compared with, or computed from,
+    the reference. Read from the QPY the sandbox produced (data, not code:
+    generated code is never executed outside the sandbox)."""
+    static = state.get("static")
+    if static is None or static.circuit_qpy is None:
+        return ""
+    from qiskit import qpy
+    from qiskit.quantum_info import Statevector
+
+    with io.BytesIO(static.circuit_qpy) as buf:
+        (qc,) = qpy.load(buf)
+    lines = [
+        f"qubits: {qc.num_qubits}",
+        f"gate counts: {dict(sorted(qc.count_ops().items()))}",
+        f"depth: {qc.depth()}",
+    ]
+    if qc.num_qubits <= _MAX_QUBITS_FOR_DISTRIBUTION:
+        try:
+            probabilities = Statevector(qc.remove_final_measurements(inplace=False))
+            top = sorted(
+                probabilities.probabilities_dict().items(), key=lambda kv: (-kv[1], kv[0])
+            )[:_TOP_STATES]
+            shown = ", ".join(f"|{state_}>: {p:.3f}" for state_, p in top if p > 1e-9)
+            lines.append(f"output distribution, most likely states (qubit 0 rightmost): {shown}")
+        except Exception as exc:  # noqa: BLE001 — unbound parameters, mid-circuit measurement
+            lines.append(f"output distribution: not computable ({type(exc).__name__})")
+    return "\n".join(lines)
+
+
 def _build_hint_prompt(action: str, error_type: str | None, state: AgentState) -> str:
     error_message = ""
     for result in (state.get("static"), state.get("semantic")):
         if result is not None and result.error is not None:
             error_message = result.error.message
             break
+    circuit_note = ""
+    semantic = state.get("semantic")
+    static = state.get("static")
+    static_failed = static is not None and static.error is not None
+    if semantic is not None and semantic.error is not None and not static_failed:
+        error_type = "functional check failed"
+        error_message = _SEMANTIC_FAILURE_NOTE
+        circuit_note = describe_generated_circuit(state)
     assertion_note = ""
     if error_type in ("AssertionViolated", "AssertionNotEvaluable"):
         # FR-012: a violated/not-evaluable assertion must be NAMED in the
@@ -263,12 +323,18 @@ def _build_hint_prompt(action: str, error_type: str | None, state: AgentState) -
             f"depth_ratio={resource.depth_ratio:.2f} (limit 2.0), cx_ratio={resource.cx_ratio:.2f}"
         )
     return (
+        f"task:\n{state.get('spec', '')}\n\n"
         f"action={action}\n"
         f"error_type={error_type}\n"
         f"error_message={error_message}\n"
         f"{assertion_note}\n"
-        f"{resource_note}\n\n"
-        f"code:\n{state.get('code', '')}"
+        f"{resource_note}\n"
+        + (
+            f"\nthe generated circuit (its own properties, not a comparison):\n{circuit_note}\n"
+            if circuit_note
+            else ""
+        )
+        + f"\ncode:\n{state.get('code', '')}"
     )
 
 
