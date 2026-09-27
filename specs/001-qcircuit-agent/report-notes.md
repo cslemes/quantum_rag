@@ -4041,6 +4041,107 @@ depois. "Menos de um dólar" é parte do achado e é medido, não estimado.
 
 ---
 
+### RESULTADO — braço RunPod, `qwen3-coder:30b` auto-hospedado (`bbc5b05c62a59fd4`, 2026-09-27)
+
+Commit `8c2ac36`. Pod `75qrd0lpj570r1`: RTX A5000 24 GB, Secure Cloud,
+EU-SE-1, **US$ 0,27/h**. Ollama 0.34.4 no pod, só em localhost, via túnel SSH
+com chave. **Pré-condições: ambas passaram** — `ollama ps` 100% GPU (20,1 GB
+em VRAM a `num_ctx` 16384) e canário de protocolo 2 × 3 byte-idênticos no
+pod. **Braço REPRODUTÍVEL** (reset por run, `temperature=0`), ao contrário
+do de API.
+
+**Custo medido**: saldo US$ 8,528 → 8,356 = **US$ 0,172** por ~38 min de pod
+(criação + download do modelo em 65 s + checagem de GPU + canário 6,4 min +
+braço 26,7 min, que inclui o canário de novo). Carga do modelo: 42,5 s por
+run sob reset. Pod encerrado logo após; gasto verificado em US$ 0/h, sem
+pods nem volumes.
+
+| por tarefa (n=16) | qwen 7B (S3) | **qwen3-coder 30B** | Luna (L1/L2) |
+|---|---|---|---|
+| sucesso | 1 | **4** | 15 / 16 |
+| sucesso de primeira | 0 | 3 | 14 / 16 |
+| `compila@1` | 2 | **12** | 16 |
+| `rejected_input` | 0 | 1 | 0 |
+| **laço engajado (m5)** | 16 | **12** (8 semântico, 4 estático) | 2 / 0 |
+| **convergiu (m5)** | 1 | **1** (`w_state_5q`, de `SyntaxError`) | 1 / 0 |
+
+**Leitura contra o registro:**
+- **Sucesso 4/16 → ramo PARCIAL**, na borda inferior (o ramo "como o qwen 7B"
+  era ≤ 3). Não igual ao Luna: **a manchete "funciona com qualquer gerador
+  capaz, inclusive auto-hospedado" NÃO se confirma com este modelo.**
+- **m5: laço engajado em 12, convergiu 1 (≤ n/4) → ramo "engaja e não
+  converge".** Das 8 falhas SEMÂNTICAS na tentativa 1, **nenhuma convergiu**.
+- **Minha expectativa (parcial tendendo a alto; símbolos inventados caem)**:
+  parcial sim, "tendendo a alto" não. A classe de símbolos inventados de fato
+  quase desaparece (0 `ImportError`; `compila@1` 12/16 contra 2/16 do 7B).
+  O que resta é FÍSICA errada.
+
+**Onde o ramo registrado e o mecanismo divergem — declarado, não escondido.**
+O registro dizia que "engaja e não converge" tornaria T090d (reparo
+incremental) prioridade. Esse consequente supunha que a não-convergência
+seria OSCILAÇÃO — perder o progresso ao regenerar —, que é o que T090d trata.
+**Não foi isso.** O que se observou é PERSISTÊNCIA: a mesma física errada
+repetida com fidelidade presa em 0,0; nos três Deutsch-Jozsa, o modelo
+escreveu GROVER nas cinco tentativas. Reparo incremental editaria o Grover,
+não o substituiria. O mecanismo está em F31, e aponta para outro componente.
+Por isso **não adoto o consequente registrado** (T090d prioridade) e registro
+a divergência aqui; a decisão sobre o que vem primeiro é do mantenedor.
+
+**Achados laterais**: o planner do 30B devolveu requisitos que falharam na
+validação do esquema (`MalformedPlannerResponse`) em 8/16 runs — o mesmo
+modo visto uma vez no Luna; e a recusa de `reversible_half_adder_4q` repete
+a do L0 (o mesmo erro sobre XOR).
+
+---
+
+### F31 — O crítico diagnostica uma falha de física sem saber qual era a tarefa, e o palpite que produz ancora o gerador no erro
+
+**O que se observou** (braço RunPod): nos três Deutsch-Jozsa, o gerador
+escreveu Grover; o validador semântico reprovou (fidelidade 0,0000); o
+crítico — o próprio 30B — produziu dicas como *"verify that the
+GroverOperator is initialized with the correct oracle"*. Em
+`bv_4q` (Bernstein-Vazirani), idem: *"ensure that the GroverOperator is
+constructed with proper initialization"*. Cinco tentativas, o mesmo algoritmo
+errado.
+
+**A causa, lida no código**: `critic.py::_build_hint_prompt` monta o prompt
+do crítico com `error_type`, `error_message` e o CÓDIGO — e mais nada. O
+crítico **não recebe o enunciado da tarefa**. Diante de código Grover e da
+frase "estado gerado diverge da referência (fidelidade=0.0000)", a leitura
+mais plausível para ele é "o Grover está mal montado", e é o que ele diz.
+O diagnóstico não é neutro: reforça a premissa errada. **É F3 observado ao
+vivo e no laço: um diagnóstico incorreto é pior que nenhum**, porque manda o
+gerador na direção errada com a autoridade de um passo de verificação.
+
+**A informação que desfaria o erro existe e é descartada**: o `payload` do
+erro semântico traz `expected_gate_counts={h: 7, x: 1}` contra
+`actual_gate_counts={Q: 1}` — um operador Grover onde a referência só tem H e
+X. Mas há uma tensão legítima de desenho: esse payload vem da REFERÊNCIA, que
+um usuário real não tem; FR-012 o mantém fora do gerador de propósito, para
+que a suíte não meça um laço que o produto não pode ter. **O enunciado da
+tarefa não tem essa tensão** — o usuário sempre o tem — e sozinho permitiria
+ao crítico ver "isto é Grover; a tarefa é Deutsch-Jozsa".
+
+**Por que isto reformula o resultado do braço**: a pergunta "o mecanismo
+central funciona?" não foi respondida negativamente por um gerador capaz que
+não usa feedback; foi respondida por um canal de feedback que não carrega a
+informação necessária para física errada. Para erros ESTÁTICOS o canal é
+rico (mensagem exata, símbolo, correção derivada — T113/T115); para erros
+SEMÂNTICOS ele é um número de fidelidade e um palpite. A única convergência
+do braço veio de um erro estático.
+
+**Contramedida proposta (T117), não aplicada**: incluir o enunciado da tarefa
+no prompt do crítico (sem vazamento de referência). Decisão separada, e do
+mantenedor: se alguma parte do payload da referência pode entrar — o que
+mudaria a suíte de "mede o produto" para "mede o laço com informação que o
+produto não tem". Medir com o mesmo braço RunPod: é reprodutível, então
+antes/depois é comparável por tarefa sem piso de ruído.
+
+**Fonte**: `results/bbc5b05c62a59fd4` (traces do crítico);
+`src/qcagent/nodes/critic.py::_build_hint_prompt`; FR-012; F3; T113; T115.
+
+---
+
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
 
 **Este é o ponto de referência do Princípio III**: o número contra o qual toda
