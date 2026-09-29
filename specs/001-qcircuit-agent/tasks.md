@@ -148,6 +148,7 @@ símbolos inventados. Ordem obrigatória: T111 → medir S1 → T113 → medir S
 - [X] **T115** [US2] — o corretor lê a MENSAGEM de erro, que revela só o primeiro símbolo inexistente; em 5 de 8 execuções de S2 terminadas em `ImportError`, o código importava mais de um. Analisar as importações do código (AST) e corrigir todas de uma vez contra `_importable_symbols()`. Barato e determinístico; não resolve a oscilação por regeneração (T090d)
 - [X] **T116** [US7] — reescrever os 52 enunciados perturbados que citam a tarefa-base pelo `task_id` (F30), mantendo a especificação completa que já contêm; aplicar como mudança deliberada da suíte, com nova execução de referência
 - [X] **T117** [US1] — incluir o enunciado da tarefa no prompt do crítico (`critic.py::_build_hint_prompt`), que hoje diagnostica falhas semânticas vendo só o código e "fidelidade=0.0000" e produz dicas que reforçam o algoritmo errado (F31). Sem vazamento de referência. Decisão separada: se parte do `payload` da referência pode entrar. Medir no braço RunPod (reprodutível)
+- [ ] **T118** [US1] Regra de informação aplicada ao GERADOR (F32, correção de F31): em falhas semânticas, substituir tudo o que é derivado da referência (tipo de erro semântico, fidelidade, contagens de portas esperadas, checagem de ordem de bits) pelas propriedades do próprio circuito gerado — contagens, tamanho, distribuição de saída. Erros estáticos mantêm a mensagem exata. Medir como R3 no braço RunPod
 
 **Checkpoint (M1)**: recuperação validada isoladamente. `recall@8` = 0,9524 (D17-1). ✅
 

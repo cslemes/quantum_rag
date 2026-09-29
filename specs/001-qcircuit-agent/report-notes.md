@@ -4310,6 +4310,76 @@ que não usa o feedback; não para o Luna, que não precisa dele.
 
 ---
 
+### F32 — Com o enunciado à vista, o crítico re-planeja: o "laço de reparo" é, na prática, re-planejamento com o erro acumulado à vista
+
+**A observação** (R2, orientador, 2026-09-29, com peso de achado e não de
+nota): depois de T117, a primeira dica do crítico nos Deutsch-Jozsa não
+diagnostica o Grover — descreve a construção pedida inteira (*"initialize
+ancilla to |1>, Hadamard on all 4, no oracle gates for f(x)=0, Hadamard on
+the inputs"*). O crítico e o planner passaram a SOBREPOR-SE: os dois leem o
+enunciado e os dois produzem um plano. Cada iteração é então "planeje de novo,
+com o contexto de erro acumulado" — e não REPARO no sentido estrito, que
+seria alterar o artefato existente naquilo que falhou.
+
+**Isto não é errado, e não diminui o 9/16** — é o mecanismo que funcionou, e
+a regra de informação é respeitada. Mas o relatório tem de NOMEÁ-LO com
+precisão: um leitor que entenda "laço de reparo" como reparo incremental lerá
+o resultado de R2 errado. O que R2 mostra é que **re-planejar com o erro à
+vista converge onde um diagnóstico cego não convergia**; não mostra que o
+sistema conserta circuitos.
+
+**O que isto afia sobre T090d**: T090d (passar o código anterior e pedir
+EDIÇÃO) faria o laço de fato REPARAR em vez de re-planejar. Isso muda o que
+T090d testa: não só "reduz a oscilação?" (as 5 alternâncias restantes de R2),
+mas "reparo estrito converge melhor ou pior que re-planejamento?" — duas
+perguntas que o relatório deve manter separadas.
+
+**Correção a F31, registrada**: F31 afirmou que FR-012 mantinha o `payload`
+do erro semântico fora do GERADOR. **Errado.** `generator.py::_render_errors`
+entrega ao gerador, em falhas semânticas, o tipo de erro derivado da
+referência, a fidelidade contra ela, **as contagens de portas ESPERADAS
+contra as obtidas** (`render_structural_diff`) e a checagem de ordem de bits
+invertida com sua fidelidade. Em todos os braços até aqui — inclusive as 5
+convergências semânticas de R2 — o gerador tinha as contagens de portas da
+referência, que nenhum usuário real tem. É exatamente o que T118 remove.
+
+---
+
+### PREDIÇÃO REGISTRADA — T118 (regra de informação aplicada ao GERADOR), escrita antes de implementar (2026-09-29)
+
+**A mudança — substituição, não remoção** (orientador): em falhas
+SEMÂNTICAS, o gerador deixa de ver tudo o que é derivado da referência — tipo
+de erro semântico, fidelidade, contagens esperadas, checagem de ordem de bits
+— e passa a ver as propriedades do SEU circuito, sobretudo a distribuição de
+saída. "Seu circuito produz 25% uniforme em quatro estados" é descritivo do
+artefato, disponível a qualquer usuário, e é informação melhor que um escalar:
+a distribuição diz o que o circuito fez; a fidelidade só diz que está errado.
+Erros ESTÁTICOS mantêm a mensagem exata (vem de executar o código do próprio
+usuário).
+
+**Direção prevista: PROVAVELMENTE MENOR.** Remover informação tende a custar
+sucesso — e o achado de F32/correção de F31 reforça: se o gerador vinha se
+apoiando nas contagens de portas esperadas, as convergências semânticas
+caem. É uma correção que ninguém faria para parecer melhor, e esse é o
+argumento para fazê-la. Se a substituição SUBIR o número, melhor ainda — não
+se planeja com isso.
+
+**Desenho**: R3 = R2 + T118, braço RunPod (mesmo modelo, versão, tipo de
+GPU, subconjunto, protocolo). Pod novo; R0 → R1 mostrou reprodutibilidade
+entre pods (12/12), então R2 → R3 é comparável por tarefa.
+
+**Controles de ORDEM (F16)**: na tentativa 1 não há erro anterior, logo o
+prompt do gerador é idêntico; `compila@1` NÃO pode mudar, e o desfecho da
+tentativa 1 deve ser idêntico em 16/16.
+
+**O que se lê**: sucesso e m5 (convergências, por causa). Queda nas
+convergências SEMÂNTICAS = o gerador dependia da informação que só o
+benchmark tem, e o 9/16 de R2 superestimava o que o produto faria. Estável ou
+maior = a distribuição do próprio circuito basta, e o resultado de R2
+sobrevive sem o vazamento.
+
+---
+
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
 
 **Este é o ponto de referência do Princípio III**: o número contra o qual toda
