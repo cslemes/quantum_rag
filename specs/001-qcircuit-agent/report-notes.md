@@ -4380,6 +4380,61 @@ sobrevive sem o vazamento.
 
 ---
 
+### RESULTADO — R3 (T118: regra de informação no gerador), `a9b9b379ec2771db`, 2026-09-29 — PREDIÇÃO CONFIRMADA: MENOR; e o 9/16 de R2 dependia do vazamento
+
+Pod `pxccz8kmgsxn3x`: RTX A5000, CA-MTL-1, US$ 0,27/h, mesmo digest e versão;
+100% GPU; canário byte-idêntico. Mesmo TIPO de GPU mantido de propósito (a
+primeira tentativa não tinha A5000; esperou-se em vez de trocar, porque a
+reprodutibilidade entre pods de R1 vale dentro do mesmo tipo). **Custo da
+sessão: US$ 0,134. Total RunPod: US$ 0,543** (R0 0,172; R1+R2 0,237; R3
+0,134). Pod encerrado; US$ 0/h verificado.
+
+| | R2 (T117; gerador via a referência) | **R3 (T117 + T118)** |
+|---|---|---|
+| sucesso | 9/16 | **6/16** |
+| `compila@1` (CONTROLE de ordem) | 11 | **11** ✅ |
+| tentativa 1 idêntica | — | **16/16** ✅ |
+| laço engajado | 12 (7 semânticas) | 12 (7 semânticas) |
+| convergiu | 6 (5 semânticas) | **3 (2 semânticas)** |
+
+**A predição registrada ("provavelmente menor") se confirmou.** As três
+perdas são exatamente os Deutsch-Jozsa que R2 havia convertido.
+
+**Consequência que o relatório TEM de carregar**: o critério "o mecanismo
+central funciona", atingido em R2 no limite exato (6 = n/2), **dependia de
+informação que só o benchmark tem** — as contagens de portas esperadas e as
+razões de profundidade/CX contra a referência. Sem ela (R3): convergiu 3 de
+12 = n/4, a borda do ramo "engaja e não converge". O que sobrevive sem
+vazamento: 2 convergências a partir de falha SEMÂNTICA (`bv_4q`,
+`qaoa_maxcut_4q_perturbed`) — o mecanismo funciona às vezes, não como regra.
+**O número honesto do braço auto-hospedado, com a regra de informação
+aplicada ao laço inteiro, é 6/16**, não 9/16. (Os braços anteriores rodaram
+todos com o vazamento. O Luna é o menos afetado: acertou de primeira em
+14-16/16, antes de qualquer feedback. O qwen 7B, com 1/16, não tinha para
+onde cair muito.)
+
+**O achado novo, e a evidência mais direta até agora para T090d**: o
+verificador de recursos só roda DEPOIS de o semântico PASSAR
+(`routing.route_after_semantic`). Em R3, `ResourceExcess` aparece no meio de
+sequências que terminam em falha semântica — ou seja, **o laço CHEGOU a um
+circuito funcionalmente correto três vezes** (`dj_balanced_4q` nas
+iterações 2 e 4, profundidade 8,75× a da referência e 9× os CX;
+`dj_constant_4q_perturbed` na 2, profundidade 27×) — e o PERDEU: com a nota
+neutra "excede o orçamento de recursos", o gerador regenerou do zero e errou
+a física. Em R2, as razões vazadas o levaram direto ao circuito enxuto.
+Isto é exatamente o que T090d trata, e na forma mais limpa possível: um
+artefato CORRETO que só precisava ser ENXUGADO foi descartado pela
+regeneração. "Otimize este circuito correto" pede edição; o laço atual só sabe
+re-planejar (F32).
+
+**Para a decisão sobre T090d (a próxima da sequência)**: a população-alvo
+agora está medida em dois modos — (a) as alternâncias estático↔semântico de
+R2 (5 tarefas), e (b) circuitos corretos perdidos ao otimizar (3 ocorrências
+em 2 tarefas, R3). O segundo é o caso de maior valor: o laço já tinha a
+resposta.
+
+---
+
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
 
 **Este é o ponto de referência do Princípio III**: o número contra o qual toda
