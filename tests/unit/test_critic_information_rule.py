@@ -129,3 +129,26 @@ def test_static_failures_keep_their_exact_message_and_gain_the_task() -> None:
     assert DJ_SPEC in prompt
     assert "ImportError: cannot import name 'H'" in prompt
     assert "gate counts" not in prompt  # there is no circuit to describe
+
+
+def test_a_failed_comparison_carries_the_artifact_not_just_the_verdict() -> None:
+    """T118: the generator only ever sees ErrorRecords, so semantic_check
+    attaches the circuit's own description to the error it records."""
+    from qcagent.graph import make_semantic_check_node
+
+    generated = QuantumCircuit(2)
+    generated.x([0, 1])  # |11>, while the reference prepares a Bell state
+    reference = QuantumCircuit(2)
+    reference.h(0)
+    reference.cx(0, 1)
+    node = make_semantic_check_node(lambda ref: reference)
+    state = {
+        "oracle_ref": "unused",
+        "iteration": 2,
+        "static": StaticResult(
+            parsed=True, executed=True, transpiled=True, error=None, circuit_qpy=_qpy(generated)
+        ),
+    }
+    (error,) = node(state)["error_history"]
+    assert "|11>: 1.000" in error.payload["artifact"]
+    assert "gate counts: {'x': 2}" in error.payload["artifact"]

@@ -10,6 +10,7 @@ from collections.abc import Callable
 from qcagent.llm.base import BaseLLMClient, InfrastructureError
 from qcagent.retrieval.hybrid import split_by_register
 from qcagent.state import AgentState, Assertion, ErrorRecord, Requirement
+from qcagent.validators.artifact import REFERENCE_DERIVED_ERRORS, failure_note
 from qcagent.validators.assertions import render_assertion
 
 GENERATOR_SYSTEM_PROMPT = """You are the code-generation stage of a quantum \
@@ -99,13 +100,20 @@ def _render_errors(errors: list[ErrorRecord]) -> str:
         return ""
     blocks = []
     for e in errors:
-        block = (
-            f"Attempt {e.iteration} failed at stage={e.stage}, "
-            f"error_type={e.error_type}:\n{e.message}"
-        )
-        diff = render_structural_diff(e.payload) if e.payload else None
-        if diff:
-            block += f"\n{diff}"
+        if e.error_type in REFERENCE_DERIVED_ERRORS:
+            # T118, the information rule applied to the generator: the error
+            # type, message and payload of a comparison with the reference
+            # are benchmark-only. Substitution, not removal: the generator
+            # sees what ITS circuit did instead of how far it is from an
+            # answer it could never have.
+            block = f"Attempt {e.iteration} failed: {failure_note(e.error_type)}."
+            if e.payload.get("artifact"):
+                block += f"\nWhat that circuit did:\n{e.payload['artifact']}"
+        else:
+            block = (
+                f"Attempt {e.iteration} failed at stage={e.stage}, "
+                f"error_type={e.error_type}:\n{e.message}"
+            )
         blocks.append(block)
     return "## Previous failed attempts\n\n" + "\n\n".join(blocks)
 

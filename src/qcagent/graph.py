@@ -38,6 +38,7 @@ from qcagent.nodes.routing import (
     route_after_static,
 )
 from qcagent.state import AgentState, ErrorRecord, SemanticResult
+from qcagent.validators.artifact import describe_circuit
 from qcagent.validators.assertions import evaluate_assertions, render_assertion
 from qcagent.validators.requirements import check_requirements
 from qcagent.validators.resource import COUPLING_MAPS, check_resources
@@ -244,6 +245,23 @@ def make_semantic_check_node(
             hamiltonian, exact_value = oracle
             result = _check_energy_oracle(generated, hamiltonian, exact_value, iteration)
 
+        if result.error is not None:
+            # T118: the generator's retry prompt holds only ErrorRecords, not
+            # the circuits behind them, so the artifact's own description is
+            # attached here, from THIS attempt's circuit — the only thing the
+            # generator will be shown about a reference-derived failure.
+            result = result.model_copy(
+                update={
+                    "error": result.error.model_copy(
+                        update={
+                            "payload": {
+                                **result.error.payload,
+                                "artifact": describe_circuit(generated),
+                            }
+                        }
+                    )
+                }
+            )
         error_history = [result.error] if result.error is not None else []
         return {
             "semantic": result,
