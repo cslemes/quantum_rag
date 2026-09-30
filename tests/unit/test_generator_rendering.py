@@ -198,3 +198,35 @@ def test_declared_assertions_reach_the_generator_on_the_first_attempt() -> None:
     assert "leftmost character is the highest-indexed qubit" in prompt
     # Requirements still come first: the assertions are part of the request.
     assert prompt.index("## Requirements") < prompt.index("## Assertions")
+
+
+# ---------------------------------------------------------------------------
+# Edit-based repair (T090d)
+# ---------------------------------------------------------------------------
+
+
+def test_retry_shows_previous_code_with_an_edit_instruction() -> None:
+    err = _wrong_gate_decomposition_error(iteration=1)
+    prompt = _build_prompt(_REQS, {"chunks": [], "code": "qc = make()"}, [err])
+
+    assert "## Code of the previous attempt" in prompt
+    assert "qc = make()" in prompt
+    assert "Do not rewrite it from scratch" in prompt
+    # After the errors, before any critic hint.
+    assert prompt.index("## Previous failed attempts") < prompt.index("## Code of the previous")
+
+
+def test_resource_excess_tells_the_generator_the_circuit_is_correct() -> None:
+    err = ErrorRecord(
+        iteration=2, stage="resource", error_type="ResourceExcess", message="depth 9x",
+        payload={"artifact": _ARTIFACT},
+    )
+    prompt = _build_prompt(_REQS, {"chunks": [], "code": "qc = big()"}, [err])
+
+    assert "functionally correct" in prompt
+    assert "WITHOUT changing what it computes" in prompt
+
+
+def test_first_attempt_prompt_never_carries_code() -> None:
+    """F16 control: attempt 1 has nothing to edit, so its prompt cannot move."""
+    assert "previous attempt" not in _build_prompt(_REQS, {"chunks": [], "code": "x"}, [])

@@ -118,6 +118,29 @@ def _render_errors(errors: list[ErrorRecord]) -> str:
     return "## Previous failed attempts\n\n" + "\n\n".join(blocks)
 
 
+def _render_previous_code(code: str, last_errors: list[ErrorRecord]) -> str:
+    """T090d: the code of the attempt that just failed, with an instruction to
+    EDIT it. Before this every attempt was a fresh generation, so a fix that
+    worked (an import, a correct but oversized circuit) was discarded by the
+    next regeneration. Shown only on a retry and only when the state carries
+    code, so the first attempt's prompt is unchanged (F16 order control).
+
+    A ResourceExcess means the circuit was already functionally correct, so
+    the instruction says so: trim it, do not rebuild it.
+    """
+    if last_errors[-1].error_type == "ResourceExcess":
+        instruction = (
+            "This circuit is functionally correct but exceeds the resource budget. "
+            "Edit it to use fewer gates and less depth WITHOUT changing what it computes."
+        )
+    else:
+        instruction = (
+            "Edit this code: keep what is correct and change only what caused the "
+            "failure above. Do not rewrite it from scratch."
+        )
+    return f"## Code of the previous attempt\n{instruction}\n```python\n{code}\n```"
+
+
 def _extract_code(text: str) -> str:
     """Pulls the content of a fenced code block. Falls back to the raw text
     if the model didn't fence it, since some prompts still leak bare code."""
@@ -176,6 +199,9 @@ def _build_prompt(
     error_section = _render_errors(last_errors)
     if error_section:
         sections.append(error_section)
+    previous_code = state.get("code")
+    if last_errors and previous_code:
+        sections.append(_render_previous_code(previous_code, last_errors))
     decision = state.get("decision")
     if decision is not None and decision.generation_hint:
         sections.append(f"## Hint for this attempt\n{decision.generation_hint}")
