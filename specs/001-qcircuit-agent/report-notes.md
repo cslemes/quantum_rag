@@ -4435,6 +4435,59 @@ resposta.
 
 ---
 
+### PREDIÇÃO REGISTRADA — T090d (reparo por edição) medido como R4 = R3 + T090d, escrita antes de implementar (2026-09-30)
+
+Substitui, para o braço RunPod, a predição de T090d mais antiga (H-inc, acima):
+aquela foi escrita antes de F31/F32 e mede oscilação em um laço que ainda não
+re-planejava.
+
+**A mudança**: a partir da tentativa 2, o gerador recebe o CÓDIGO da tentativa
+anterior junto do erro, com instrução de EDITAR — manter o que funciona e
+alterar só o que falhou —, e não de reescrever. Tentativa 1 inalterada. Para
+`ResourceExcess` (circuito funcionalmente correto, acima do orçamento) a
+instrução é explícita: o circuito está correto; reduza-o sem mudar o que ele
+computa.
+
+**O que R4 NÃO testa, e o relatório tem de dizer**: T090d muda o GERADOR, não o
+crítico. A dica do crítico continua descrevendo a construção inteira (F32).
+R4 mede portanto "editar o código anterior COM uma dica que re-planeja", não
+reparo estrito puro. Uma queda ou ausência de ganho não refuta reparo
+incremental em si; refuta esta forma dele.
+
+**Direção prevista: MAIOR que 6/16, mas modesta.** Primeira predição neste
+ciclo em que o viés esperado é para cima — razão a mais para declarar as
+condições de erro antes. Faixa: 7 a 9 de 16. Acima de 9 eu trataria como
+suspeito (R2 tinha o vazamento e chegou a 9).
+
+**Métrica primária (população-alvo medida em R3)**: dos 3 circuitos corretos
+perdidos ao otimizar (`dj_balanced_4q` ×2, `dj_constant_4q_perturbed` ×1),
+quantos terminam em sucesso após `ResourceExcess`. Previsto: a maioria (≥2 de
+3); é o caso em que o laço já tinha a resposta. Secundária: alternâncias
+estático↔semântico (5 em R2) e reincidência de um `error_type` já resolvido.
+
+**Controles de ORDEM**: `compila@1` = 11 e tentativa 1 idêntica em 16/16 (não há
+código anterior na tentativa 1). Qualquer desvio é contaminação (F15/F16) e
+invalida a leitura.
+
+**Condições de refutação, declaradas antes:**
+
+1. **Os circuitos corretos continuarem sendo perdidos** (≤1 de 3 recuperado):
+   o problema não era regeneração, e sim o modelo não saber enxugar.
+2. **Sucesso subir sem a população-alvo melhorar**: efeito difuso de mais
+   contexto, não do mecanismo; não creditar T090d.
+3. **Ancoragem**: reincidência cai e o sucesso não sobe, ou convergências
+   SEMÂNTICAS caem abaixo das 2 de R3 (`bv_4q`, `qaoa_maxcut_4q_perturbed`) —
+   o código anterior impede abandonar uma abordagem errada. Resultado
+   distinto, a reportar como tal; é o risco que a dica re-planejadora deveria
+   mitigar e que R4 não consegue separar.
+4. **Sucesso abaixo de 6/16**: piora líquida; T090d não se justifica nesta forma.
+
+**Sobre a ordem**: R4 é medido no mesmo pod/tipo de GPU (A5000), mesmo
+subconjunto e protocolo de R3. A linha de base local completa só roda depois,
+com o laço final.
+
+---
+
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
 
 **Este é o ponto de referência do Princípio III**: o número contra o qual toda
