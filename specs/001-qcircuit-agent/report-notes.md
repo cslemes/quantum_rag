@@ -4539,6 +4539,57 @@ população-alvo acima, que é menor que o número agregado.
 
 ---
 
+### R4 — CONTROLE FORTE refeito retroativamente, e as DUAS faces de T090d (2026-10-06)
+
+**Controle de ordem (byte a byte, sem nova execução).** A premissa de que o
+código da tentativa 1 é recuperável do trace **não se sustenta**: o trace
+(T112) guarda `{node: generator, iteration}`, não o código. O que existe, e é
+função determinística do código da tentativa 1: (a) `final_code`, nas 3 tarefas
+que passam na tentativa 1 (`bell_phi_plus_2q`, `ghz_5q`, `qft_5q`) — comparação
+byte a byte do CÓDIGO; (b) nas demais, o `ErrorRecord` da tentativa 1 completo
+(mensagem exata, sequência de portas gerada, contagens, descrição do
+artefato). **Resultado: R3 vs R4 idênticos em 16/16** (1 rejeitada na entrada
+conta como idêntica trivialmente), e o trace de planner+retriever ANTES da
+primeira chamada ao gerador é idêntico em 16/16 (as divergências posteriores,
+em 7 tarefas, são re-recuperações depois do erro, esperadas). Isto é mais forte
+que "mesmo desfecho", mas continua sendo prova indireta para as 12 tarefas
+(registro do erro, não o código); um circuito diferente com registro de erro
+byte-idêntico é implausível, não impossível. **O 10/16 se sustenta como
+atribuível a T090d.**
+
+**Correção ao raciocínio do registro.** Eu havia tratado "acima de 9" como
+suspeito porque o 9 de R2 incluía o vazamento. Isso confundia dois eixos: R2→R3
+isola o efeito do vazamento (única mudança: T118) e vale −3 tarefas, ou seja, o
+vazamento AJUDOU, e não menos do que se supunha. R4 não contradiz isso: T090d é
+outra intervenção, e 9 era o teto de um laço regenerativo com vazamento, não de
+qualquer laço. A heurística de teto estava errada; o controle é o que decide, e
+ele passou.
+
+**A face que o 10/16 esconde: oscilação trocada por repetição.** Por tarefa,
+sobre os erros de geração (sem o planner), R3 vs R4:
+
+| | R3 | R4 |
+|---|---|---|
+| alternâncias A→B→A | **11** | **1** |
+| mesmo `error_type` em sequência | 11 | 15 |
+| MESMA mensagem em sequência (mesmo símbolo/erro idêntico) | 5 | **11** |
+
+T090d praticamente eliminou a oscilação e **mais que dobrou as repetições
+idênticas**. Das 5 tarefas que falham nos dois braços, 4 repetem mais o mesmo
+erro exato (`simon_6q_perturbed` 0→1, `grover_3q` 1→4, `grover_4q` 0→2,
+`ising_field_coupling_4q_perturbed` 2→3); `qpe_4q` é misto (2→1 idênticas, mas
+tipo repetido 2→3). Nenhuma dessas 5 foi resgatada pela edição. A condição de
+refutação 3 (âncoragem) foi **declarada em termos de convergências semânticas
+caírem abaixo de R3**, o que NÃO ocorreu (2 → 6); o critério declarado não
+dispara. Mas o fenômeno que ela descrevia — o código anterior prende o modelo
+numa abordagem errada — **aparece nas tarefas que não convergem**. As duas
+faces têm de ser reportadas juntas: T090d converge mais onde o erro é
+corrigível por edição e **prende** onde exigiria abandonar a abordagem.
+Reforça o que F32 apontava: o que falta nesses casos é re-planejar, e a edição
+tira essa opção do gerador.
+
+---
+
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
 
 **Este é o ponto de referência do Princípio III**: o número contra o qual toda
