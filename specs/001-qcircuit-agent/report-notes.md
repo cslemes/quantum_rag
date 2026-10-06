@@ -4654,6 +4654,132 @@ de 2026-09-26 passa a ser histórica.
 
 ---
 
+### VERIFICAÇÕES SOBRE A LINHA DE BASE LOCAL (`1bf505bf84beb040`) — quatro, as duas primeiras bloqueantes (2026-10-06)
+
+O resultado acima NÃO foi alterado; o que segue o qualifica.
+
+**1. `ghz_linear5_mixed_perturbed` NÃO é uma tarefa quebrada — e a premissa
+da checagem estava errada.** O run NÃO terminou em cinco `ResourceExcess`:
+o histórico é `UnknownSymbol, MissingImport, UnknownSymbol,
+WrongGateDecomposition, ResourceExcess`, ou seja, **um** `ResourceExcess`, na
+5ª e última tentativa (e o único de todo o baseline de 120 runs). Isso é o que
+`aborted` significa aqui: a última tentativa falhou no estágio de recursos.
+O orçamento declarado é `max_depth_ratio = 2.0` sobre a profundidade do
+circuito de referência transpilado (`cx_ratio` é reportado, não decide), com
+`optimization_level=2`, `seed_transpiler=42`, `linear_5`:
+
+| | profundidade | portas | CX |
+|---|---|---|---|
+| referência transpilada | 3 | 3 | 2 |
+| teto (2,0×) | 6 | — | — |
+| **circuito do 7B na tentativa 5** | **15** | — | 5 (razões 5,00 / 2,50) |
+
+A referência cumpre o próprio orçamento por construção (razão 1,00). O que
+mais importa é que implementações corretas NATURAIS também cumprem: `H(0);
+CX(0,3); CX(3,4)`, `H(4); CX(4,3); CX(3,0)` e a estrela `H(0); CX(0,3);
+CX(0,4)` dão profundidade 3, 2 CX e **razão 1,00 nos três**. O circuito do 7B
+estava funcionalmente correto (`state_equiv` verdadeiro) mas carregava
+`SwapGate`s, `RZ(π)`, `reverse_bits()` e `initialize()` — profundidade 15. A
+tarefa é satisfazível e o fracasso é do gerador. **Não vai para as exclusões
+por vacuidade; fica no denominador.**
+
+**Defeito DIFERENTE nas outras `*_perturbed` de `linear_5` (o oposto do
+critério pedido)**: o orçamento é relativo à referência TRANSPILADA, e em duas
+perturbadas essa referência sai muito mais funda que a da gêmea não
+perturbada — `ghz_linear5_full_perturbed` 25 (gêmea: 5) e
+`ising_linear5_mixed_perturbed` 27 (gêmea: 7). O teto 2× vira 50 e 54: um
+orçamento FROUXO, não estreito. Nenhuma referência excede seu orçamento,
+então nenhuma cai no critério de exclusão enunciado; mas a checagem de
+recursos nessas duas tarefas quase não discrimina. Registrado como defeito de
+calibração, **sem exclusão aplicada**: decidir é do orientador. (No baseline
+atual nenhuma das duas chegou ao estágio de recursos: `failed_semantic` e
+`failed_static`.) Nas demais tarefas de `t4_hardware` a profundidade
+transpilada da referência é igual ou próxima da bruta (diferença ≤ 1).
+
+**2. `compila@1` 20/120 nos dois runs: NÃO é exatamente o mesmo conjunto.**
+Sob a definição do código (`analysis/metrics.py::_first_attempt_reached`:
+nenhum erro de estágio `static` na iteração 1), seed 1 nos dois:
+**18 tarefas em comum**; só no run antigo: `ising_field_coupling_5q_perturbed`,
+`ising_linear5_local_perturbed`; só no novo:
+`field_coupling_linear5_scattered_perturbed`, `ising_linear5_mixed_perturbed`.
+Troca de 2 por 2, ou seja, havia churn que se cancelava. **Mas é localizado**:
+as 4 são `_perturbed` e as 4 têm o enunciado alterado desde o run antigo (53
+arquivos de tarefa mudaram entre `df596b7` e o HEAD, todos `_perturbed`). Nas
+**67 tarefas sem enunciado alterado: 13/120 em ambos, 0 trocas**; nas 53
+alteradas: 7 → 7, 4 trocas. A atribuição ao enunciado é por construção, não
+por intervenção isolada. A afirmação "o gargalo continua sendo compilar" se
+sustenta **nesse sentido restrito** (conjunto idêntico onde o prompt é
+idêntico), não como "as mesmas 20 tarefas".
+
+**Os 7 sucessos**, compilou na tentativa 1 ou só após reparo estático:
+
+| tarefa | iterações | compilou na 1ª | erros |
+|---|---|---|---|
+| `ghz_3q` | 3 | **não** | UnknownSymbol → WrongGate |
+| `ghz_5q` | 4 | **não** | UnknownSymbol → WrongGate ×2 |
+| `vqe_h2_r055` | 4 | **não** | UnknownSymbol → Conceptual → UnknownSymbol |
+| `vqe_h2_r055_perturbed` | 2 | **não** | SyntaxError |
+| `vqe_h2_r130_perturbed` | 2 | **não** | SyntaxError |
+| `ghz_linear5_endpoints` | 4 | **sim** | NonUnitary → WrongGate ×2 |
+| `ghz_linear5_scattered_even` | 4 | **não** | UnknownSymbol → WrongGate ×2 |
+
+**6 de 7 só compilaram depois de reparo estático**; só 1 passou pela tentativa
+1 sem erro estático. Isto sustenta a leitura de que o caminho do 7B até o
+sucesso passa por consertar a compilação primeiro.
+
+**3. Durações — três medições distintas, não uma "suíte completa".** Nenhum
+número abaixo deve ser citado sem estes rótulos.
+
+| | run A `99960870239e97e7` | run B `9e19fa1225e65c9d` | **run C `1bf505bf84beb040`** |
+|---|---|---|---|
+| data | 2026-09-22 | 2026-09-26 | 2026-10-06 |
+| execuções | 360 (120 × 3 seeds) | 360 (120 × 3 seeds) | **120 (1 seed)** |
+| tempo de parede | **205,8 min (3 h 26 min)** | 260 min 22 s | **72 min** |
+| s por run (parede) | 34 | 43 | 36 |
+| reset do servidor | uma vez (`reset_before_run`) | por run | por run |
+| Ollama (host) | 0.34.1 | 0.34.4 | **0.35.1** |
+| `containerized` | não gravado | `no` | `no` |
+| pontos do corpus | 1019 | 875 | 875 |
+
+Ambiente de B e C, gravado nos registros: Python no venv do sandbox
+(`/home/agent/.venvs/qcagent`), host `claude-Quantum-RAG`, `fork`, `gpu_offload
+100%`, Ollama no host alcançado por HTTP. O run A não gravava o ambiente; que
+também rodou no venv do sandbox é a conclusão de F21, verificada depois por
+comando, não por registro. O hardware de referência declarado em `plan.md` é
+RTX 3070 8 GB, mas **não está nos registros** (`gpu_stack: unrecorded`,
+`gpu_processor` ausente): "mesmo hardware" é declarado, não verificado.
+
+**Qual citar**: para "a suíte como configurada hoje" (`config.yaml`,
+`seeds: [1]`, reset por run), **72 min (run C)** — é a única medição dessa
+configuração, e confirma a estimativa registrada de ~1 h 30 como teto
+(a estimativa extrapolava de B). **3 h 26 min é a duração de 360 execuções
+com 3 seeds e reset único**, protocolo que não é mais o corrente; é o número
+ao qual SC-007 foi emendado (3 h → 4 h) e deve ser citado só como histórico
+dessa emenda. **260 min é 3 seeds sob o protocolo atual.** Comparar 72 com
+205,8 diretamente seria comparar 120 com 360 runs. (Eu mesmo disse, ao
+lançar o run C, "165–206 min": extrapolação errada de execuções de 3 seeds.)
+
+**Mudança de ambiente que o resultado da linha de base NÃO sinalizava: o
+Ollama do host foi de 0.34.4 (run B) para 0.35.1 (run C).** O servidor local
+não é fixado por versão (só o do pod é). Atenua, sem eliminar, o fato de a
+tentativa 1 não ter mudado em nenhuma das 67 tarefas de prompt inalterado
+(item 2); mas "mesmo sistema" não vale entre B e C, e 1 → 7 sucessos mistura
+mudança de laço, de suíte e de servidor. Para o orientador: fixar a versão do
+servidor local ou fazer o runner recusar divergência.
+
+**4. 34 → 58: a definição JÁ era a mesma — o delta se confirma.** Os registros
+do run B estão em disco. Aplicando a definição corrente (estado final
+`success` ou `failed_semantic`) ao run B, seed 1: **34/120, exatamente o
+número registrado em 2026-09-26 (28,3%)**; no run C: **58/120 (48,3%)**. A
+ressalva "definição não reconstruída" do resultado acima cai. Duas definições
+vizinhas, para não serem confundidas: "registro final tem `semantic`" dá
+**34 → 59** (inclui o `aborted`, cujo semântico passou e que falhou em
+recursos); e "chegou ao semântico em QUALQUER tentativa" dá **73 → 88**
+(pergunta diferente). O delta citável é 34 → 58, com a ressalva de ambiente
+do item 3.
+
+---
+
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
 
 **Este é o ponto de referência do Princípio III**: o número contra o qual toda
