@@ -4614,6 +4614,46 @@ transfere por si só.
 
 ---
 
+### RESULTADO — linha de base local completa (qwen2.5-coder:7b, `1bf505bf84beb040`, 2026-10-06)
+
+Commit `d1eab80` (predição) + código de T090d; 120 runs, `seeds: [1]`, 0 erros
+de infraestrutura, 0 de harness. **Tempo de parede 72 min** (01:21–02:33 UTC),
+dentro do teto de SC-007 (3 h). Custo US$ 0.
+
+| métrica | 2026-09-26 (`9e19fa12`) | **agora** | IC 95% Wilson (agora) |
+|---|---|---|---|
+| sucesso | 1/120 (0,8%) | **7/120 (5,8%)** | [2,9%, 11,6%] |
+| `compila@1` | 20/120 (16,7%) | **20/120 (16,7%)** | [11,1%, 24,3%] |
+| `verificado@1` | 0/120 | 0/120 | — |
+| terminou em `failed_*` (esgotou) | 119/120 | **112/120 (93%)** | [87%, 97%] |
+| terminou com veredito semântico (sucesso + `failed_semantic`) | 34/120 | **58/120 (48%)** | [40%, 57%] |
+
+Status: 61 `failed_static`, 51 `failed_semantic`, 7 `success`, 1 `aborted`
+(`ghz_linear5_mixed_perturbed`, 5 iterações terminando em `ResourceExcess`).
+Por tier: t1 5,6%, t2 8,3%, t3 0,0%, t4 8,3%. Sucessos: `ghz_3q`, `ghz_5q`,
+`vqe_h2_r055`, `vqe_h2_r055_perturbed`, `vqe_h2_r130_perturbed`,
+`ghz_linear5_endpoints`, `ghz_linear5_scattered_even`. Iterações até sucesso:
+3,29 em média; **nenhum sucesso na tentativa 1** (`verificado@1` 0).
+
+**Contra o registro**: a predição era 1–6 de 120; **7 ficou um acima da faixa**,
+e abaixo da linha de refutação (> 10). A leitura "o gargalo do 7B é compilar"
+se mantém: `compila@1` é **idêntico** ao de 2026-09-26 (20/120), apesar de
+T116 ter reescrito 52 enunciados — a tentativa 1 não se moveu em contagem. O
+ganho (1 → 7) vem inteiro do laço, depois da tentativa 1, e o IC [2,9%, 11,6%]
+não exclui um efeito pequeno; é uma melhoria de sucesso de poucas tarefas, não
+uma mudança de regime.
+
+**Ressalvas que o relatório tem de carregar**: (1) o 48% de "veredito
+semântico" usa a definição acima (estado final); a de 2026-09-26 (28,3%) não
+está reconstruída aqui, então a comparação 34 → 58 é indicativa, não
+verificada; (2) não é comparável por tarefa com a execução anterior (T115, T117,
+T118, T090d e a suíte T116 mudaram juntos) e esta rodada não separa o efeito de
+cada um — só T090d tem medição isolada, e no 30B (R3 → R4); (3) uma semente,
+um modelo; (4) este é o número do braço local de agora em diante — a execução
+de 2026-09-26 passa a ser histórica.
+
+---
+
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
 
 **Este é o ponto de referência do Princípio III**: o número contra o qual toda

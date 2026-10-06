@@ -1,0 +1,19 @@
+canary_seeds:
+- 1
+- 2
+- 3
+generator_host: local
+max_iter: 5
+model: qwen2.5-coder:7b
+ollama_base_url: null
+protocol_canary:
+- qaoa_maxcut_4q_perturbed
+- dj_constant_4q
+provider: ollama
+reasoning_effort: high
+reset_per_run: true
+results_dir: results
+seeds:
+- 1
+send_temperature: false
+tasks: all
