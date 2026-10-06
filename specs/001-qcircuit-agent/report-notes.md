@@ -1123,7 +1123,7 @@ declarar. O inventário atual, feito por essa regra:
 **`PYTHONHASHSEED`: já testado, e passou, por acidente de desenho.** Verificado
 que NÃO está fixado em lugar nenhum — nem no Dockerfile, nem no compose, nem
 no `.env`, nem no ambiente do sandbox — e que `hash("qc")` de fato difere
-entre processos Python consecutivos. As execuções A e B foram processos
+entre processos Python consecutivos. As execuções A e A2 (`99960870`/`7de38e77`) foram processos
 separados, logo rodaram com sementes de hash DIFERENTES. Se qualquer coisa no
 caminho de veredito dependesse de ordem de iteração de `set`, teria aparecido
 nos 0/360. Não apareceu.
@@ -3000,9 +3000,22 @@ não como ruído.
 (F15). Com 26,1% de divergência na tentativa 1, nenhuma das linhas acima é
 interpretável.
 
+
+> **Rótulos de run (2026-10-06, sem reuso de letra).** **A** = `99960870239e97e7`
+> (2026-09-22, 360 execuções, 3 seeds); **A2** = `7de38e77ac071bd3` (2026-09-22,
+> o REPLAY de A para o piso de ruído — antes chamado "run B" nas seções de
+> 22/09, renomeado porque "B" passou a designar outro run); **B** =
+> `9e19fa1225e65c9d` (2026-09-26, 360 execuções, 3 seeds, `reset_per_run`,
+> Ollama 0.34.4); **C** = `1bf505bf84beb040` (2026-10-06, 120 execuções, 1
+> seed, Ollama 0.35.1); **T102** = `ce9614fa3a6f60a6` (2026-09-19). Séries por
+> seed: o "40/74" do run B é a FATIA da seed 1 (120 tarefas, das quais 74
+> chegaram a uma checagem semântica); as três seeds dão o mesmo 74/40, e as 360
+> execuções juntas dão 222/120 (a mesma taxa, 54,1%).
+
+---
 ---
 
-### PISO DE RUÍDO DE REPLAY MEDIDO: ZERO — 0/360 idênticos sob sequência de chamadas fixa (runs `99960870239e97e7` e `7de38e77ac071bd3`, 2026-09-22)
+### PISO DE RUÍDO DE REPLAY MEDIDO: ZERO — 0/360 idênticos sob sequência de chamadas fixa (runs A `99960870239e97e7` e A2 `7de38e77ac071bd3`, 2026-09-22)
 
 > **Corrigido em 2026-09-26 (F28).** Título original: "PISO DE RUÍDO MEDIDO:
 > ZERO. O sistema é determinístico". O que foi mostrado é **0/360
@@ -3104,7 +3117,7 @@ idêntica, dois terços dos 360 runs seriam custo puro, a suíte cairia para
 
 **Refutada, com o mesmo número nas duas execuções:**
 
-| dentro de UMA execução, ao longo dos 3 seeds | run A | run B |
+| dentro de UMA execução, ao longo dos 3 seeds | run A | run A2 |
 |---|---|---|
 | `final_code` idêntico entre seeds | 41/120 = 34,2% | 41/120 = 34,2% |
 | status idêntico entre seeds | 98/120 = 81,7% | 98/120 = 81,7% |
@@ -3112,14 +3125,14 @@ idêntica, dois terços dos 360 runs seriam custo puro, a suíte cairia para
 
 Em ~66% das tarefas os três seeds produzem CÓDIGO DIFERENTE. O Ollama usa o
 seed mesmo com `temperature=0` — a decodificação não é argmax puro. E o
-efeito é **determinístico**: run A e run B concordam nos três números e nas
+efeito é **determinístico**: run A e run A2 concordam nos três números e nas
 mesmas tarefas, o que confirma que seed é uma entrada reprodutível do
 sistema, não ruído.
 
 > **Confundido (F28).** Os seeds 1, 2 e 3 de uma tarefa rodaram em
 > sequência sobre o mesmo estado de servidor: o seed 2 herdava a história do
 > seed 1. Parte da diferença entre seeds pode ser história, não seed. A
-> concordância entre run A e run B é replay e não separa as duas causas. A
+> concordância entre run A e run A2 é replay e não separa as duas causas. A
 > checagem de independência com ordem de seeds invertida sob `reset_per_run`
 > separa. **A refutação desta seção não era evidência (F29)**, qualquer que
 > seja o resultado da predição `9ce9b42`: o instrumento não separava efeito de
@@ -5502,7 +5515,7 @@ importa porque muda o que a suíte mede, e T102 previa a decisão sem escolher:
   3 h 26 min ainda satisfaz esse propósito. Emendar SC-007 seria honesto se a
   justificativa for essa — e desonesto se for só para fazer o número passar.
 
-**Recomendo decidir DEPOIS do piso de ruído (run B)**, porque a escolha entre
+**Recomendo decidir DEPOIS do piso de ruído (run A2)**, porque a escolha entre
 paralelizar e cortar seeds depende de quanto poder estatístico existe hoje, e
 esse número ainda não existe.
 

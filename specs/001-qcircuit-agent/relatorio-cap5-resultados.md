@@ -73,7 +73,7 @@ loop de reparo. Não há componente de "o gerador ficou melhor" nele.
 
 Um segundo sinal aponta na mesma direção. Chamando de **regressão** a execução
 que alcança verificação semântica e depois volta a falhar em estático, a taxa
-caiu de 40 em 74 (54,1%) para 29 em 88 (33,0%): o loop não só avança mais,
+caiu de 40 em 74 (54,1%; rodada B, fatia da semente 1 — 120 tarefas, 74 com checagem semântica; as três sementes dão o mesmo 74/40) para 29 em 88 (33,0%; rodada C): o loop não só avança mais,
 destrói menos do que já havia conseguido. O baseline de 19/09 (anterior ao
 *trace*; contagem por `error_history`, limite inferior) dá 63 em 113 (55,8%):
 estável entre os dois estados anteriores, com a ressalva de que eles diferem em
@@ -196,9 +196,9 @@ Existem três medições de duração de suíte, sob configurações diferentes:
 
 | rodada | configuração | tempo |
 |---|---|---|
-| A | 360 execuções, 3 sementes, reset único, Ollama 0.34.1 | 205,8 min |
-| B | 360 execuções, 3 sementes, `reset_per_run`, Ollama 0.34.4 | 260 min |
-| C | 120 execuções, 1 semente, `reset_per_run`, Ollama 0.35.1 | **72 min** |
+| A (`99960870…`) | 360 execuções, 3 sementes, reset único, Ollama 0.34.1 | 205,8 min |
+| B (`9e19fa12…`) | 360 execuções, 3 sementes, `reset_per_run`, Ollama 0.34.4 | 260 min |
+| C (`1bf505bf…`) | 120 execuções, 1 semente, `reset_per_run`, Ollama 0.35.1 | **72 min** |
 
 **O número citável é 72 minutos, para a suíte como configurada hoje.** As três
 medidas não são comparáveis entre si — diferem em número de execuções,
