@@ -19,6 +19,7 @@ half protects someone running the suite locally with no CI in the loop.
 
 import argparse
 import json
+import os
 import sys
 import time
 import traceback
@@ -62,6 +63,14 @@ class ProtocolIntegrityError(RuntimeError):
     RunConfig.protocol_canary."""
 
 
+class EnvironmentMismatchError(RuntimeError):
+    """Raised when the Ollama server (or the declared GPU) is not the one the
+    canonical environment pins — see `check_environment`."""
+
+
+ENVIRONMENT_FILE = Path(__file__).with_name("environment.yaml")
+
+
 class RunConfig(BaseModel):
     """`config.yaml` — the source of truth for one regression run."""
 
@@ -86,6 +95,14 @@ class RunConfig(BaseModel):
     # only variable. `generator_host` names where it ran, for the record.
     ollama_base_url: str | None = None
     generator_host: str = "local"
+    # Ollama server version this config expects. None = the canonical pin in
+    # bench/environment.yaml. The RunPod arm sets its own (the pod's version is
+    # pinned in the pod, not on the host).
+    expected_ollama_version: str | None = None
+    # Explicit override of the version gate. Set by the runner CLI flag
+    # `--allow-ollama-version-mismatch`, never silently: it is part of the
+    # config, so it changes the run_id and is stamped into every record.
+    allow_ollama_version_mismatch: bool = False
     seeds: list[int] = Field(default_factory=lambda: [1, 2, 3])
     # Task ids to run, or "all" for every task under bench/tasks/.
     tasks: list[str] | str = "all"
@@ -135,6 +152,67 @@ class RunConfig(BaseModel):
     @classmethod
     def load(cls, path: Path) -> "RunConfig":
         return cls.model_validate(yaml.safe_load(path.read_text()) or {})
+
+
+def check_environment(
+    config: RunConfig,
+    lib_versions: dict[str, str],
+    *,
+    pin_file: Path = ENVIRONMENT_FILE,
+    declared_gpu: str | None = None,
+) -> dict[str, str]:
+    """Version gate. Compares the server this run is about to talk to with the
+    pinned environment and returns the entries to stamp into every record.
+
+    Aborts (raises EnvironmentMismatchError) when the Ollama version differs
+    from the pin, naming both. A server that cannot be queried ("unknown") is a
+    mismatch, not a pass. `allow_ollama_version_mismatch` turns the abort into
+    a record: `ollama_version_gate` then says OVERRIDDEN with both versions, so
+    an overridden run cannot be mistaken for a clean one.
+
+    The GPU model is declared, not verified (Ollama's HTTP API exposes no
+    device name): it is recorded as declared, and only a declaration that
+    contradicts the pin aborts. No declaration is recorded as "unrecorded".
+    Only meaningful for provider "ollama"; API providers have no such server.
+    """
+    if config.provider != "ollama":
+        return {"ollama_version_gate": f"not applicable (provider {config.provider})"}
+
+    pins = yaml.safe_load(pin_file.read_text()) or {}
+    expected = config.expected_ollama_version or str(pins["ollama_version"])
+    actual = lib_versions.get("ollama", "unknown")
+    stamps: dict[str, str] = {"ollama_expected": expected}
+    if actual == expected:
+        stamps["ollama_version_gate"] = "matched"
+    elif config.allow_ollama_version_mismatch:
+        stamps["ollama_version_gate"] = (
+            f"OVERRIDDEN: expected {expected}, server is {actual} "
+            "(--allow-ollama-version-mismatch)"
+        )
+    else:
+        raise EnvironmentMismatchError(
+            f"Ollama server version mismatch: the canonical environment pins {expected}, "
+            f"the server at {config.ollama_url} reports {actual}. Refusing to run — a "
+            "different server version is a different system (F21). Restore the pinned "
+            "version, or pass --allow-ollama-version-mismatch to run anyway; the override "
+            "is stamped into every record."
+        )
+
+    gpu = declared_gpu if declared_gpu is not None else os.environ.get("QCAGENT_GPU_MODEL")
+    pinned_gpu = pins.get("gpu_model")
+    if gpu:
+        if config.generator_host == "local" and pinned_gpu and gpu != pinned_gpu:
+            raise EnvironmentMismatchError(
+                f"GPU model mismatch: the canonical environment declares {pinned_gpu!r}, "
+                f"the operator declared {gpu!r} (QCAGENT_GPU_MODEL)."
+            )
+        stamps["gpu_model"] = gpu
+    else:
+        stamps["gpu_model"] = "unrecorded"
+    stamps["gpu_model_status"] = (
+        "declared by the operator, not verified: Ollama's HTTP API exposes no device name"
+    )
+    return stamps
 
 
 def load_tasks(config: RunConfig, tasks_dir: Path = TASKS_DIR) -> list[TaskSpec]:
@@ -534,6 +612,13 @@ def run_suite(
     # with an injected task_runner has no such server to ask.
     if lib_versions is None:
         lib_versions = collect_lib_versions(ollama_base_url=config.ollama_url)
+        try:
+            lib_versions |= check_environment(config, lib_versions)
+        except EnvironmentMismatchError as exc:
+            # Left in the run directory, like the protocol canary: the refusal
+            # is itself a result.
+            (out_dir / "ENVIRONMENT_MISMATCH.txt").write_text(f"{exc}\n")
+            raise
         # The retrieval corpus is part of what produced these numbers, so it
         # belongs in the record beside the library versions (Principle III).
         #
@@ -768,6 +853,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=Path("config.yaml"))
     parser.add_argument(
+        "--allow-ollama-version-mismatch",
+        action="store_true",
+        help="run even if the Ollama server version differs from the pinned one "
+        "(bench/environment.yaml); stamped into every record as OVERRIDDEN",
+    )
+    parser.add_argument(
         "--verify-only",
         action="store_true",
         help="run the Principle IV reference check for the configured tasks and stop",
@@ -780,6 +871,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     config = RunConfig.load(args.config)
+    if args.allow_ollama_version_mismatch:
+        config = config.model_copy(update={"allow_ollama_version_mismatch": True})
     tasks = load_tasks(config)
     failures = verify_references(tasks)
     if failures:
@@ -816,7 +909,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if canary_failures else 0
     try:
         run_suite(config, check_protocol=True)
-    except ProtocolIntegrityError as exc:
+    except (ProtocolIntegrityError, EnvironmentMismatchError) as exc:
         print(f"REFUSING TO RUN: {exc}", file=sys.stderr)
         return 1
     return 0

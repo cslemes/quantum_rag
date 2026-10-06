@@ -79,7 +79,7 @@ CONTROLLED_FIELDS = (
 # When the operator DOES declare it, a difference is a hard refusal like any
 # other controlled field: undeclared is unverified, declared-and-different is
 # incomparable.
-DECLARED_FIELDS = ("gpu_stack",)
+DECLARED_FIELDS = ("gpu_stack", "gpu_model")
 UNDECLARED = "unrecorded"
 
 

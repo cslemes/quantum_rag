@@ -54,6 +54,15 @@ def _first_attempt_reached(record: RunRecord, stage: str) -> bool:
     )
 
 
+def _reached_semantic(record: RunRecord) -> bool:
+    """True when a semantic check RAN at some attempt, read from the trace
+    (T112): a `semantic_check` node event. Not from `error_history`: a
+    ParameterBindingError raised during the semantic check is filed under
+    stage "static" (vqe_h2_r055_perturbed, run 9e19fa12, attempt 1), and a
+    semantic PASS leaves no error at all."""
+    return any(event.get("node") == "semantic_check" for event in record.trace)
+
+
 def _mean(values: Sequence[float]) -> float | None:
     return statistics.fmean(values) if values else None
 
@@ -74,6 +83,15 @@ class SuiteMetrics(BaseModel):
     verified_at_1: float | None  # attempt 1 both verified and passed
     success_rate: float | None  # verified and passed, any attempt
     completed_unverified_rate: float | None  # finished clean, nothing verified
+    # Loop damage, independent of the success count: of the runs that got far
+    # enough for a semantic check at SOME attempt, the share that ended in a
+    # STATIC failure — the loop reached a circuit that compiled and ran, then
+    # lost it. 0 means the loop never undid its own progress; success_rate
+    # cannot say that, because a run can also fail without ever having
+    # reached the semantic stage.
+    runs_reached_semantic: int
+    runs_regressed: int
+    regression_rate: float | None
     success_rate_by_tier: dict[str, float]
     status_counts: dict[str, int]
 
@@ -134,6 +152,9 @@ def compute(records: Iterable[RunRecord], tiers: dict[str, str] | None = None) -
         if r.resource and r.resource.get("cx_ratio") is not None
     ]
 
+    reached_semantic = [r for r in attempted if _reached_semantic(r)]
+    regressed = [r for r in reached_semantic if r.status == "failed_static"]
+
     return SuiteMetrics(
         runs=len(all_records),
         attempted=len(attempted),
@@ -143,6 +164,9 @@ def compute(records: Iterable[RunRecord], tiers: dict[str, str] | None = None) -
         compiles_at_1=rate(sum(1 for r in attempted if _first_attempt_reached(r, "static"))),
         verified_at_1=rate(sum(1 for r in successes if r.iterations == 1)),
         success_rate=rate(len(successes)),
+        runs_reached_semantic=len(reached_semantic),
+        runs_regressed=len(regressed),
+        regression_rate=len(regressed) / len(reached_semantic) if reached_semantic else None,
         completed_unverified_rate=rate(
             sum(1 for r in attempted if r.status == "completed_unverified")
         ),
@@ -189,6 +213,9 @@ def render(metrics: SuiteMetrics) -> str:
         f"taxa de sucesso:      {pct(metrics.success_rate)}",
         f"completed_unverified: {pct(metrics.completed_unverified_rate)}  "
         "(finished clean, nothing verified — NOT success)",
+        f"taxa de regressão:   {pct(metrics.regression_rate)}  "
+        f"({metrics.runs_regressed}/{metrics.runs_reached_semantic}: chegou ao semântico "
+        "em alguma tentativa e terminou em falha estática)",
         "",
         "taxa de sucesso por tier:",
         *(f"  {tier}: {rate:.1%}" for tier, rate in metrics.success_rate_by_tier.items()),

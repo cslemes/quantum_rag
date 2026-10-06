@@ -136,3 +136,23 @@ def test_a_zero_ratio_still_counts() -> None:
 
     assert metrics.mean_cx_ratio == 1.0
     assert metrics.mean_depth_ratio == 1.0
+
+
+def test_regression_rate_counts_runs_that_reached_semantic_then_ended_static() -> None:
+    sem = [{"node": "semantic_check", "passed": False}]
+    records = [
+        _record("failed_static", task_id="a", trace=sem),  # reached semantic, lost it: regression
+        _record("failed_static", task_id="a", trace=[]),  # never reached semantic: not counted
+        _record("failed_semantic", task_id="a", trace=sem),  # reached, did not regress
+        _record("success", task_id="a", trace=sem),  # reached, did not regress
+    ]
+    m = compute(records, _TIERS)
+
+    assert (m.runs_reached_semantic, m.runs_regressed) == (3, 1)
+    assert m.regression_rate == 1 / 3
+    assert "1/3" in render(m)
+
+
+def test_regression_rate_is_undefined_when_nothing_reached_semantic() -> None:
+    m = compute([_record("failed_static", trace=[])], _TIERS)
+    assert m.regression_rate is None

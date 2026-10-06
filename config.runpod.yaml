@@ -35,3 +35,4 @@ results_dir: results
 reset_per_run: true
 ollama_base_url: http://localhost:11435
 generator_host: "runpod:NVIDIA RTX A5000 (CA-MTL-1, secure, $0.27/h, pod n3wqj9dx0eyd7g)"
+expected_ollama_version: "0.34.4"   # the pod pins its own Ollama (scripts/runpod_arm.py::OLLAMA_VERSION), not the host pin

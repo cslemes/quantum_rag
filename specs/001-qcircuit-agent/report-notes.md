@@ -4795,6 +4795,132 @@ tal.
 
 ---
 
+### Run D NÃO foi executado: o Ollama está no host Windows, inalcançável pelo agente (2026-10-06)
+
+Instalar 0.34.4 exige trocar o Ollama NATIVO do host; o agente só o alcança por
+HTTP (`host.docker.internal:11434`) e não pode instalar nem desinstalar nada
+lá. Instalar 0.34.4 no sandbox (sem GPU: `nvidia-smi` ausente) mudaria o
+hardware, e rodar no pod mudaria GPU e servidor — nenhuma das duas é "tudo
+igual ao run C". A predição acima fica registrada e **pendente**; o que falta
+é o operador instalar 0.34.4 no host e rodar
+`uv run python -m bench.runner --config config.yaml --allow-ollama-version-mismatch`
+(a flag é necessária porque o novo gate, abaixo, recusa 0.34.4), com
+`QCAGENT_GPU_MODEL` declarado, e restaurar 0.35.1 depois.
+
+---
+
+### Item 2 — controle de versão do servidor, aplicado (2026-10-06)
+
+**O que já existia e o que faltava.** A versão do Ollama JÁ era gravada em todo
+registro (`lib_versions["ollama"]`) e `analysis/compare.py` já RECUSAVA comparar
+dois runs de versões diferentes. O que NÃO existia era recusar o RUN: o run C
+rodou em 0.35.1 sem aviso, e a divergência só apareceu na leitura posterior.
+
+- **Pin**: `bench/environment.yaml` — `ollama_version: "0.35.1"` e
+  `gpu_model` (declarado em `plan.md`). É o documento canônico legível por
+  máquina; D15 / apêndice de reprodutibilidade passam a apontar para ele.
+- **Gate no início de `run_suite`** (`bench/runner.py::check_environment`):
+  versão diferente do pin → **ABORTA**, com mensagem que nomeia as duas
+  versões; servidor inalcançável ("unknown") conta como divergência. O aborto
+  grava `ENVIRONMENT_MISMATCH.txt` no diretório do run (a recusa é um
+  resultado, como no canário). Provedores de API: "não se aplica".
+- **Override explícito**: `--allow-ollama-version-mismatch`. Entra na config
+  (muda o `run_id`) e carimba CADA registro com
+  `ollama_version_gate: "OVERRIDDEN: expected X, server is Y (...)"`; um run
+  limpo grava `matched`. `ollama_expected` também gravado.
+- **Braço RunPod**: `config.runpod.yaml` fixa o PRÓPRIO pin
+  (`expected_ollama_version: "0.34.4"`, a versão que o pod instala), pois o
+  pin do host não se aplica a ele.
+- **GPU: continua DECLARADA, não verificada, e agora está rotulada assim.** A
+  API HTTP do Ollama não expõe nome de dispositivo (verificado em
+  `/api/version`, `/api/ps` e `/api/show`; `/api/system` e `/api/gpu` dão
+  404) e `nvidia-smi` está no host. Não há como verificar daqui. O runner grava
+  `gpu_model` (da declaração do operador, `QCAGENT_GPU_MODEL`, ou `unrecorded`)
+  e `gpu_model_status: "declared by the operator, not verified…"`. Só uma
+  declaração que CONTRADIZ o pin aborta; ausência é gravada como ausência.
+  `analysis/compare.py` passou a tratar `gpu_model` como campo declarado (avisa
+  se não declarado, recusa se declarado e diferente). **Para o orientador**: a
+  única verificação real do modelo da GPU seria um endpoint no host, ou
+  `nvidia-smi` exposto ao agente.
+- Testes: `tests/unit/test_environment_gate.py` (8) — pass, mismatch com as
+  duas versões na mensagem, `unknown`, override carimbado, pin próprio do pod,
+  GPU declarada/ausente/contraditória, API sem servidor. Suíte unitária: 504
+  passam.
+
+---
+
+### Item 3 — as duas tarefas irmãs: o perturbado É caro, a referência não é o defeito (2026-10-06)
+
+Método do item 1: 4 implementações corretas NATURAIS por tarefa (todas
+verificadas equivalentes à referência), passadas por `check_resources` com os
+mesmos parâmetros (`linear_5`, opt 2, `seed_transpiler=42`). A referência de
+ambas usa o bloco `QFT` da biblioteca como instrução opaca.
+
+| `ghz_linear5_full_perturbed` (ref. transpilada: **25**) | profundidade | razão |
+|---|---|---|
+| GHZ em cadeia + bloco `QFT` (= referência) | 25 | 1,00 |
+| GHZ em cadeia + `QFT(5).decompose()` | 25 | 1,00 |
+| GHZ em cadeia + QFT escrita à mão (H, CP, SWAPs) | 26 | 1,04 |
+| GHZ centrado (árvore) + bloco `QFT` | 20 | 0,80 |
+
+| `ising_linear5_mixed_perturbed` (ref. transpilada: **27**) | profundidade | razão |
+|---|---|---|
+| termos CX-RZ-CX + bloco `QFT` (= referência) | 27 | 1,00 |
+| termos CX-RZ-CX + `QFT(5).decompose()` | 27 | 1,00 |
+| termos CX-RZ-CX + QFT à mão | 27 | 1,00 |
+| `PauliEvolutionGate` + bloco `QFT` | 23 | 0,85 |
+
+**As implementações naturais caem PERTO da referência (20–27 contra 25 e 27).**
+Pela regra enunciada, **nada muda**: a perturbação (QFT sobre 5 qubits numa
+linha) custa de fato ~25 de profundidade, e a referência é uma implementação
+natural. Nenhuma tarefa excluída, nenhuma referência trocada, suíte não
+versionada, e os números históricos dessas duas tarefas continuam valendo sob
+o mesmo orçamento.
+
+**Correção ao que escrevi na verificação anterior**: chamei esse orçamento de
+"FROUXO, a checagem quase não discrimina". Isso comparava a profundidade da
+perturbada com a da gêmea não perturbada, que é a comparação errada: o
+referencial é uma solução natural DA PRÓPRIA tarefa, e contra ela o teto 2× é
+tão estrito aqui quanto nas outras. Retratado; o defeito de calibração não
+existe.
+
+**Observação lateral, não corrigida**: `check_resources` transpila sem
+`basis_gates`, então `cx_count` conta só portas `cx` literais — o `cp` da QFT
+fica fora. Nas tarefas com QFT, `cx_ratio` mede só a parte GHZ/Ising. Não
+decide aprovação (só a profundidade decide), mas o `cx_ratio` médio reportado
+por `analysis.metrics` mistura as duas coisas.
+
+---
+
+### Item 4 — taxa de regressão, métrica derivada nova (2026-10-06)
+
+**Definição** (`analysis/metrics.py`): entre as runs que chegaram a uma
+checagem semântica em ALGUMA tentativa, a fração que terminou em
+`failed_static` — o laço chegou a um circuito que compila e executa e o
+perdeu. Mede dano do laço independentemente do número de sucessos. "Chegou à
+checagem semântica" lê o TRACE (evento `semantic_check`, T112), e não
+`error_history`: um `ParameterBindingError` levantado durante a checagem
+semântica é arquivado com `stage="static"`, e um PASS semântico não deixa
+erro algum. Reportada por run em `analysis.metrics` e `make report`.
+
+**Confirmação dos seus números — um bate, o outro não:**
+
+| | seu número | contagem por `error_history` (a que eu usei) | **por trace (definição final)** |
+|---|---|---|---|
+| run B (seed 1) | 39/73 | 39/73 ✓ | **40/74 = 54,1%** |
+| run C | 30/88 | 29/88 | **29/88 = 33,0%** |
+
+Run B: 39/73 reproduz sob a contagem por `error_history`, mas essa contagem
+PERDE `vqe_h2_r055_perturbed` (tentativa 1: `ParameterBindingError` arquivado
+como estático, embora o semântico tenha rodado; terminou `failed_static`), e o
+trace corrige para **40/74**. Run C: **29/88, não 30/88** — nem pelo trace nem
+pelo `error_history` consegui reproduzir 30; não vi o que o 30 contou
+(o `aborted` terminou em recursos, não em estático). Taxas: **54,1% → 33,0%**,
+ou seja, **a regressão caiu em ~21 pontos entre B e C**, na direção que T090d
+pretendia, e os dois runs têm o mesmo denominador de tarefas.
+
+---
+
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
 
 **Este é o ponto de referência do Princípio III**: o número contra o qual toda

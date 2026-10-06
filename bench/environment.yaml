@@ -1,0 +1,20 @@
+# Canonical execution environment — the PINNED values the runner checks at
+# startup (item "version gating"; report-notes.md, "ambiente canônico").
+#
+# A field here is enforced or labeled, never decoration (F21):
+#   ollama_version  ENFORCED. The runner reads the server's version over
+#                   /api/version and ABORTS on mismatch, naming both. A run
+#                   that was overridden carries `ollama_version_gate:
+#                   OVERRIDDEN ...` in every record. Per-config override of the
+#                   expectation: `expected_ollama_version` in the run config
+#                   (the RunPod arm pins its own pod's version).
+#   gpu_model       DECLARED, not verifiable: Ollama's HTTP API exposes no
+#                   device name, and nvidia-smi lives on the host. The runner
+#                   records the operator's declaration (QCAGENT_GPU_MODEL) and
+#                   aborts only if a declaration contradicts this value; an
+#                   absent declaration is recorded as "unrecorded".
+#
+# Moving the local server to another version is a deliberate act: change
+# `ollama_version` here, in the same commit, and say why in report-notes.md.
+ollama_version: "0.35.1"
+gpu_model: "NVIDIA GeForce RTX 3070 (8 GB)"   # as declared in plan.md, host Windows
