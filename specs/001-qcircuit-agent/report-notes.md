@@ -4780,6 +4780,21 @@ do item 3.
 
 ---
 
+### PREDIÇÃO REGISTRADA — run D: confound de versão do servidor (Ollama 0.34.4 vs 0.35.1), escrita antes de rodar (2026-10-06)
+
+Run D = run C (`1bf505bf84beb040`) com TUDO igual — mesmo código do laço
+(`d1eab80`), mesmos enunciados, mesma semente, `reset_per_run`, mesmo modelo —
+exceto o servidor: Ollama **0.34.4** no host em vez de 0.35.1.
+
+**Predição: 5 a 9 de 120.** Uma troca de versão menor de um servidor de
+inferência, com pesos, temperatura e semente fixos, deveria mover pouco o
+número. **Se 0.34.4 der 3 ou menos, ou 12 ou mais, a troca de servidor é um
+confound material e o delta 1 → 7 não pode ser atribuído às mudanças do laço.**
+Entre 4 e 11 sem estar em 5–9: leitura "mexeu, mas não decide", reportada como
+tal.
+
+---
+
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
 
 **Este é o ponto de referência do Princípio III**: o número contra o qual toda
