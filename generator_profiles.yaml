@@ -1,0 +1,60 @@
+# Generator backend profiles — the ONE place a generator is described.
+#
+# A profile is configuration over a single code path: the UI, the regression
+# runner and the by-hand tools all build their client from it with
+# `qcagent.llm.profiles.build_client`. Adding a backend is adding an entry
+# here, not adding code — provided its protocol is one of the client types
+# (`ollama`, `openai_compatible`).
+#
+# SECRETS never appear in this file. `credential_env` names an environment
+# variable (resolved server-side from the process environment or .env); the
+# loader rejects anything that is not shaped like a variable name. Neither the
+# UI, the run records nor the logs ever carry the value.
+#
+# The app does NOT start, stop or provision anything. A profile whose backend
+# is not up is reported as unreachable, with the reason; it is never replaced
+# by another profile.
+
+default: local-7b
+
+profiles:
+  - name: local-7b
+    label: "Local — qwen2.5-coder 7B (host GPU)"
+    client_type: ollama
+    base_url: http://localhost:11434
+    base_url_env: OLLAMA_BASE_URL        # .env overrides (e.g. host.docker.internal)
+    model: qwen2.5-coder:7b
+    # The version the local numbers were measured under (bench/environment.yaml
+    # carried this globally until profiles; it now belongs to the backend).
+    expected_server_version: "0.35.1"
+    determinism:
+      reset_strategy: per_run            # unload the model before every run (F28)
+      temperature: 0.0                   # pinned, never inherited (F15)
+      num_ctx: 16384                     # pinned, never inherited (D10b)
+
+  - name: runpod-30b
+    label: "RunPod — qwen3-coder 30B (rented GPU, via SSH tunnel)"
+    client_type: ollama
+    base_url: http://localhost:11435     # the SSH tunnel to the pod's Ollama
+    base_url_env: RUNPOD_OLLAMA_BASE_URL
+    model: qwen3-coder:30b
+    expected_server_version: "0.34.4"    # pinned in the pod (scripts/runpod_arm.py)
+    determinism:
+      reset_strategy: per_run
+      temperature: 0.0
+      num_ctx: 16384
+    setup_hint: >-
+      Needs the RunPod pod AND the SSH tunnel to be already up. This app does
+      not start, stop or provision pods and does not manage billing.
+
+  # An OpenAI-compatible frontier API is CONFIGURATION ONLY — no code. Uncomment
+  # and set the variable named by credential_env in .env:
+  #
+  # - name: frontier-openai
+  #   label: "OpenAI-compatible — frontier model"
+  #   client_type: openai_compatible
+  #   base_url: https://api.openai.com/v1
+  #   model: gpt-6-luna
+  #   credential_env: OPENAI_API_KEY
+  #   determinism: {reset_strategy: none, temperature: null, num_ctx: null}
+  #   pricing_usd_per_mtok: [0.10, 0.50]  # optional; cost is 0 when omitted

@@ -11,7 +11,9 @@
 # `--verify-only` performs just that check.
 
 # Generator under test. Any model the configured Ollama server serves.
-model: qwen2.5-coder:7b
+# The generator is a PROFILE (generator_profiles.yaml): model, server URL, expected
+# server version and determinism settings all come from it.
+profile: local-7b
 
 # ONE seed (2026-09-26). Under reset_per_run the three seeds of a task were
 # byte-identical in every arm of T114 (16/16, three times): at temperature 0

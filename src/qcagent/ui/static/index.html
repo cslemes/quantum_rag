@@ -153,6 +153,11 @@
   .basenote { font-size: 12px; color: var(--muted); margin-top: 12px;
               border-left: 2px solid var(--line); padding-left: 10px; }
   .health { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+  .pbar { display: flex; gap: 8px; align-items: center; }
+  .pbar select { flex: 1; font: inherit; font-size: 13px; padding: 7px 8px; border-radius: 7px;
+                 border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+  .pstatus { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+  .pstatus .state { font-weight: 600; color: var(--fg); }
   details summary { cursor: pointer; font-size: 12px; color: var(--muted); margin-top: 12px; }
 </style>
 </head>
@@ -164,6 +169,11 @@
 
   <div class="cols">
     <section>
+      <label for="profile">Generator <span class="hint">— which backend writes the circuit; the checks are the same for all</span></label>
+      <div class="pbar"><select id="profile"></select>
+        <button type="button" id="recheck">Re-check</button></div>
+      <div class="pstatus" id="pstatus">checking…</div>
+
       <label for="spec">Circuit description</label>
       <textarea id="spec" rows="4" placeholder="A 2-qubit Bell state |Phi+> using H and CNOT."></textarea>
 
@@ -243,7 +253,75 @@ async function doValidate() {
 }
 
 fetch("/api/health").then(r => r.json()).then(h =>
-  $("health").textContent = `retrieval: ${h.qdrant} · generator: ${h.ollama}`);
+  $("health").textContent = `retrieval: ${h.qdrant}`);
+
+// ---- generator profiles ---------------------------------------------------
+// Reachability is read LIVE from the server — on load, on selection, on
+// "Re-check" and (by the server, not trusted from here) before every run. It
+// is never cached: the natural order is app, then pod, then tunnel, so a
+// state read once at boot would show a false "unreachable". The page shows
+// WHEN each check ran.
+let profileState = {};
+const STATE_WORD = { reachable: "reachable", unreachable: "unreachable", not_configured: "not configured" };
+
+function when(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? iso : d.toLocaleTimeString();
+}
+
+function statusHtml(p) {
+  let body;
+  if (p.state === "reachable" && p.usable) {
+    body = `<span class="state">● Configured and reachable</span> — server ${esc(p.server_version || "n/a")}`
+      + (p.expected_server_version ? ` (profile pins ${esc(p.expected_server_version)})` : "");
+  } else if (p.state === "reachable") {
+    body = `<span class="state">⚠ Reachable, but refused</span> — server reports ${esc(p.server_version)},
+      this profile pins ${esc(p.expected_server_version)}. Nothing will be sent to it.`;
+  } else if (p.state === "unreachable") {
+    body = `<span class="state">○ Configured, but unreachable</span> — ${esc(p.reason || "no answer")}.
+      Runs on this profile are refused; they are not sent to another one.`;
+  } else {
+    body = `<span class="state">– Not configured</span> — ${esc(p.reason || "")}.`;
+  }
+  return `${body}<br>checked ${esc(when(p.checked_at))} · re-checked again before every run`;
+}
+
+function renderProfileOptions(list, keep) {
+  const sel = $("profile");
+  sel.innerHTML = "";
+  list.profiles.forEach(p => {
+    const o = document.createElement("option");
+    o.value = p.name;
+    o.textContent = `${p.label} — ${STATE_WORD[p.state]}${p.state === "reachable" && !p.usable ? " (version refused)" : ""}`;
+    sel.appendChild(o);
+    profileState[p.name] = p;
+  });
+  sel.value = keep && profileState[keep] ? keep : list.default;
+  $("pstatus").innerHTML = statusHtml(profileState[sel.value]);
+}
+
+function loadProfiles(keep) {
+  $("pstatus").textContent = "checking…";
+  return fetch("/api/profiles").then(r => r.json()).then(list => renderProfileOptions(list, keep))
+    .catch(() => { $("pstatus").textContent = "could not read generator profiles from the server"; });
+}
+
+function recheckSelected() {
+  const name = $("profile").value;
+  $("pstatus").textContent = "checking…";
+  return fetch("/api/profiles/" + encodeURIComponent(name) + "/status")
+    .then(r => r.json()).then(p => {
+      profileState[name] = p;
+      const opt = [...$("profile").options].find(o => o.value === name);
+      if (opt) opt.textContent = `${p.label} — ${STATE_WORD[p.state]}${p.state === "reachable" && !p.usable ? " (version refused)" : ""}`;
+      $("pstatus").innerHTML = statusHtml(p);
+    })
+    .catch(() => { $("pstatus").textContent = "could not re-check this profile"; });
+}
+
+$("profile").onchange = recheckSelected;   // re-check on selection
+$("recheck").onclick = () => loadProfiles($("profile").value);   // explicit refresh
+loadProfiles(null);
 
 $("go").onclick = () => {
   const spec = $("spec").value.trim();
@@ -251,11 +329,20 @@ $("go").onclick = () => {
   $("go").disabled = true;
   const maxIter = +$("maxiter").value || 5;
   const src = new EventSource("/api/run?spec=" + encodeURIComponent(spec)
+    + "&profile=" + encodeURIComponent($("profile").value)
     + "&assertions=" + encodeURIComponent($("assertions").value)
     + "&max_iter=" + maxIter);
 
   src.addEventListener("stage", e => renderProgress(JSON.parse(e.data)));
   src.addEventListener("done", e => { renderDone(JSON.parse(e.data)); src.close(); $("go").disabled = false; });
+  src.addEventListener("refused", e => {
+    const d = JSON.parse(e.data);
+    $("right").innerHTML = `<div class="report unverified"><div class="verdict">NOT RUN — generator unavailable</div>
+      <div class="verdict-body">${esc(d.message)}<br><br>
+      Checked ${esc(when(d.checked_at || new Date().toISOString()))}. Start the backend (for RunPod: the pod and the
+      SSH tunnel; this app does not start them) and press <strong>Re-check</strong>.</div></div>`;
+    src.close(); $("go").disabled = false; recheckSelected();
+  });
   src.addEventListener("error", e => {
     let d = {}; try { d = JSON.parse(e.data); } catch {}
     $("right").innerHTML = `<div class="report unverified"><div class="verdict">RUN FAILED</div>
@@ -454,6 +541,9 @@ function renderDone(d) {
       ${diagramHtml(d.diagram)}` : ""}
     ${distributionHtml(d.distribution)}
     ${attemptsHtml(d.failures, d.iterations, d.max_iter, null, d.elapsed_s)}
+    ${d.generator ? `<div class="basenote">Generated by <strong>${esc(d.generator.profile)}</strong> — model ${esc(d.generator.model_resolved)},
+      server ${esc(d.generator.server_version_reported)}, reset ${esc(d.generator.determinism_reset)},
+      temperature ${esc(d.generator.determinism_temperature)}, num_ctx ${esc(d.generator.determinism_num_ctx)}</div>` : ""}
     ${rep ? `<details><summary>Full guarantee report (text)</summary><pre>${esc(rep.text)}</pre></details>` : ""}`;
   wireDrafts(d.distribution);
   wireCheck(d.token);

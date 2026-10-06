@@ -3,7 +3,9 @@
 # two strata, chosen from run 99960870239e97e7 before any arm ran.
 #   Stratum A — errors taught by the 2.x corpus (F24)
 #   Stratum B — invented symbols only (F25); control for S0->S1
-model: qwen2.5-coder:7b
+# The generator is a PROFILE (generator_profiles.yaml): model, server URL, expected
+# server version and determinism settings all come from it.
+profile: local-7b
 seeds: [1, 2, 3]
 tasks:
   # A

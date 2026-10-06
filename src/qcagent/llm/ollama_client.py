@@ -1,6 +1,7 @@
 """Local generator client — Ollama (research.md D10, D10b, D10c)."""
 
 import subprocess
+import sys
 import time
 from typing import TypedDict
 
@@ -308,3 +309,29 @@ class OllamaClient(BaseLLMClient):
             model_id=self.model_id,
             num_ctx=self.num_ctx,
         )
+
+
+def reset_generator_state(base_url: str, model: str) -> None:
+    """Unload the model, so the run starts from a known engine state.
+
+    Generation turned out to depend on state INSIDE the inference server, not
+    only on the request: an identical prompt (same seed, `temperature=0`) can
+    return one answer computed fresh and a different one served off Ollama's
+    own prompt/KV cache. Two suite runs back to back therefore differ — the
+    second inherits the first's cache. It is F18's problem one level down: a
+    memoization layer between the experiment and the system under test, except
+    this one is not ours and cannot be deleted from disk.
+
+    Unloading is the only handle the HTTP API gives us over that state. It
+    does not prove determinism — that is what the two-run measurement is for
+    (F19) — it removes one known way for two runs to start differently.
+    """
+    try:
+        httpx.post(f"{base_url}/api/generate", json={"model": model, "keep_alive": 0}, timeout=60)
+        time.sleep(3)  # the unload is asynchronous; give it a moment to land
+        print(f"generator state reset: {model} unloaded before the run", flush=True)
+    except httpx.HTTPError as exc:  # pragma: no cover - best effort, never fatal
+        # A failed reset is worth saying out loud but must not abort a run:
+        # the consequence is a possibly-warm start, which the comparison will
+        # show, not a wrong result.
+        print(f"WARNING: could not reset generator state ({exc})", file=sys.stderr, flush=True)

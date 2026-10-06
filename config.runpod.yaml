@@ -3,7 +3,9 @@
 # "PREDIÇÃO REGISTRADA — braço RunPod"). Two strata, chosen from run 99960870239e97e7:
 #   Stratum A — errors taught by the 2.x corpus (F24)
 #   Stratum B — invented symbols only (F25); control for S0->S1
-model: qwen3-coder:30b
+# The generator is a PROFILE (generator_profiles.yaml): model, server URL, expected
+# server version and determinism settings all come from it.
+profile: runpod-30b
 provider: ollama
 seeds: [1]
 tasks:
@@ -33,6 +35,4 @@ results_dir: results
 # change. The server is ours, so reset_per_run and the protocol canary apply
 # (defaults), which makes this arm reproducible, unlike the API arms.
 reset_per_run: true
-ollama_base_url: http://localhost:11435
 generator_host: "runpod:NVIDIA RTX A5000 (CA-MTL-1, secure, $0.27/h, pod n3wqj9dx0eyd7g)"
-expected_ollama_version: "0.34.4"   # the pod pins its own Ollama (scripts/runpod_arm.py::OLLAMA_VERSION), not the host pin

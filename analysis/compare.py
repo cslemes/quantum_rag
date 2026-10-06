@@ -83,6 +83,15 @@ DECLARED_FIELDS = ("gpu_stack", "gpu_model")
 UNDECLARED = "unrecorded"
 
 
+# The generator backend. A different profile is a different generator, exactly
+# as a different server version is, and is refused the same way. Runs from
+# before profiles existed carry no `profile` at all: two of those are the same
+# (unprofiled) regime and stay comparable with each other, but an unprofiled
+# run against a profiled one is NOT comparable — "absent" never reads as "fine".
+PROFILE_FIELD = "profile"
+UNPROFILED = "unprofiled"
+
+
 class IncomparableRunsError(RuntimeError):
     """Raised when two runs were not produced under the same controlled
     conditions, so a per-task difference cannot be attributed to the change
@@ -107,6 +116,13 @@ def check_comparable(before: list[RunRecord], after: list[RunRecord]) -> None:
             problems.append(f"{field}: missing ({lhs!r} vs {rhs!r}) — run predates the protocol")
         elif lhs != rhs:
             problems.append(f"{field}: {lhs!r} != {rhs!r}")
+    lhs_profile = before[0].lib_versions.get(PROFILE_FIELD, UNPROFILED)
+    rhs_profile = after[0].lib_versions.get(PROFILE_FIELD, UNPROFILED)
+    if lhs_profile != rhs_profile:
+        problems.append(
+            f"{PROFILE_FIELD}: {lhs_profile!r} != {rhs_profile!r} — a different generator "
+            "backend is a different system, not the same system under a change"
+        )
     warnings = []
     for field in DECLARED_FIELDS:
         lhs = before[0].lib_versions.get(field, UNDECLARED)

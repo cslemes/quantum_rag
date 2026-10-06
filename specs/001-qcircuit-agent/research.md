@@ -1783,9 +1783,10 @@ continha uma alegação identificavelmente incorreta — não só classificar o
 
 ## D15 — Ambiente de execução canônico
 
-> **Versões fixadas (2026-10-06)**: o servidor Ollama do host é fixado em
-> **0.35.1** e o modelo de GPU declarado é RTX 3070 (8 GB), em
-> `bench/environment.yaml` — a fonte legível por máquina. O runner COMPARA a
+> **Versões fixadas (2026-10-06; movidas para o perfil em 2026-10-07)**: a
+> versão esperada do servidor é do PERFIL do backend
+> (`generator_profiles.yaml`: `local-7b` → 0.35.1, `runpod-30b` → 0.34.4) e o
+> modelo de GPU declarado (RTX 3070, 8 GB) fica em `bench/environment.yaml`. O runner COMPARA a
 > versão no início e ABORTA se divergir, nomeando as duas (override explícito:
 > `--allow-ollama-version-mismatch`, carimbado em cada registro). O modelo da
 > GPU é DECLARADO, não verificável pela API HTTP do Ollama, e gravado como tal.

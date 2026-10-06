@@ -1,18 +1,19 @@
-"""Version gate: the runner refuses a server that is not the pinned one, an
-override is stamped into the record, and the GPU model is recorded as
-DECLARED (Ollama's HTTP API exposes no device name)."""
+"""Version gate, per PROFILE: the runner refuses a server that is not the one
+the profile pins, an override is stamped into the record, and the GPU model is
+recorded as DECLARED (Ollama's HTTP API exposes no device name).
 
-from pathlib import Path
+The expected version lives in the profile, not globally: the host and the pod
+pin different Ollama versions, and a global pin would force an override — and
+the OVERRIDDEN stamp — on a correct RunPod run.
+"""
 
 import pytest
 
 from bench.runner import EnvironmentMismatchError, RunConfig, check_environment
 
-PIN = Path("bench/environment.yaml")
 
-
-def _config(**kwargs) -> RunConfig:
-    return RunConfig(tasks=["bell_phi_plus_2q"], seeds=[1], **kwargs)
+def _config(profile: str | None = "local-7b", **kwargs) -> RunConfig:
+    return RunConfig(profile=profile, tasks=["bell_phi_plus_2q"], seeds=[1], **kwargs)
 
 
 def test_matching_version_passes_and_is_stamped() -> None:
@@ -21,10 +22,11 @@ def test_matching_version_passes_and_is_stamped() -> None:
     assert stamps["ollama_expected"] == "0.35.1"
 
 
-def test_mismatch_aborts_naming_both_versions() -> None:
+def test_mismatch_aborts_naming_the_profile_and_both_versions() -> None:
     with pytest.raises(EnvironmentMismatchError) as exc:
         check_environment(_config(), {"ollama": "0.34.4"})
-    assert "0.35.1" in str(exc.value) and "0.34.4" in str(exc.value)
+    message = str(exc.value)
+    assert "local-7b" in message and "0.35.1" in message and "0.34.4" in message
 
 
 def test_unreachable_server_is_a_mismatch_not_a_pass() -> None:
@@ -35,22 +37,30 @@ def test_unreachable_server_is_a_mismatch_not_a_pass() -> None:
 
 
 def test_override_runs_but_is_stamped_as_overridden() -> None:
-    stamps = check_environment(
-        _config(allow_ollama_version_mismatch=True), {"ollama": "0.34.4"}
-    )
+    stamps = check_environment(_config(allow_ollama_version_mismatch=True), {"ollama": "0.34.4"})
     gate = stamps["ollama_version_gate"]
     assert gate.startswith("OVERRIDDEN")
     assert "0.35.1" in gate and "0.34.4" in gate
 
 
-def test_config_can_pin_its_own_version_for_the_pod() -> None:
-    stamps = check_environment(
-        _config(expected_ollama_version="0.34.4", generator_host="runpod:x"),
-        {"ollama": "0.34.4"},
-    )
+def test_a_correct_runpod_run_is_not_stamped_overridden() -> None:
+    """The reason the pin moved into the profile: with a single global pin of
+    0.35.1, the pod's legitimate 0.34.4 would need the override flag."""
+    stamps = check_environment(_config("runpod-30b"), {"ollama": "0.34.4"})
     assert stamps["ollama_version_gate"] == "matched"
+    assert "OVERRIDDEN" not in "".join(stamps.values())
+
+
+def test_each_profile_refuses_the_other_profiles_version() -> None:
     with pytest.raises(EnvironmentMismatchError):
-        check_environment(_config(expected_ollama_version="0.34.4"), {"ollama": "0.35.1"})
+        check_environment(_config("runpod-30b"), {"ollama": "0.35.1"})
+    with pytest.raises(EnvironmentMismatchError):
+        check_environment(_config("local-7b"), {"ollama": "0.34.4"})
+
+
+def test_an_unprofiled_ollama_run_cannot_be_gated_so_it_is_refused() -> None:
+    with pytest.raises(EnvironmentMismatchError, match="profile"):
+        check_environment(_config(None), {"ollama": "0.35.1"})
 
 
 def test_gpu_is_declared_not_verified(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -71,7 +81,10 @@ def test_a_gpu_declaration_that_contradicts_the_pin_aborts() -> None:
 
 def test_api_providers_have_no_server_to_gate() -> None:
     config = RunConfig(
-        provider="openai", tasks=["bell_phi_plus_2q"], seeds=[1],
-        reset_per_run=False, protocol_canary=[],
+        provider="openai",
+        tasks=["bell_phi_plus_2q"],
+        seeds=[1],
+        reset_per_run=False,
+        protocol_canary=[],
     )
     assert "not applicable" in check_environment(config, {})["ollama_version_gate"]

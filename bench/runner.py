@@ -44,6 +44,17 @@ from qcagent.llm.ollama_client import (
     OllamaClient,
     assert_full_gpu_offload_http,
     gpu_offload_fraction,
+    reset_generator_state,
+)
+from qcagent.llm.profiles import (
+    Profile,
+    ProfileError,
+    build_client,
+    get_profile,
+    identity_stamps,
+    probe,
+    reset_server_state,
+    resolve_base_url,
 )
 from qcagent.retrieval.embedding import FastEmbedEmbedder
 from qcagent.state import AgentState, ErrorRecord
@@ -79,7 +90,9 @@ class RunConfig(BaseModel):
     # "is the bottleneck the architecture or the generator?" with every LLM
     # role (planner, generator, critic) served by the frontier model and
     # everything else — corpus, validators, routing, corrector — unchanged.
-    provider: Literal["ollama", "anthropic", "openrouter", "groq", "openai"] = "ollama"
+    provider: Literal[
+        "ollama", "anthropic", "openrouter", "groq", "openai", "openai_compatible"
+    ] = "ollama"
     # OpenAI only: send temperature=0 (qwen parity). Off unless a probe showed
     # the model accepts it — reasoning models commonly reject it.
     send_temperature: bool = False
@@ -95,10 +108,12 @@ class RunConfig(BaseModel):
     # only variable. `generator_host` names where it ran, for the record.
     ollama_base_url: str | None = None
     generator_host: str = "local"
-    # Ollama server version this config expects. None = the canonical pin in
-    # bench/environment.yaml. The RunPod arm sets its own (the pod's version is
-    # pinned in the pod, not on the host).
-    expected_ollama_version: str | None = None
+    # The generator backend, by name (generator_profiles.yaml). When set it is
+    # the ONLY source of: model, server URL, expected server version, reset
+    # strategy, temperature and num_ctx — a config that also says any of those
+    # differently is refused, not merged. The profile selects a backend; it is
+    # not a second code path (qcagent.llm.profiles).
+    profile: str | None = None
     # Explicit override of the version gate. Set by the runner CLI flag
     # `--allow-ollama-version-mismatch`, never silently: it is part of the
     # config, so it changes the run_id and is stamped into every record.
@@ -132,6 +147,23 @@ class RunConfig(BaseModel):
     canary_seeds: list[int] = Field(default_factory=lambda: [1, 2, 3])
 
     @model_validator(mode="after")
+    def _apply_profile(self) -> "RunConfig":
+        if self.profile is None:
+            return self
+        if self.ollama_base_url is not None:
+            raise ValueError(
+                "ollama_base_url conflicts with `profile`: the URL belongs to the profile"
+            )
+        try:
+            profile = get_profile(self.profile)
+        except ProfileError as exc:
+            raise ValueError(str(exc)) from exc
+        self.model = profile.model
+        self.provider = "ollama" if profile.client_type == "ollama" else "openai_compatible"
+        self.reset_per_run = profile.determinism.reset_strategy == "per_run"
+        return self
+
+    @model_validator(mode="after")
     def _ollama_only_protocol(self) -> "RunConfig":
         # The reset and the canary are about Ollama's server state (F28). The
         # Anthropic API is not deterministic and has no state to unload, so
@@ -146,7 +178,16 @@ class RunConfig(BaseModel):
         return self
 
     @property
+    def resolved_profile(self) -> Profile | None:
+        return get_profile(self.profile) if self.profile else None
+
+    @property
     def ollama_url(self) -> str:
+        if self.profile:
+            url = resolve_base_url(get_profile(self.profile))
+            if url is None:
+                raise ProfileError(f"profile {self.profile!r} has no base URL")
+            return url
         return self.ollama_base_url or settings.ollama_base_url
 
     @classmethod
@@ -179,29 +220,40 @@ def check_environment(
         return {"ollama_version_gate": f"not applicable (provider {config.provider})"}
 
     pins = yaml.safe_load(pin_file.read_text()) or {}
-    expected = config.expected_ollama_version or str(pins["ollama_version"])
-    actual = lib_versions.get("ollama", "unknown")
-    stamps: dict[str, str] = {"ollama_expected": expected}
-    if actual == expected:
-        stamps["ollama_version_gate"] = "matched"
-    elif config.allow_ollama_version_mismatch:
-        stamps["ollama_version_gate"] = (
-            f"OVERRIDDEN: expected {expected}, server is {actual} "
-            "(--allow-ollama-version-mismatch)"
-        )
-    else:
+    profile = config.resolved_profile
+    if profile is None:
         raise EnvironmentMismatchError(
-            f"Ollama server version mismatch: the canonical environment pins {expected}, "
-            f"the server at {config.ollama_url} reports {actual}. Refusing to run — a "
-            "different server version is a different system (F21). Restore the pinned "
-            "version, or pass --allow-ollama-version-mismatch to run anyway; the override "
-            "is stamped into every record."
+            "an ollama run needs a generator profile (`profile:` in the run config): the "
+            "expected server version belongs to the profile, and an unprofiled run could "
+            "not be gated"
         )
+    expected = profile.expected_server_version
+    actual = lib_versions.get("ollama", "unknown")
+    stamps: dict[str, str] = {}
+    if expected is None:
+        stamps["ollama_version_gate"] = "not pinned by this profile"
+    else:
+        stamps["ollama_expected"] = expected
+        if actual == expected:
+            stamps["ollama_version_gate"] = "matched"
+        elif config.allow_ollama_version_mismatch:
+            stamps["ollama_version_gate"] = (
+                f"OVERRIDDEN: expected {expected}, server is {actual} "
+                "(--allow-ollama-version-mismatch)"
+            )
+        else:
+            raise EnvironmentMismatchError(
+                f"Ollama server version mismatch for profile {profile.name!r}: it pins "
+                f"{expected}, the server at {config.ollama_url} reports {actual}. Refusing "
+                "to run — a different server version is a different system (F21). Restore "
+                "the pinned version, or pass --allow-ollama-version-mismatch to run anyway; "
+                "the override is stamped into every record."
+            )
 
     gpu = declared_gpu if declared_gpu is not None else os.environ.get("QCAGENT_GPU_MODEL")
     pinned_gpu = pins.get("gpu_model")
     if gpu:
-        if config.generator_host == "local" and pinned_gpu and gpu != pinned_gpu:
+        if config.profile == "local-7b" and pinned_gpu and gpu != pinned_gpu:
             raise EnvironmentMismatchError(
                 f"GPU model mismatch: the canonical environment declares {pinned_gpu!r}, "
                 f"the operator declared {gpu!r} (QCAGENT_GPU_MODEL)."
@@ -289,32 +341,6 @@ def verify_gpu_offload(base_url: str, model: str) -> float:
     fraction = assert_full_gpu_offload_http(base_url, model)
     print(f"generator offload: {fraction:.0%} GPU (D10c)", flush=True)
     return fraction
-
-
-def reset_generator_state(base_url: str, model: str) -> None:
-    """Unload the model, so the run starts from a known engine state.
-
-    Generation turned out to depend on state INSIDE the inference server, not
-    only on the request: an identical prompt (same seed, `temperature=0`) can
-    return one answer computed fresh and a different one served off Ollama's
-    own prompt/KV cache. Two suite runs back to back therefore differ — the
-    second inherits the first's cache. It is F18's problem one level down: a
-    memoization layer between the experiment and the system under test, except
-    this one is not ours and cannot be deleted from disk.
-
-    Unloading is the only handle the HTTP API gives us over that state. It
-    does not prove determinism — that is what the two-run measurement is for
-    (F19) — it removes one known way for two runs to start differently.
-    """
-    try:
-        httpx.post(f"{base_url}/api/generate", json={"model": model, "keep_alive": 0}, timeout=60)
-        time.sleep(3)  # the unload is asynchronous; give it a moment to land
-        print(f"generator state reset: {model} unloaded before the run", flush=True)
-    except httpx.HTTPError as exc:  # pragma: no cover - best effort, never fatal
-        # A failed reset is worth saying out loud but must not abort a run:
-        # the consequence is a possibly-warm start, which the comparison will
-        # show, not a wrong result.
-        print(f"WARNING: could not reset generator state ({exc})", file=sys.stderr, flush=True)
 
 
 class EmptyIndexError(RuntimeError):
@@ -613,6 +639,13 @@ def run_suite(
     if lib_versions is None:
         lib_versions = collect_lib_versions(ollama_base_url=config.ollama_url)
         try:
+            if config.resolved_profile is not None:
+                status = probe(config.resolved_profile)
+                if status.state != "reachable":
+                    raise EnvironmentMismatchError(
+                        status.refusal() or f"profile {config.profile!r} is not usable"
+                    )
+                lib_versions |= identity_stamps(config.resolved_profile, status)
             lib_versions |= check_environment(config, lib_versions)
         except EnvironmentMismatchError as exc:
             # Left in the run directory, like the protocol canary: the refusal
@@ -672,8 +705,16 @@ def run_suite(
                 # otherwise: a run at temperature 0 and one at the model default
                 # are not comparable, and nothing in the results would say so
                 # (F15).
-                "ollama_temperature": str(settings.ollama_temperature),
-                "ollama_num_ctx": str(settings.ollama_num_ctx),
+                "ollama_temperature": str(
+                    config.resolved_profile.determinism.temperature
+                    if config.resolved_profile
+                    else settings.ollama_temperature
+                ),
+                "ollama_num_ctx": str(
+                    config.resolved_profile.determinism.num_ctx
+                    if config.resolved_profile
+                    else settings.ollama_num_ctx
+                ),
                 "generator_state": "reset_before_each_run"
                 if config.reset_per_run
                 else "reset_before_suite",
@@ -690,7 +731,10 @@ def run_suite(
     if reset_state is None and task_runner is None and config.provider == "ollama":
 
         def reset_state() -> None:
-            reset_generator_state(config.ollama_url, config.model)
+            if config.resolved_profile is not None:
+                reset_server_state(config.resolved_profile)
+            else:
+                reset_generator_state(config.ollama_url, config.model)
 
     if check_protocol and config.protocol_canary:
         canary = load_tasks(config.model_copy(update={"tasks": config.protocol_canary}), tasks_dir)
@@ -769,7 +813,13 @@ def _graph_runner(config: RunConfig, usage: Usage) -> TaskRunner:
     suite (D1b: the pool exists so process startup is paid once, not per
     task)."""
     inner: BaseLLMClient
-    if config.provider == "anthropic":
+    if config.resolved_profile is not None:
+        # The ONE construction path: ollama and openai_compatible profiles both
+        # come from `build_client`; the legacy provider chain below is only for
+        # the historical API arms, which have no profile.
+        inner = build_client(config.resolved_profile)
+        reset_server_state(config.resolved_profile)
+    elif config.provider == "anthropic":
         from qcagent.llm.anthropic_client import AnthropicClient
 
         if not settings.anthropic_api_key:
@@ -895,7 +945,10 @@ def main(argv: list[str] | None = None) -> int:
         if config.reset_per_run and config.provider == "ollama":
 
             def reset() -> None:
-                reset_generator_state(config.ollama_url, config.model)
+                if config.resolved_profile is not None:
+                    reset_server_state(config.resolved_profile)
+                else:
+                    reset_generator_state(config.ollama_url, config.model)
 
         canary_failures = verify_protocol(
             runner, canary, config.canary_seeds, config.max_iter, reset
