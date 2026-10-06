@@ -4921,6 +4921,49 @@ pretendia, e os dois runs têm o mesmo denominador de tarefas.
 
 ---
 
+### Reconciliação das figuras 1,8% / 84% / 331-de-335 (2026-10-06) — as três se re-derivam; uma está mal enunciada
+
+**Origem**: o baseline T102, run **`ce9614fa3a6f60a6`**, 2026-09-19, sha `3ef5c21`,
+Ollama 0.34.1, corpus 1019 pontos, `qwen2.5-coder:7b`, **120 tarefas × 3 seeds =
+360 execuções**. Registros em disco; recontados hoje, sem reconstruir nada:
+
+| figura | número exato | denominador | verificado |
+|---|---|---|---|
+| **1,8% de sucesso** | **6/341 = 1,76%** | 341 = 360 − 19 `harness_error` ("attempted") | ✓ |
+| **84%** | **287/341 = 84,16%** terminam em `failed_static` | os mesmos 341 | ✓ (mas ver abaixo: o ENUNCIADO é impreciso) |
+| **331 de 335** | **335 = 341 − 6 sucessos** (287 + 44 `failed_semantic` + 4 `rejected_input`); **331** esgotaram 5 iterações | falhas dentre os 341; as outras 4 são `rejected_input` (0 iterações, nunca geraram código) | ✓ |
+
+Por que pareciam incompatíveis: **1,8% NÃO é 1/120 nem 6/360** (esse seria 1,67%)
+— é 6/341, depois de excluir 19 runs em que o nosso próprio harness quebrou. E
+**335 NÃO é "falhas em 360"**: é falhas em 341. Os três números são do mesmo
+run e do mesmo denominador; o que faltava era dizê-lo. Além disso, **331/335
+subestima o fato**: dos 331 que chegaram a gerar código, **331 (todos)**
+esgotaram as cinco iterações; o "335" só entra porque inclui 4 recusas na
+entrada.
+
+**O que está ERRADO é o enunciado do 84%** ("param antes de chegar à
+verificação funcional"). 84% é a fração que TERMINA em falha estática (a última
+tentativa falhou na estática), não a que nunca chegou à verificação funcional.
+O run não tem `trace` (T112 é posterior), então a medição exata não existe;
+pelo `error_history` como proxy, **63 das 287 já tinham um erro de estágio
+semântico/recursos em alguma tentativa** — chegaram à verificação funcional e a
+perderam (é a "regressão" da métrica nova). O proxy subestima quem chegou, então
+o que se pode afirmar é: **no máximo 224/341 = 65,7% nunca chegaram à
+verificação funcional**; 84% é o teto de uma leitura que só vale para o ESTADO
+FINAL. Enunciado correto: **"84% (287/341) terminam em falha estática"**.
+
+**Validade do run, que continua limitando o uso das três**: pré-F28 (contaminação
+entre tarefas), corpus 2.x (F24), 19 `harness_error`, três seeds que não são
+sorteios independentes (F29), e substituído como número do braço local pelo
+run C (`1bf505bf…`: 7/120). **Recomendação**: as três podem ser citadas
+como descrição do baseline de 19/09, **com run e denominador inline**; nenhuma
+deve aparecer como manchete do estado atual. Aplicado em
+`roteiro-orientador-v2.md`, `relatorio-esqueleto.md` e
+`relatorio-cap5-resultados.md`. (O "84% → 51%" do cap. 5 compara
+287/341 com 61/120 = 50,8%: as duas são fração de `failed_static` final.)
+
+---
+
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
 
 **Este é o ponto de referência do Princípio III**: o número contra o qual toda

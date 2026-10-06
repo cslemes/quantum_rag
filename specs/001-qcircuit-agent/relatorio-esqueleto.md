@@ -165,8 +165,12 @@ baixo é diagnóstico, não resultado.*
 
 ### 5.1 Baseline
 
-1,8% de sucesso; 84% param antes da verificação funcional; 331 de 335 falhas
-esgotam as cinco tentativas.
+Baseline de 19/09 (run `ce9614fa…`, 360 execuções, **341 válidas** após excluir
+19 erros de harness): **6/341 = 1,8%** de sucesso; **287/341 = 84%** terminam em
+falha estática (não é o mesmo que "param antes da verificação funcional": 63
+das 287 chegaram a ela); **331 de 335 falhas** esgotam as cinco tentativas
+(335 = 341 − 6; as outras 4 foram recusadas na entrada). Histórico: o número
+corrente do braço local é 7/120.
 
 **Precisão**: toda taxa com intervalo POR TAREFA (119 tarefas), não por run —
 as ~3 runs por tarefa não são sorteios independentes (F29). Ex.: sucesso 1,8%,

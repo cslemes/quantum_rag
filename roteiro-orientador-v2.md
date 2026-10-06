@@ -95,10 +95,14 @@ Falta: interface, execução em hardware real.
 
 Este é o momento que distingue um trabalho sério. Não suavize.
 
-> "Rodei a suíte completa. A taxa de sucesso é baixa — 1,8% — mas o número
-> importante é outro: 84% das execuções param antes de chegar à verificação
-> funcional, porque o código não roda. E 331 de 335 falhas esgotam as cinco
-> tentativas do loop de correção."
+> "Rodei a suíte completa — baseline de 19/09: 360 execuções, 341 válidas (19
+> tiveram erro do meu próprio harness). A taxa de sucesso é baixa — 6 de 341,
+> 1,8% — mas o número importante é outro: 84% (287 de 341) terminam em falha
+> estática, porque o código não roda; e 331 das 335 falhas esgotam as cinco
+> tentativas do loop de correção (as outras 4 foram recusadas na entrada)."
+> *(Nota: "terminam em falha estática" ≠ "nunca chegam à verificação
+> funcional": 63 dessas 287 chegaram a ela e a perderam. Medição atual do braço
+> local: 7/120.)*
 
 O que isso diz:
 
@@ -176,7 +180,7 @@ Extensão, estrutura, se há template. Isso determina o que priorizar nas seis
 semanas restantes.
 
 **3. Baseline baixo é problema?**
-> "1,8% de sucesso pode soar mal fora de contexto. Meu argumento é que o número
+> "1,8% de sucesso (6/341, baseline de 19/09) pode soar mal fora de contexto. Meu argumento é que o número
 > é diagnóstico, não resultado — e que a honestidade sobre ele é parte do que o
 > trabalho defende. Você vê risco nisso na avaliação?"
 
