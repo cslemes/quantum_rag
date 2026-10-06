@@ -4590,6 +4590,30 @@ tira essa opção do gerador.
 
 ---
 
+### PREDIÇÃO REGISTRADA — linha de base local completa (qwen2.5-coder:7b, 120 tarefas, `seeds: [1]`), escrita antes de rodar (2026-10-06)
+
+Substitui como número do braço local a execução de 2026-09-26 (`9e19fa12…`:
+sucesso 1/120, `compila@1` 20/120, veredito semântico 34/120, MAX_ITER 119/120),
+feita ANTES de T115, T116, T117, T118 e T090d. Uma linha de base só, com o
+código final do laço.
+
+**Direção prevista: sucesso continua baixo, no máximo uma melhora modesta.**
+Faixa: **1 a 6 de 120 (≤ 5%)**. Razão: o gargalo do 7B é compilar (S3: 2/16
+`compila@1`, 1/16 de sucesso no subconjunto), e as melhorias recentes atuam
+depois da tentativa 1 sobre falhas SEMÂNTICAS, que o 7B quase não alcança. O
+ganho de R4 foi medido com o 30B, que compila (12/16 `compila@1`); não se
+transfere por si só.
+
+- **veredito semântico alcançado**: ≥ 28% (não cai; T115 só ajuda).
+- **MAX_ITER esgotado**: ≥ 90%.
+- **`compila@1` NÃO é controle de ordem aqui**: T116 reescreveu 52 enunciados,
+  então a tentativa 1 pode mudar por causa da suíte. Registrado para não ler
+  uma mudança nele como contaminação nem como efeito do laço.
+- **Refutação**: sucesso > 10/120 (8%) contradiz a leitura "o gargalo do 7B é
+  compilar" e passaria a pedir análise por tarefa antes de qualquer manchete.
+
+---
+
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
 
 **Este é o ponto de referência do Princípio III**: o número contra o qual toda
