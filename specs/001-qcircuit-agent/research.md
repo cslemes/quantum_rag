@@ -1783,6 +1783,15 @@ continha uma alegação identificavelmente incorreta — não só classificar o
 
 ## D15 — Ambiente de execução canônico
 
+> **Versões fixadas (2026-10-06)**: o servidor Ollama do host é fixado em
+> **0.35.1** e o modelo de GPU declarado é RTX 3070 (8 GB), em
+> `bench/environment.yaml` — a fonte legível por máquina. O runner COMPARA a
+> versão no início e ABORTA se divergir, nomeando as duas (override explícito:
+> `--allow-ollama-version-mismatch`, carimbado em cada registro). O modelo da
+> GPU é DECLARADO, não verificável pela API HTTP do Ollama, e gravado como tal.
+> Mudar a versão é um ato deliberado: altere o arquivo no mesmo commit e
+> justifique em `report-notes.md`.
+
 > **EMENDADO em 2026-09-23, para descrever o que de fato aconteceu.** A
 > decisão original dizia que o agente rodava em container. **Ele nunca
 > rodou.** A imagem `quantum-rag-app:latest` foi construída, validada uma vez
