@@ -4488,6 +4488,57 @@ com o laço final.
 
 ---
 
+### RESULTADO — R4 (T090d: reparo por edição), `c2c9727e85a436c3`, 2026-10-06 — ACIMA DA FAIXA PREVISTA: 10/16
+
+Pod `n3wqj9dx0eyd7g`: RTX A5000, CA-MTL-1, US$ 0,27/h, Ollama 0.34.4, 20 GB,
+100% GPU, mesmo tipo de GPU de R3. Braço em ~15 min (00:04–00:19 UTC).
+**Custo ≈ US$ 0,31** (pod de ~69 min): o pod ficou ~45 min ocioso depois do
+fim do braço porque meu aguardador (`pgrep` casando consigo mesmo) não
+terminou — erro operacional meu, não do protocolo; custo do braço em si ≈ US$ 0,07.
+Pod encerrado; 0 pods restantes verificados.
+
+| | R2 (vazamento) | R3 (T118) | **R4 (T118 + T090d)** |
+|---|---|---|---|
+| sucesso | 9/16 | 6/16 | **10/16** |
+| tentativa 1 idêntica a R3 (CONTROLE) | — | — | **16/16** ✅ |
+| laço engajado | 12 | 12 | 12 |
+| convergiu | 6 (5 sem.) | 3 (2 sem.) | **7 (6 sem.)** |
+
+**Contra o registro**: a predição era 7–9 e "acima de 9, suspeito". **10 caiu
+acima da faixa.** Os controles de ordem passaram (desfecho da tentativa 1
+idêntico em 16/16, sem código anterior a editar), então não há contaminação
+detectável; o desvio é de magnitude, não de direção. Com n=16 e uma semente, 10
+vs. 6 são 4 tarefas — todas na população-alvo ou perto dela — e o número deve
+ser lido com essa largura, não como estimativa precisa.
+
+**População-alvo — o resultado mais fino, e menos limpo que o número**: as 3
+tarefas que R3 perdeu (`dj_constant_4q`, `dj_constant_4q_perturbed`,
+`dj_balanced_4q`) voltaram a SUCESSO em R4. Mas **só uma passou por
+`ResourceExcess`** (`dj_constant_4q_perturbed`: ResourceExcess → WrongGate →
+sucesso na 4ª; o corte foi seguido de um erro semântico e depois corrigido). As
+outras duas convergiram por reparo SEMÂNTICO na 2ª tentativa, sem nunca chegar
+ao verificador de recursos. Portanto "o laço enxuga o circuito correto em vez
+de descartá-lo" tem **uma** ocorrência direta, não três; a condição de
+refutação 1 (≤1 de 3 recuperado) não é acionada pela contagem por tarefa (3 de
+3), mas o MECANISMO específico (aparar) está fracamente evidenciado.
+Ganho adicional não previsto: `ising_weighted_maxcut_4q` (semântico, converge
+na 3ª).
+
+**Âncoragem (condição 3) — sinal parcial, não refutação**: as convergências
+semânticas de R3 (`bv_4q`, `qaoa_maxcut_4q_perturbed`) se mantiveram, então o
+critério declarado não dispara. Mas `grover_3q` terminou com 5×
+`HallucinatedSymbol` seguidas (em R3 oscilava com WrongGate): editar o código
+anterior pode PRENDER o gerador no mesmo símbolo inventado. Registrado como
+hipótese a olhar na análise por erro, não medida aqui.
+
+**O que NÃO se pode concluir**: (1) R4 mede edição COM dica re-planejadora (F32),
+não reparo estrito; (2) uma semente, um modelo, 16 tarefas; (3) a faixa prevista
+foi excedida, então a minha calibração para este tipo de mudança estava
+conservadora, o que não valida o mecanismo — a evidência do mecanismo é a
+população-alvo acima, que é menor que o número agregado.
+
+---
+
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
 
 **Este é o ponto de referência do Princípio III**: o número contra o qual toda
