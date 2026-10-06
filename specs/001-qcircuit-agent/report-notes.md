@@ -4964,6 +4964,51 @@ deve aparecer como manchete do estado atual. Aplicado em
 
 ---
 
+### Taxa de regressão do baseline T102 (`ce9614fa3a6f60a6`, 2026-09-19) — 63/113 = 55,8% (limite inferior) (2026-10-06)
+
+Mesma definição dos runs B e C: runs que chegaram a uma checagem semântica ou de
+recursos em alguma tentativa e terminaram em `failed_static`, sobre os que
+chegaram a uma. **Este run é anterior ao trace (T112): a contagem vem de
+`error_history`** (+ `semantic`/`resource` presentes no registro; `success` conta
+como chegou), e é **limite inferior**.
+
+- **Denominador (chegaram a semântico/recursos) = 113** dos 341 válidos: 44
+  `failed_semantic` + 6 `success` + 63 `failed_static`. Não há `aborted` neste run.
+- **Numerador = 63.** **Taxa = 63/113 = 55,8%.**
+
+**Por que é limite inferior da TAXA** (e não só das contagens): o proxy só pode
+perder runs que chegaram ao semântico e terminaram em `failed_static` — um
+sucesso e um `failed_semantic` sempre aparecem, e um PASS semântico seguido de
+falha estática não deixa erro semântico (nem de recursos, se o recurso passou), e
+um `ParameterBindingError` levantado no semântico é arquivado como estático.
+Cada run perdido entra no numerador E no denominador, o que só sobe a taxa
+enquanto ela for < 100%. Sensibilidade: se 10 / 50 / 100 dos 224 `failed_static`
+não detectados tivessem de fato chegado, a taxa seria 59,3% / 69,3% / 76,5%
+(teto 85,2% = 287/337).
+
+| run | método | regressão | |
+|---|---|---|---|
+| T102 `ce9614fa` (19/09, 3 seeds, 341 válidos) | `error_history` (≥) | **63/113 = 55,8%** | |
+| B `9e19fa12` (26/09, seed 1) | trace | 40/74 = 54,1% | (53,4% pelo mesmo proxy: 39/73) |
+| C `1bf505bf` (06/10, 1 seed) | trace | **29/88 = 33,0%** | |
+
+**Leitura: o número mostra o que se esperava, com ressalvas.** A taxa é estável
+entre os dois estados anteriores — 55,8% e 54,1% (53,4% like-for-like pelo
+proxy) — e cai para 33,0% no run C. Como o T102 é limite inferior, o valor
+verdadeiro dele é ≥ 55,8%, ou seja, a queda B → C não encolhe com a correção.
+Ressalvas que o relatório deve carregar: (1) **os dois estados anteriores
+diferem em protocolo, corpus e contaminação (F24, F28)** — a estabilidade entre
+eles é entre sistemas diferentes que coincidem na taxa, não um mesmo sistema
+medido duas vezes; (2) **o T102 tem 3 seeds não independentes** (por seed:
+10/19 = 52,6%, 35/55 = 63,6%, 18/39 = 46,2%) — o intervalo de 46–64% é o ruído
+que o pooling esconde; (3) **a composição do denominador mudou**: chegar ao
+semântico passou de 113/341 (33%) no T102 e 74/120 (62%) em B para 88/120 (73%)
+em C, então a taxa mede o dano sobre uma população maior e mais difícil; (4) a
+queda B → C continua confundida com a versão do servidor (0.34.4 → 0.35.1; run D
+pendente) e mistura T115/T116/T117/T118/T090d.
+
+---
+
 ### BASELINE — primeira execução completa da suíte ao vivo (T102, 2026-09-19)
 
 **Este é o ponto de referência do Princípio III**: o número contra o qual toda

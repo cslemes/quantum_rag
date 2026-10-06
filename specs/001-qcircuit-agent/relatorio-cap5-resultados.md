@@ -74,7 +74,10 @@ loop de reparo. Não há componente de "o gerador ficou melhor" nele.
 Um segundo sinal aponta na mesma direção. Chamando de **regressão** a execução
 que alcança verificação semântica e depois volta a falhar em estático, a taxa
 caiu de 40 em 74 (54,1%) para 29 em 88 (33,0%): o loop não só avança mais,
-destrói menos do que já havia conseguido.
+destrói menos do que já havia conseguido. O baseline de 19/09 (anterior ao
+*trace*; contagem por `error_history`, limite inferior) dá 63 em 113 (55,8%):
+estável entre os dois estados anteriores, com a ressalva de que eles diferem em
+protocolo e corpus.
 
 A métrica é apurada a partir do *trace* de execução, não da contagem de
 `error_history`. A contagem anterior deixava escapar uma tarefa
