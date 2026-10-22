@@ -5053,6 +5053,52 @@ refutam; serão relatadas como tais.
 
 ---
 
+### PREDIÇÃO REGISTRADA — run E (7B no Ollama 0.40.7) e definições das execuções C, E, F; run D aposentado (2026-10-22)
+
+**Definições** (tudo o mais idêntico nas três: mesmo código do laço, mesmos
+enunciados, uma semente, `reset_per_run`, Ollama no host):
+
+- **C** = qwen2.5-coder:7b, 120 tarefas, Ollama 0.35.1 — `1bf505bf84beb040`, 7/120. Já feita.
+- **E** = qwen2.5-coder:7b, 120 tarefas, Ollama 0.40.7 — o mesmo arquivo de modelo
+  (não foi baixado de novo desde C). **C vs E isola a VERSÃO DO SERVIDOR.**
+- **F** = qwen2.5-coder:1.5b, 120 tarefas, Ollama 0.40.7. **E vs F isola a ESCALA
+  DO MODELO.** A predição de F é a registrada em `f8d3100` (0 a 3 sucessos,
+  `compila@1` ≤ 10/120), antes escrita em termos de "C"; a comparação válida é
+  com E. Duas comparações, relatadas SEPARADAS.
+
+**Predição de E: 3 a 11 de 120.** Pesos, temperatura fixada e semente fixada
+inalterados; cinco versões menores do servidor devem movê-lo pouco. **Fora de
+3–11, a versão do servidor importa materialmente e a seção 5.7 do capítulo 5
+precisa ser reescrita.** E também funciona como teste de fumaça do servidor
+novo: 7/120 é um valor conhecido, e um resultado muito distante indica algo
+quebrado, não algo interessante.
+
+**Re-fixação do gate, decisão deliberada e registrada:** `expected_server_version`
+de `local-7b` e `local-1.5b` passa de 0.35.1 para 0.40.7. O host derivou de 0.35.1
+para 0.40.7 e o gate recusou ANTES de produzir um número — é a sexta instância
+do padrão "estado ambiente herdado" e a primeira capturada de antemão. Nenhuma
+execução usa `--allow-ollama-version-mismatch`.
+
+**Run D aposentado.** C vs E o substitui: testa a sensibilidade à versão numa
+distância maior (0.35.1 → 0.40.7, contra 0.34.4 → 0.35.1) e dispensa baixar a
+versão do Ollama.
+
+**Correção:** a instrução anterior de verificar o template primeiro (como causa
+de uma diferença entre C e E) estava errada, e fica registrada como tal. O
+template é propriedade do pull, não do servidor, e o 7B não foi baixado de novo
+desde C; uma mudança entre C e E viria da renderização ou do caminho de
+inferência do servidor, não de outro template.
+
+**Captura do prompt:** os registros de C não têm o prompt; a partir de E, a
+primeira chamada ao gerador de cada execução é gravada em
+`results/<run_id>/first_prompt.json` (`system` + `prompt` como o cliente os
+recebe; só gravação, não altera o que o modelo vê). Não ajuda C vs E
+retroativamente: o diff de prompts entre E e F é o único possível agora, e as
+duas execuções enviam o mesmo texto para a mesma tarefa, então só `input_tokens`
+(contagem do servidor) pode revelar uma diferença de renderização entre servidores.
+
+---
+
 ### Modelo de chat: 7B e 1.5B têm o MESMO template (hash), e o que os registros guardam do prompt (2026-10-22)
 
 Comparação feita por programa, não a olho: `POST /api/show` no Ollama do host

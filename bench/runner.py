@@ -404,9 +404,16 @@ class AccountingLLM(BaseLLMClient):
     `usage`. Wraps `generate` (not `_generate_impl`) so a cache hit — which
     costs nothing — is counted as the zero it is."""
 
-    def __init__(self, inner: BaseLLMClient, usage: Usage) -> None:
+    def __init__(
+        self, inner: BaseLLMClient, usage: Usage, capture_first_prompt: Path | None = None
+    ) -> None:
         self.inner = inner
         self.usage = usage
+        # The first call of a run is written out verbatim (system + prompt as the
+        # client receives them). The records do not otherwise keep any prompt, so
+        # a drift in how the server renders it could not be diffed afterwards.
+        # Recording only: it changes nothing the model sees.
+        self._capture = capture_first_prompt
         self.model_id = inner.model_id
         self.cache_dir = inner.cache_dir
 
@@ -421,6 +428,15 @@ class AccountingLLM(BaseLLMClient):
     def generate(
         self, *, system: str, prompt: str, seed: int, max_tokens: int = 4096
     ) -> LLMResponse:
+        if self._capture is not None and not self._capture.exists():
+            self._capture.write_text(
+                json.dumps(
+                    {"model": self.model_id, "seed": seed, "system": system, "prompt": prompt},
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
         response = self.inner.generate(
             system=system, prompt=prompt, seed=seed, max_tokens=max_tokens
         )
@@ -726,7 +742,7 @@ def run_suite(
                 "gpu_offload": f"{verify_gpu_offload(config.ollama_url, config.model):.0%}",
             }
     usage = usage or Usage()
-    runner = task_runner or _graph_runner(config, usage)
+    runner = task_runner or _graph_runner(config, usage, out_dir / "first_prompt.json")
     if reset_state is None and task_runner is None and config.provider == "ollama":
 
         def reset_state() -> None:
@@ -805,7 +821,9 @@ def run_suite(
     return jsonl
 
 
-def _graph_runner(config: RunConfig, usage: Usage) -> TaskRunner:
+def _graph_runner(
+    config: RunConfig, usage: Usage, capture_first_prompt: Path | None = None
+) -> TaskRunner:
     """The live path: real Ollama, real Qdrant-backed retrieval, real
     sandbox — the same graph `bench/run_single.py` drives by hand, with the
     LLM wrapped for accounting and one `WorkerPool` shared across the whole
@@ -866,7 +884,7 @@ def _graph_runner(config: RunConfig, usage: Usage) -> TaskRunner:
             f"an unprofiled Ollama run is not permitted (provider={config.provider!r}, "
             f"model={config.model!r}): set `profile:` in the run config"
         )
-    llm = AccountingLLM(inner, usage)
+    llm = AccountingLLM(inner, usage, capture_first_prompt)
     qdrant = QdrantClient(url=settings.qdrant_url)
     embedder = FastEmbedEmbedder()
     pool = WorkerPool(size=settings.worker_pool_size, recycle_after=settings.worker_recycle_after)

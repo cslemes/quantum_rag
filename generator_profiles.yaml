@@ -26,20 +26,23 @@ profiles:
     model: qwen2.5-coder:7b
     # The version the local numbers were measured under (bench/environment.yaml
     # carried this globally until profiles; it now belongs to the backend).
-    expected_server_version: "0.35.1"
+    # RE-PINNED 0.35.1 -> 0.40.7 on 2026-10-22, a deliberate decision: the host
+    # drifted and the gate refused before it produced a number. Run C (7/120)
+    # was measured on 0.35.1; runs E and F on 0.40.7 (report-notes.md).
+    expected_server_version: "0.40.7"
     determinism:
       reset_strategy: per_run            # unload the model before every run (F28)
       temperature: 0.0                   # pinned, never inherited (F15)
       num_ctx: 16384                     # pinned, never inherited (D10b)
 
-  # Scale control: identical to local-7b in every field but the model.
+  # Scale control: identical to local-7b in every field but the model (same re-pin).
   - name: local-1.5b
     label: "Local — qwen2.5-coder 1.5B (host GPU)"
     client_type: ollama
     base_url: http://localhost:11434
     base_url_env: OLLAMA_BASE_URL
     model: qwen2.5-coder:1.5b
-    expected_server_version: "0.35.1"
+    expected_server_version: "0.40.7"
     determinism:
       reset_strategy: per_run
       temperature: 0.0
