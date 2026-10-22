@@ -5144,6 +5144,43 @@ morreu na checagem de GPU sem gerar nada; não escreveu registros.
 
 ---
 
+### RESULTADO — run F (qwen2.5-coder:1.5b, Ollama 0.40.8, `a6a6a63fb3611cb6`, 2026-10-22) — PREDIÇÃO CONFIRMADA, no limite (2026-10-22)
+
+Digest `d7372fd828518a4d…`, perfil `local-1.5b`, gate `matched` (0.40.8),
+`reset_per_run`, 1 semente, 120 tarefas, código do laço idêntico ao de C. Sem
+`--allow-ollama-version-mismatch`. Execução fria para o 1.5B (a chave do cache
+inclui o `model_id`). Tempo de parede 126,5 min (02:10:08 → 04:16:39 UTC, inclui
+~6 min de verificação prévia); soma de `latency_s` 112 min.
+
+| métrica | F (1.5B, 0.40.8) | C (7B, 0.35.1) |
+|---|---|---|
+| sucesso | **1/120** | 7/120 |
+| `compila@1` | **10/120** | 20/120 |
+| `failed_static` / `failed_semantic` / `aborted` | 107 / 11 / 0 | 61 / 51 / 1 |
+| `rejected_input` | 1 (`w_state_5q_perturbed`, 0 iterações) | 0 |
+| veredito semântico alcançado (success + failed_semantic) | 12/120 | 58/120 |
+| alcançou checagem semântica em alguma tentativa (trace) | 16/120 | 88/120 |
+| taxa de regressão | 4/16 (25,0%) | 29/88 (33,0%) |
+| sucessos com `compila@1` | 0 | 1 |
+| sucessos só após reparo estático | 1 (`qft_3q_perturbed`) | 6 |
+
+Erros de F por tipo (todas as tentativas): SyntaxError 346, UnknownSymbol 103,
+HallucinatedSymbol 62, WrongGateDecomposition 46, MissingImport 27,
+DeprecatedAPI 4. Erros de harness: nenhum; o `rejected_input` é um status do
+pipeline (a entrada foi rejeitada antes de gerar), não uma falha de infraestrutura.
+
+**A predição (0 a 3 sucessos; `compila@1` ≤ 10/120) se confirmou:** 1 sucesso e
+`compila@1` = 10, **exatamente no teto da faixa**, não folgado. Não houve
+refutação (≥ 5 sucessos ou `compila@1` > 15). O padrão é o previsto: o 1.5B
+quase não compila (SyntaxError domina) e quase não alcança a checagem semântica
+(16 vs 88).
+
+**Comparação válida é F vs E (mesma versão do servidor), não F vs C:** a coluna
+C acima está em 0.35.1 e serve só de referência. E vs F fica pendente da
+execução fria de E (a primeira E foi replay, ver acima).
+
+---
+
 ### Modelo de chat: 7B e 1.5B têm o MESMO template (hash), e o que os registros guardam do prompt (2026-10-22)
 
 Comparação feita por programa, não a olho: `POST /api/show` no Ollama do host
