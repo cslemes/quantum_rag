@@ -5036,6 +5036,23 @@ segundo caminho de geração nem de verificação.
 
 ---
 
+### PREDIÇÃO REGISTRADA — controle de escala: qwen2.5-coder:1.5b, 120 tarefas, `seeds: [1]`, escrita antes de adicionar o perfil e de rodar (2026-10-22)
+
+Mesma configuração da execução C (`1bf505bf…`, 7B: 7/120): mesmo código do laço,
+mesmos enunciados, uma semente, `reset_per_run`, Ollama no host. Só o modelo muda.
+
+**Previsto: 0 a 3 sucessos de 120, e `compila@1` em 10/120 ou menos.** Razão: o
+gargalo do 7B é compilar, e um modelo 4,7x menor deve compilar bem menos.
+
+**Refutação: 5 ou mais sucessos, ou `compila@1` acima de 15/120.** Isso também
+enfraqueceria a conclusão do capítulo 5 de que o gargalo é o gerador, pois
+indicaria que a escala entre 1,5B e 7B pouco importa para esta tarefa.
+
+Faixas intermediárias (4 sucessos; `compila@1` de 11 a 15) não confirmam nem
+refutam; serão relatadas como tais.
+
+---
+
 ### Taxa de regressão do baseline T102 (`ce9614fa3a6f60a6`, 2026-09-19) — 63/113 = 55,8% (limite inferior) (2026-10-06)
 
 Mesma definição dos runs B e C: runs que chegaram a uma checagem semântica ou de
