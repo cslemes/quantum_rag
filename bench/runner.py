@@ -55,6 +55,7 @@ from qcagent.llm.profiles import (
     reset_server_state,
     resolve_base_url,
 )
+from qcagent.nodes.generator import GENERATOR_SYSTEM_PROMPT
 from qcagent.retrieval.embedding import FastEmbedEmbedder
 from qcagent.state import AgentState, ErrorRecord
 from qcagent.validators.sandbox import WorkerPool
@@ -117,6 +118,9 @@ class RunConfig(BaseModel):
     # `--allow-ollama-version-mismatch`, never silently: it is part of the
     # config, so it changes the run_id and is stamped into every record.
     allow_ollama_version_mismatch: bool = False
+    # Same shape for the retrieval index: `--allow-index-mismatch`, in the config
+    # (so it changes the run_id) and stamped as OVERRIDDEN in every record.
+    allow_index_mismatch: bool = False
     seeds: list[int] = Field(default_factory=lambda: [1, 2, 3])
     # Task ids to run, or "all" for every task under bench/tasks/.
     tasks: list[str] | str = "all"
@@ -266,6 +270,65 @@ def check_environment(
     return stamps
 
 
+def check_retrieval_index(
+    client: QdrantClient,
+    config: RunConfig,
+    *,
+    pin_file: Path = ENVIRONMENT_FILE,
+) -> dict[str, str]:
+    """Index gate, the retrieval counterpart of the Ollama version gate.
+
+    `require_populated_index` already refuses a missing or empty collection; a
+    WRONG-SIZED one (a partial ingestion, or the 1019 a 503 once produced) used
+    to pass and was only recorded as `qdocs_points`, so a comparison was
+    meaningful only if someone later noticed the numbers differed. The pin
+    (bench/environment.yaml `retrieval_index`) is checked LIVE before every
+    run: a different collection size is a different retrieval corpus, i.e. a
+    different system. An unreachable Qdrant is also a refusal, in words, instead
+    of a connection traceback.
+
+    `allow_index_mismatch` turns the abort into a stamp (`qdocs_points_gate:
+    OVERRIDDEN ...`), as for the server version.
+    """
+    from qcagent.retrieval.index import COLLECTION
+
+    pin = (yaml.safe_load(pin_file.read_text()) or {}).get("retrieval_index") or {}
+    try:
+        points = require_populated_index(client)
+    except EmptyIndexError as exc:
+        raise EnvironmentMismatchError(str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - any transport failure is a refusal
+        raise EnvironmentMismatchError(
+            f"the retrieval index (Qdrant at {settings.qdrant_url}) cannot be reached: "
+            f"{type(exc).__name__}. Refusing to start: start the Qdrant container and "
+            "re-run; the suite would otherwise fail in the retriever on every task."
+        ) from exc
+
+    stamps = {"qdocs_points": str(points)}
+    expected = pin.get("expected_points")
+    if pin.get("collection") not in (None, COLLECTION):
+        raise EnvironmentMismatchError(
+            f"the pin names collection {pin['collection']!r}, the code queries {COLLECTION!r}"
+        )
+    if expected is None:
+        stamps["qdocs_points_gate"] = "not pinned"
+    elif points == expected:
+        stamps["qdocs_points_gate"] = "matched"
+        stamps["qdocs_points_expected"] = str(expected)
+    elif config.allow_index_mismatch:
+        stamps["qdocs_points_gate"] = (
+            f"OVERRIDDEN: expected {expected}, index has {points} (--allow-index-mismatch)"
+        )
+    else:
+        raise EnvironmentMismatchError(
+            f"retrieval index mismatch: collection {COLLECTION!r} has {points} points, the "
+            f"pin (bench/environment.yaml) says {expected}. Refusing to run — a different "
+            "corpus is a different system. Re-index to the pinned corpus, or pass "
+            "--allow-index-mismatch; the override is stamped into every record."
+        )
+    return stamps
+
+
 def load_tasks(config: RunConfig, tasks_dir: Path = TASKS_DIR) -> list[TaskSpec]:
     """Resolves the configuration's task ids to `TaskSpec`s. An id that
     matches no task file is an error, not an empty selection — a typo in
@@ -409,9 +472,12 @@ class AccountingLLM(BaseLLMClient):
     ) -> None:
         self.inner = inner
         self.usage = usage
-        # The first call of a run is written out verbatim (system + prompt as the
-        # client receives them). The records do not otherwise keep any prompt, so
-        # a drift in how the server renders it could not be diffed afterwards.
+        # The first GENERATOR call of a run is written out verbatim (system +
+        # prompt as the client receives them). The records do not otherwise keep
+        # any prompt, so a drift in how the server renders it could not be diffed
+        # afterwards. Selected by the generator's own system prompt, not by being
+        # first: the first call of a run is the PLANNER's (the capture first made
+        # held that one, which is not the text whose rendering matters).
         # Recording only: it changes nothing the model sees.
         self._capture = capture_first_prompt
         self.model_id = inner.model_id
@@ -428,7 +494,11 @@ class AccountingLLM(BaseLLMClient):
     def generate(
         self, *, system: str, prompt: str, seed: int, max_tokens: int = 4096
     ) -> LLMResponse:
-        if self._capture is not None and not self._capture.exists():
+        if (
+            self._capture is not None
+            and system == GENERATOR_SYSTEM_PROMPT
+            and not self._capture.exists()
+        ):
             self._capture.write_text(
                 json.dumps(
                     {"model": self.model_id, "seed": seed, "system": system, "prompt": prompt},
@@ -676,9 +746,14 @@ def run_suite(
         # 1020 and 1019 chunks for exactly that reason. Until the corpus is
         # pinned, a comparison between two runs is only meaningful if this
         # number matches — so it has to be visible in both.
+        try:
+            index_stamps = check_retrieval_index(QdrantClient(url=settings.qdrant_url), config)
+        except EnvironmentMismatchError as exc:
+            (out_dir / "ENVIRONMENT_MISMATCH.txt").write_text(f"{exc}\n")
+            raise
         lib_versions = {
             **lib_versions,
-            "qdocs_points": str(require_populated_index(QdrantClient(url=settings.qdrant_url))),
+            **index_stamps,
             "generator_provider": config.provider,
             "generator_host": config.generator_host,
         }
@@ -742,7 +817,7 @@ def run_suite(
                 "gpu_offload": f"{verify_gpu_offload(config.ollama_url, config.model):.0%}",
             }
     usage = usage or Usage()
-    runner = task_runner or _graph_runner(config, usage, out_dir / "first_prompt.json")
+    runner = task_runner or _graph_runner(config, usage, out_dir / "first_generator_prompt.json")
     if reset_state is None and task_runner is None and config.provider == "ollama":
 
         def reset_state() -> None:
@@ -926,6 +1001,12 @@ def main(argv: list[str] | None = None) -> int:
         "(bench/environment.yaml); stamped into every record as OVERRIDDEN",
     )
     parser.add_argument(
+        "--allow-index-mismatch",
+        action="store_true",
+        help="run even if the retrieval index size differs from the pinned one "
+        "(bench/environment.yaml); stamped into every record as OVERRIDDEN",
+    )
+    parser.add_argument(
         "--verify-only",
         action="store_true",
         help="run the Principle IV reference check for the configured tasks and stop",
@@ -940,6 +1021,8 @@ def main(argv: list[str] | None = None) -> int:
     config = RunConfig.load(args.config)
     if args.allow_ollama_version_mismatch:
         config = config.model_copy(update={"allow_ollama_version_mismatch": True})
+    if args.allow_index_mismatch:
+        config = config.model_copy(update={"allow_index_mismatch": True})
     tasks = load_tasks(config)
     failures = verify_references(tasks)
     if failures:

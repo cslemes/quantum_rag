@@ -212,3 +212,73 @@ def test_a_record_that_cannot_be_serialized_costs_one_run_not_the_suite(
         record = RunRecord.model_validate(json.loads(line))
         assert record.status == "harness_error"
         assert "Traceback" in record.error_history[0]["message"]
+
+
+# ------------------------- retrieval index gate (pinned size) ----------------
+
+
+def _index_pin(tmp_path, points=875):
+    pin = tmp_path / "environment.yaml"
+    pin.write_text(f"retrieval_index:\n  collection: qdocs\n  expected_points: {points}\n")
+    return pin
+
+
+def test_index_gate_passes_and_stamps_when_the_size_matches(tmp_path) -> None:
+    from bench.runner import check_retrieval_index
+
+    stamps = check_retrieval_index(
+        _FakeQdrant(exists=True, points=875), RunConfig(), pin_file=_index_pin(tmp_path)
+    )
+    assert stamps["qdocs_points"] == "875" and stamps["qdocs_points_gate"] == "matched"
+
+
+def test_index_gate_refuses_a_wrong_sized_collection(tmp_path) -> None:
+    """The case that used to pass: non-empty, so `require_populated_index` was
+    satisfied, and the only trace was a differing `qdocs_points` in the record."""
+    from bench.runner import EnvironmentMismatchError, check_retrieval_index
+
+    with pytest.raises(EnvironmentMismatchError, match="has 1019 points.*says 875"):
+        check_retrieval_index(
+            _FakeQdrant(exists=True, points=1019), RunConfig(), pin_file=_index_pin(tmp_path)
+        )
+
+
+def test_index_gate_override_is_stamped_not_silent(tmp_path) -> None:
+    from bench.runner import check_retrieval_index
+
+    stamps = check_retrieval_index(
+        _FakeQdrant(exists=True, points=1019),
+        RunConfig(allow_index_mismatch=True),
+        pin_file=_index_pin(tmp_path),
+    )
+    assert stamps["qdocs_points_gate"].startswith("OVERRIDDEN: expected 875, index has 1019")
+
+
+@pytest.mark.parametrize("exists,points", [(False, 0), (True, 0)])
+def test_index_gate_refuses_missing_and_empty(tmp_path, exists, points) -> None:
+    from bench.runner import EnvironmentMismatchError, check_retrieval_index
+
+    with pytest.raises(EnvironmentMismatchError):
+        check_retrieval_index(
+            _FakeQdrant(exists=exists, points=points), RunConfig(), pin_file=_index_pin(tmp_path)
+        )
+
+
+def test_index_gate_turns_an_unreachable_qdrant_into_a_refusal(tmp_path) -> None:
+    from bench.runner import EnvironmentMismatchError, check_retrieval_index
+
+    class Down:
+        def collection_exists(self, name):
+            raise ConnectionRefusedError("[Errno 111] Connection refused")
+
+    with pytest.raises(EnvironmentMismatchError, match="cannot be reached"):
+        check_retrieval_index(Down(), RunConfig(), pin_file=_index_pin(tmp_path))
+
+
+def test_the_repo_pin_is_the_corpus_the_measured_runs_used() -> None:
+    import yaml
+
+    from bench.runner import ENVIRONMENT_FILE
+
+    pin = yaml.safe_load(ENVIRONMENT_FILE.read_text())["retrieval_index"]
+    assert pin == {"collection": "qdocs", "expected_points": 875}

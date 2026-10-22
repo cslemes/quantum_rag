@@ -102,3 +102,31 @@ def test_graph_runner_itself_refuses_an_unprofiled_ollama_run() -> None:
     assert config.profile is None
     with pytest.raises(ProfileError, match="unprofiled Ollama run is not permitted"):
         _graph_runner(config, Usage())
+
+
+def test_prompt_capture_holds_the_generators_call_not_the_planners(tmp_path) -> None:
+    """The first call of a run is the planner's. The capture is selected by the
+    generator's own system prompt, so the planner's call (first) is skipped."""
+    import json
+
+    from bench.runner import AccountingLLM, Usage
+    from qcagent.llm.base import LLMResponse
+    from qcagent.nodes.generator import GENERATOR_SYSTEM_PROMPT
+
+    class Echo:
+        model_id = "m"
+        cache_dir = tmp_path
+
+        def generate(self, *, system, prompt, seed, max_tokens=4096):
+            return LLMResponse(
+                text="x", input_tokens=1, output_tokens=1, cost_usd=0.0, latency_s=0.0, model_id="m"
+            )
+
+    target = tmp_path / "first_generator_prompt.json"
+    llm = AccountingLLM(Echo(), Usage(), target)  # type: ignore[arg-type]
+    llm.generate(system="planner system", prompt="planner prompt", seed=1)
+    assert not target.exists()
+    llm.generate(system=GENERATOR_SYSTEM_PROMPT, prompt="gen prompt 1", seed=1)
+    llm.generate(system=GENERATOR_SYSTEM_PROMPT, prompt="gen prompt 2", seed=1)
+    saved = json.loads(target.read_text())
+    assert saved["prompt"] == "gen prompt 1" and saved["system"] == GENERATOR_SYSTEM_PROMPT

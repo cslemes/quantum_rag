@@ -13,6 +13,16 @@
 #                   aborts only if a declaration contradicts this value; an
 #                   absent declaration is recorded as "unrecorded".
 #
+#   retrieval_index The Qdrant collection and its point count, probed live before
+#                   every run (check_retrieval_index). A different size is a
+#                   different corpus. 875 is the corpus runs B, C, E and F used;
+#                   run A (1019) predates it. Re-indexing is a deliberate act:
+#                   change `expected_points` in the same commit, say why in
+#                   report-notes.md, and say which earlier runs it no longer matches.
+#
 # Moving a backend to another server version is a deliberate act: change its
 # `expected_server_version` in generator_profiles.yaml, in the same commit, and say why in report-notes.md.
 gpu_model: "NVIDIA GeForce RTX 3070 (8 GB)"   # as declared in plan.md, host Windows
+retrieval_index:
+  collection: qdocs
+  expected_points: 875
