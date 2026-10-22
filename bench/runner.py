@@ -41,7 +41,6 @@ from qcagent.live import LiveServices, build_live_graph, initial_state
 from qcagent.llm.base import BaseLLMClient, LLMResponse
 from qcagent.llm.ollama_client import (
     GPUOffloadError,
-    OllamaClient,
     assert_full_gpu_offload_http,
     gpu_offload_fraction,
     reset_generator_state,
@@ -860,13 +859,13 @@ def _graph_runner(config: RunConfig, usage: Usage) -> TaskRunner:
             effort=config.reasoning_effort,
         )
     else:
-        inner = OllamaClient(
-            config.ollama_url,
-            config.model,
-            settings.ollama_num_ctx,
-            settings.ollama_temperature,
+        # A local refusal, not a dependence on check_environment having fired
+        # earlier: an unprofiled Ollama run has no pinned server version and no
+        # identity stamp, so it must not be constructible from here.
+        raise ProfileError(
+            f"an unprofiled Ollama run is not permitted (provider={config.provider!r}, "
+            f"model={config.model!r}): set `profile:` in the run config"
         )
-        reset_generator_state(config.ollama_url, config.model)
     llm = AccountingLLM(inner, usage)
     qdrant = QdrantClient(url=settings.qdrant_url)
     embedder = FastEmbedEmbedder()

@@ -78,3 +78,30 @@ def test_run_single_can_choose_its_seed() -> None:
     assert "seed" in inspect.signature(rs.run_task).parameters
     source = Path(ROOT / "bench/run_single.py").read_text()
     assert '"--seed"' in source, "the CLI must expose it, not just the function"
+
+
+def test_run_single_has_no_unprofiled_path() -> None:
+    """run_single used to build its client from settings: the one way to
+    generate with no profile stamp and no server-version check."""
+    import inspect
+
+    import bench.run_single as rs
+
+    source = Path(ROOT / "bench/run_single.py").read_text()
+    assert "OllamaClient(" not in source and "settings.ollama" not in source
+    assert "build_client(profile)" in source
+    param = inspect.signature(rs.run_task).parameters["profile"]
+    assert param.default is inspect.Parameter.empty and param.kind is inspect.Parameter.KEYWORD_ONLY
+    assert '"--profile"' in source and "required=True" in source
+
+
+def test_run_single_refuses_an_unusable_profile(monkeypatch) -> None:
+    import pytest
+
+    import bench.run_single as rs
+    from qcagent.llm.profiles import ProfileError, ProfileStatus
+
+    down = ProfileStatus(profile="local-7b", label="x", state="unreachable", reason="down")
+    monkeypatch.setattr(rs, "probe", lambda _p: down)
+    with pytest.raises(ProfileError, match="NOT sent to any other profile"):
+        rs.gate_profile("local-7b")

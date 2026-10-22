@@ -37,7 +37,7 @@ validate-oracles:
 # Dev inspection tool — one TaskSpec through the US1 graph, by hand:
 #   make run TASK=bench/tasks/t1_primitives/ghz_3q.json
 run:
-	uv run python -m bench.run_single $(TASK)
+	uv run python -m bench.run_single $(TASK) --profile $(or $(PROFILE),local-7b)
 
 # Principle IV, without running anything: re-validates every reference named
 # in config.yaml and stops. The same check runs automatically before `eval`.

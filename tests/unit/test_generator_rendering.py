@@ -218,7 +218,10 @@ def test_retry_shows_previous_code_with_an_edit_instruction() -> None:
 
 def test_resource_excess_tells_the_generator_the_circuit_is_correct() -> None:
     err = ErrorRecord(
-        iteration=2, stage="resource", error_type="ResourceExcess", message="depth 9x",
+        iteration=2,
+        stage="resource",
+        error_type="ResourceExcess",
+        message="depth 9x",
         payload={"artifact": _ARTIFACT},
     )
     prompt = _build_prompt(_REQS, {"chunks": [], "code": "qc = big()"}, [err])

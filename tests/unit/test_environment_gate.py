@@ -88,3 +88,17 @@ def test_api_providers_have_no_server_to_gate() -> None:
         protocol_canary=[],
     )
     assert "not applicable" in check_environment(config, {})["ollama_version_gate"]
+
+
+def test_graph_runner_itself_refuses_an_unprofiled_ollama_run() -> None:
+    """Calls `_graph_runner` directly, so it does NOT pass through
+    check_environment. The refusal must be local: a guarantee that holds only
+    because an upstream check fires first breaks silently when that check is
+    reordered or made conditional."""
+    from bench.runner import Usage, _graph_runner
+    from qcagent.llm.profiles import ProfileError
+
+    config = RunConfig(provider="ollama")
+    assert config.profile is None
+    with pytest.raises(ProfileError, match="unprofiled Ollama run is not permitted"):
+        _graph_runner(config, Usage())

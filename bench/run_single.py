@@ -3,9 +3,13 @@ T039).
 
     make run TASK=bench/tasks/t1_primitives/ghz_3q.json
 
-Development tool, not part of the experimental harness: it always uses the
-local Ollama generator (D10) and the real retriever against `settings.
-qdrant_url` (`make index` must have populated the `qdocs` collection first —
+Development tool, not part of the experimental harness: the generator is a
+NAMED PROFILE (generator_profiles.yaml, `--profile`, required), built by the
+same `build_client` as the suite and the UI and gated the same way (probe,
+refuse when unreachable or the server version contradicts the profile's pin).
+It used to build an OllamaClient from `settings`, which made it the one path
+that could generate with no profile and no version check. The real retriever
+runs against `settings.qdrant_url` (`make index` must have populated the `qdocs` collection first —
 this tool never creates it on demand, see index.py's CollectionNotFound), and
 it prints a human-readable report instead of writing a `RunRecord` to
 `results/`.
@@ -34,7 +38,16 @@ from bench.schema import TaskSpec
 from qcagent.config import settings
 from qcagent.graph import Oracle, StatePreparationOracle, recursion_limit_for
 from qcagent.live import LiveServices, build_live_graph, initial_state
-from qcagent.llm.ollama_client import OllamaClient
+from qcagent.llm.profiles import (
+    Profile,
+    ProfileError,
+    ProfileStatus,
+    build_client,
+    get_profile,
+    identity_stamps,
+    probe,
+    reset_server_state,
+)
 from qcagent.nodes.generator import render_structural_diff
 from qcagent.retrieval.embedding import FastEmbedEmbedder
 from qcagent.state import AgentState
@@ -68,7 +81,20 @@ def _load_oracle(task: TaskSpec) -> Oracle:
     )
 
 
-def run_task(task_path: Path, *, seed: int, max_iter: int | None = None) -> AgentState:
+def gate_profile(name: str) -> tuple[Profile, ProfileStatus]:
+    """Resolve a profile and refuse unless it is usable right now. Same rule as
+    the suite and the UI: no fallback to another profile, no unchecked server."""
+    profile = get_profile(name)  # ProfileError for an unknown name
+    status = probe(profile)
+    refusal = status.refusal()
+    if refusal is not None:
+        raise ProfileError(refusal)
+    return profile, status
+
+
+def run_task(
+    task_path: Path, *, seed: int, profile: Profile, max_iter: int | None = None
+) -> AgentState:
     """Runs one TaskSpec through the graph to a terminal status.
 
     `seed` is REQUIRED and is the whole point of T104. This tool used to pass
@@ -89,12 +115,9 @@ def run_task(task_path: Path, *, seed: int, max_iter: int | None = None) -> Agen
     # Every generation parameter stated explicitly, none inherited: this tool
     # and the suite agreed on temperature only because both happened to take
     # the client's default, which is the accident T104 exists to remove.
-    llm = OllamaClient(
-        settings.ollama_base_url,
-        settings.ollama_model,
-        settings.ollama_num_ctx,
-        settings.ollama_temperature,
-    )
+    # `profile` carries them, and arrives only through `gate_profile`.
+    llm = build_client(profile)
+    reset_server_state(profile)
     resolved_max_iter = max_iter or settings.max_iter
 
     qdrant_client = QdrantClient(url=settings.qdrant_url)
@@ -178,14 +201,27 @@ def main() -> None:
             "seed (ghz_3q succeeds on 2, fails on 1 and 3), so state it when reporting."
         ),
     )
+    parser.add_argument(
+        "--profile",
+        required=True,
+        help="Generator profile name from generator_profiles.yaml. Required: there is "
+        "no default, so a by-hand run always names the system it ran on.",
+    )
     args = parser.parse_args()
 
     if not args.task.exists():
         print(f"error: task file not found: {args.task}", file=sys.stderr)
         raise SystemExit(1)
 
+    try:
+        profile, status = gate_profile(args.profile)
+    except ProfileError as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+    stamps = ", ".join(f"{k}={v}" for k, v in identity_stamps(profile, status).items())
+    print(f"generator: {stamps}", file=sys.stderr)
     print(f"seed={args.seed}  (outcomes are seed-dependent — see --seed)", file=sys.stderr)
-    state = run_task(args.task, seed=args.seed)
+    state = run_task(args.task, seed=args.seed, profile=profile)
     _print_report(state)
 
 
