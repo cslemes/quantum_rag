@@ -42,7 +42,7 @@ modo que "mesmo hardware" entre rodadas é declaração, não verificação.
 
 Gerador: `qwen2.5-coder:7b`. Suíte completa, uma semente.
 
-| | 2026-09-26 | rodada atual |
+| | 2026-09-26 (run B, Ollama 0.34.4) | rodada atual (run C, Ollama 0.35.1) |
 |---|---|---|
 | sucesso | 1/120 | **7/120** (5,8%; IC 95% 2,9–11,6%) |
 | `compila@1` | 20/120 | 20/120 |
@@ -66,7 +66,7 @@ O que mudou está depois dela:
 - nenhuma tarefa acertou na primeira tentativa, nas duas rodadas;
 - **seis dos sete sucessos só compilaram após reparo estático**;
 - a fração de execuções que TERMINAM em falha estática caiu de 84% (287/341,
-  baseline de 19/09) para 51% (61/120, run C).
+  baseline de 19/09, Ollama 0.34.1) para 51% (61/120, run C, Ollama 0.35.1).
 
 Ou seja: o contador de sucesso do braço local é integralmente atribuível ao
 loop de reparo. Não há componente de "o gerador ficou melhor" nele.
@@ -150,7 +150,7 @@ afirmação estatística, e nenhuma é apresentada como tal. O que o subconjunto
 responde é qualitativo e suficiente: a arquitetura funciona quando o gerador
 alcança o regime em que ela opera.
 
-| | local 7B (n=120) | 30B R0 | 30B R2 ⚠ | 30B R3 | 30B R4 | fronteira |
+| | local 7B (n=120, Ollama 0.35.1) | 30B R0 (Ollama 0.34.4, pod) | 30B R2 ⚠ | 30B R3 | 30B R4 | fronteira |
 |---|---|---|---|---|---|---|
 | sucesso | 7/120 | 4/16 | 9/16 | 6/16 | 10/16 | 15–16/16 |
 | `compila@1` | 20/120 | 11–12/16 | | | | 16/16 |

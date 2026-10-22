@@ -170,7 +170,7 @@ Baseline de 19/09 (run `ce9614fa…`, 360 execuções, **341 válidas** após ex
 falha estática (não é o mesmo que "param antes da verificação funcional": 63
 das 287 chegaram a ela); **331 de 335 falhas** esgotam as cinco tentativas
 (335 = 341 − 6; as outras 4 foram recusadas na entrada). Histórico: o número
-corrente do braço local é 7/120.
+corrente do braço local é 7/120 no Ollama 0.35.1 (5/120 no 0.40.8, mesmo modelo; uma cifra de sucesso sempre leva a build do servidor).
 
 **Precisão**: toda taxa com intervalo POR TAREFA (119 tarefas), não por run —
 as ~3 runs por tarefa não são sorteios independentes (F29). Ex.: sucesso 1,8%,
@@ -297,7 +297,7 @@ Um diagnóstico incorreto é pior que nenhum — ancora o modelo numa direção 
 - Reparo incremental — a hipótese H-inc, registrada com condições de falsificação
 - Verificar circuito escrito pelo próprio usuário (`/api/check` já é 80% disso)
 - Oráculo de fidelidade de canal para teleportação
-- Ajuste fino destilando o loop nos pesos
+- Ajuste fino destilando o loop nos pesos — **precondição: o 1.5B base é refeito na MESMA build do servidor imediatamente antes da execução destilada** (ver report-notes.md, "Destilação: precondição de build")
 
 ---
 

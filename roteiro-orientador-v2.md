@@ -102,7 +102,7 @@ Este é o momento que distingue um trabalho sério. Não suavize.
 > tentativas do loop de correção (as outras 4 foram recusadas na entrada)."
 > *(Nota: "terminam em falha estática" ≠ "nunca chegam à verificação
 > funcional": 63 dessas 287 chegaram a ela e a perderam. Medição atual do braço
-> local: 7/120.)*
+> local: 7/120 no Ollama 0.35.1; 5/120 no Ollama 0.40.8, mesmo modelo — as tarefas individuais não se reproduzem entre as duas builds, ver report-notes.md.)*
 
 O que isso diz:
 

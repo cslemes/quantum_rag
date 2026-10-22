@@ -5053,15 +5053,15 @@ refutam; serão relatadas como tais.
 
 ---
 
-### PREDIÇÃO REGISTRADA — run E (7B no Ollama 0.40.7) e definições das execuções C, E, F; run D aposentado (2026-10-22)
+### PREDIÇÃO REGISTRADA — run E (7B no Ollama 0.40.8) e definições das execuções C, E, F; run D aposentado (2026-10-22)
 
 **Definições** (tudo o mais idêntico nas três: mesmo código do laço, mesmos
 enunciados, uma semente, `reset_per_run`, Ollama no host):
 
 - **C** = qwen2.5-coder:7b, 120 tarefas, Ollama 0.35.1 — `1bf505bf84beb040`, 7/120. Já feita.
-- **E** = qwen2.5-coder:7b, 120 tarefas, Ollama 0.40.7 — o mesmo arquivo de modelo
+- **E** = qwen2.5-coder:7b, 120 tarefas, Ollama 0.40.8 [escrito 0.40.7 no momento do registro; corrigido, ver "Deriva do servidor do host"] — o mesmo arquivo de modelo
   (não foi baixado de novo desde C). **C vs E isola a VERSÃO DO SERVIDOR.**
-- **F** = qwen2.5-coder:1.5b, 120 tarefas, Ollama 0.40.7. **E vs F isola a ESCALA
+- **F** = qwen2.5-coder:1.5b, 120 tarefas, Ollama 0.40.8 [idem]. **E vs F isola a ESCALA
   DO MODELO.** A predição de F é a registrada em `f8d3100` (0 a 3 sucessos,
   `compila@1` ≤ 10/120), antes escrita em termos de "C"; a comparação válida é
   com E. Duas comparações, relatadas SEPARADAS.
@@ -5102,8 +5102,8 @@ duas execuções enviam o mesmo texto para a mesma tarefa, então só `input_tok
 ### Segunda re-fixação do gate: 0.40.7 → 0.40.8; a execução E foi recusada antes de rodar (2026-10-22)
 
 Ao lançar E, o gate recusou: o servidor do host passou a reportar **0.40.8**
-(provavelmente atualização automática; a sondagem anterior, minutos antes,
-dava 0.40.7). Nenhuma tarefa rodou e nenhum registro foi escrito. É a segunda
+(atualização automática do host, confirmada pelo dono; a leitura anterior, 0.40.7,
+foi feita ~37 min antes, às ~01:10 UTC). Nenhuma tarefa rodou e nenhum registro foi escrito. É a segunda
 deriva do host no mesmo dia (0.35.1 → 0.40.7 → 0.40.8) e a segunda vez que o
 gate a captura de antemão.
 
@@ -5240,10 +5240,148 @@ e o cache de C (`.cache/llm.replay-source-C-2026-10-22`) foram preservados.
 
 ---
 
+### Deriva do servidor do host: a cadeia completa e o que está fixado (2026-10-22)
+
+Versões do Ollama do HOST nos registros, com data (UTC):
+
+| execução | data | Ollama (host) |
+|---|---|---|
+| baselines T102 e execuções A/A2 (`99960870…`, `7de38e77…`) | 2026-09-17 a 09-22 | 0.34.1 |
+| execução B (`9e19fa12…`) | 2026-09-26 | 0.34.4 |
+| execução C (`1bf505bf…`) | 2026-10-06 | 0.35.1 |
+| leitura ao criar o perfil `local-1.5b` (commit `a368d4b`, 01:10:42) | 2026-10-22 ~01:10 | **0.40.7** |
+| recusa do gate ao lançar E (commit `5c18a58`, 01:48:14) | 2026-10-22 ~01:47 | **0.40.8** |
+| E e F (`7fd09e27…`, `a6a6a63f…`); host ainda 0.40.8 às 18:37 | 2026-10-22 | 0.40.8 |
+
+(O braço do pod, 30B, ficou em 0.34.4 por instalação fixada, não por deriva.)
+
+**É uma terceira deriva real, não um erro de registro:** 0.34.4 → 0.35.1 →
+0.40.7 → 0.40.8. Duas correções ao enunciado: (1) o intervalo de 0.34.4
+(26/09) a 0.40.8 (22/10) é de **26 dias, ~3,7 semanas**, não 2,5; contando a
+0.34.1 de 22/09 são quatro mudanças em 30 dias. (2) O último passo (0.40.7 →
+0.40.8) ocorreu **dentro de ~37 minutos**, não "num dia": as duas leituras são
+do mesmo dia UTC (noite de 21/10 no fuso local, UTC−3).
+
+**Fixação commitada:** `local-7b` e `local-1.5b` fixam **0.40.8**
+(`5c18a58`). 0.40.7 esteve fixado por ~10 minutos de histórico (`acce8aa`,
+01:37 → 01:48) e nunca foi usado por uma execução. Os registros de E e F dizem
+`server_version_reported: 0.40.8` e `ollama_version_gate: matched`: pino e
+registros coincidem. (Os registros dos braços de API mostram `ollama: 0.34.4`
+porque `collect_lib_versions` consulta o servidor local mesmo quando o modelo é
+de API; é irrelevante para essas execuções.)
+
+### Toda cifra medida leva a build do servidor (2026-10-22)
+
+| execução | modelo | Ollama | sucesso | `compila@1` |
+|---|---|---|---|---|
+| T102 `ce9614fa…` (3 sementes, 360) | 7B | 0.34.1 | 6/360 | — |
+| B `9e19fa12…` (3 sementes, 360) | 7B | 0.34.4 | 3/360 (1/120 por tarefa, semente 1) | 20/120 |
+| **C** `1bf505bf…` (1 semente, 120) | 7B | **0.35.1** | **7/120** | 20/120 |
+| **E** `7fd09e27…` (1 semente, 120) | 7B | **0.40.8** | **5/120** | 19/120 |
+| **F** `a6a6a63f…` (1 semente, 120) | 1.5B | **0.40.8** | **1/120** | 10/120 |
+| R0–R4 (16 tarefas) | 30B (pod) | 0.34.4 | 4, 9, 6, 10 de 16 | — |
+
+Regra daqui em diante: "7/120" sem build não se escreve. C vs E mediu que o
+mesmo arquivo de modelo, mesmo código do laço, mesma semente e mesmos
+enunciados dão resultados **por tarefa** diferentes entre builds (ver abaixo),
+então a forma sem qualificação é uma afirmação que medimos ser falsa.
+Qualificados nos documentos: capítulo 5 (cabeçalhos das tabelas), roteiro do
+orientador e esqueleto do relatório.
+
+### Pergunta dos tokens, decidida pelos registros: nenhuma das 6 é "contagem do servidor" (2026-10-22)
+
+Das 18 tarefas de C e E com mesmo status, iterações e código final, 12 têm
+`input_tokens` idênticos e 6 diferem. **Nenhuma das 6 tem 1 iteração** (todas
+têm 2 a 5), então a regra "1 iteração prova mudança de contagem" não se aplica;
+usei os registros guardados:
+
+| tarefa | iter. | Δ`input_tokens` | Δ`output_tokens` | erros C = E? | trace C = E? |
+|---|---|---|---|---|---|
+| `bell_phi_minus_2q_perturbed` | 5 | +10 | +10 | sim | não (dica do crítico difere) |
+| `reversible_full_adder_5q_perturbed` | 5 | −45 | −45 | sim | sim |
+| `qpe_4q` | 5 | −5 | −5 | sim | não (dica do crítico) |
+| `qpe_4q_perturbed` | 5 | −24 | −40 | sim | não (dica e justificativa) |
+| `vqe_h2_r055` | 4 | +8 | +12 | sim | não (requisitos do planejador) |
+| `vqe_h2_r130_perturbed` | 2 | +2 | +1 | sim | não (requisitos do planejador) |
+
+Os registros de erro são idênticos nas 6, o que pela regra apontaria para
+contagem; **mas dois fatos independentes a contradizem:** (1) em três tarefas
+Δentrada = Δsaída exatamente (+10/+10, −45/−45, −5/−5): os tokens a mais
+gerados numa tentativa voltam como entrada na seguinte (o código anterior é
+reapresentado, T090d), a assinatura de uma tentativa intermediária diferente, não
+a de uma contagem diferente, que moveria entrada e saída por quantidades
+independentes; (2) as 12 tarefas com entrada idêntica (todas de 5 iterações) mostram que
+a contagem de prompt não mudou. E o texto guardado no trace difere em 5 das 6
+(dicas e justificativas do crítico, requisitos do planejador) sem que o erro
+final difira. **Decisão: as 6 sustentam "tentativas intermediárias
+diferentes com o mesmo registro de erro", nenhuma sustenta "contagem
+mudou".** O erro idêntico não prova código idêntico: o registro de erro é
+insensível a mudanças que não alteram a mensagem.
+
+**Achado associado, mais forte que a pergunta:** a entrada do PLANEJADOR é só o
+enunciado da tarefa (+ prompt de sistema fixo); nada mudou em `nodes/`, `graph.py`,
+`live.py`, `retrieval/` nem em `bench/tasks/` entre `6c379c2` e HEAD. Ainda
+assim, **em 34 das 120 tarefas os requisitos que o planejador devolveu em C
+(0.35.1) e em E (0.40.8) diferem** (p.ex. `vqe_h2_r055`: `output_format`
+"numeric" em C, "fixed_circuit" em E). Mesma entrada, mesmos pesos, temperatura 0,
+mesma semente, servidor reiniciado por execução: a saída muda com a build do
+servidor. Isto é evidência direta de que a build é uma variável do experimento.
+
+### Índice de recuperação: o que acontece sem ele, e o gate novo (2026-10-22)
+
+**O que aconteceu e o que teria acontecido.** Qdrant parado há 7 dias: a E
+inicial falhou ruidosamente (`Connection refused`, saída 1), não degradou em
+silêncio, porque `require_populated_index` já consulta o Qdrant antes de rodar.
+Por situação, ANTES deste commit: container parado → traceback e saída 1
+(recusa, sem mensagem legível); coleção ausente → `EmptyIndexError` (recusa);
+coleção vazia → `EmptyIndexError` (recusa); **coleção de TAMANHO ERRADO mas não
+vazia (ingestão parcial, os 1019 de um 503) → passava**, só gravada em
+`qdocs_points`, e uma comparação só era válida se alguém notasse. A UI mostra o
+tamanho no painel de saúde, mas não o compara com nada e não recusa. Esse último
+caso era a lacuna.
+
+**Gate novo** (`check_retrieval_index`, mesmo formato do gate do Ollama): o pino
+vive em `bench/environment.yaml` (`retrieval_index: {collection: qdocs,
+expected_points: 875}`, o corpus de B, C, E e F), é sondado ao vivo antes de
+cada execução e recusa por incompatibilidade, nomeando as duas contagens; Qdrant
+inalcançável vira recusa em palavras. `--allow-index-mismatch` converte a recusa em
+carimbo `qdocs_points_gate: OVERRIDDEN: expected 875, index has N`; passando,
+grava `matched`. Escrito em `ENVIRONMENT_MISMATCH.txt` no diretório da execução,
+como o gate de versão. **Não coberto:** o painel de saúde da UI (informa a
+contagem, não recusa nem compara); a execução A (1019) não casa mais com o pino,
+por desenho.
+
+### Captura do prompt corrigida: agora é a primeira chamada do GERADOR (2026-10-22)
+
+A captura anterior guardava a primeira chamada da execução, que é a do
+planejador (`first_prompt.json` de E e F contém o prompt do planejador; ficam
+como estão). Agora `AccountingLLM` seleciona pelo prompt de sistema do gerador e
+grava `results/<run_id>/first_generator_prompt.json`. Vale a partir da próxima
+execução; E e F não têm o prompt do gerador.
+
+### Deriva de build e a precondição da destilação (2026-10-22)
+
+**Precondição do experimento, não passo opcional:** a comparação base × ajustado
+exige as duas execuções na MESMA build do servidor. Não se deve contar com a
+execução F (1/120 no Ollama 0.40.8) como linha de base: o host já derivou quatro
+vezes em 30 dias e C vs E mostrou que a build desloca resultados por tarefa.
+**Imediatamente antes da execução destilada, refazer o 1.5B base na build vigente
+naquele momento e comparar contra essa execução**, com `expected_server_version`
+dos perfis ajustado deliberadamente para ela (e registrado). Orçamento: **126
+minutos de relógio sem supervisão** para essa execução (a medida de F: 126,5 min
+incluindo ~6 de verificações). Condições: cache `.cache/llm` frio (F18; note que a
+chave NÃO inclui a build do servidor: uma refeita do 1.5B com os mesmos prompts
+seria um replay das respostas de F, e o gate de versão não a vê); índice a 875
+pontos (gate); mesmo código do laço e mesma semente. Gancho em
+`relatorio-esqueleto.md` (lista de trabalhos futuros).
+
+---
+
 ### Modelo de chat: 7B e 1.5B têm o MESMO template (hash), e o que os registros guardam do prompt (2026-10-22)
 
 Comparação feita por programa, não a olho: `POST /api/show` no Ollama do host
-(0.40.7), campo `template`, SHA-256 do texto.
+(versão do servidor NÃO consultada nesse momento: estava entre 0.40.7 e 0.40.8; o
+template é propriedade do pull, então não depende dela), campo `template`, SHA-256 do texto.
 
 | modelo | digest | tamanho do template | SHA-256 do template |
 |---|---|---|---|
