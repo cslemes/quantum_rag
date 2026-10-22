@@ -5116,6 +5116,34 @@ E/F, vale 0.40.8.
 
 ---
 
+### Run E (`82a2169098ea3783`) foi um REPLAY do cache de respostas de C — NÃO é medição (2026-10-22)
+
+E terminou em 9 minutos de execução (C: 72 min) com 7/120, `compila@1` 20/120,
+veredito semântico 57/120 e regressão 30/88, contra 7 / 20 / 58 / 29/88 de C.
+Esses números são quase idênticos **porque o gerador não foi consultado**:
+`.cache/llm` (F18) estava quente com as 1036 respostas de C (06/10), chaveadas
+por `modelo|semente|system|prompt`, e os prompts de E são os mesmos. Evidência:
+117 de 120 registros com `latency_s` < 5 s (máx. 28 s; C somou 66 min), e só 13
+arquivos novos no cache em 22/10. Os 13 novos são as únicas chamadas que o
+servidor 0.40.8 realmente respondeu, e o que as diferencia é uma pergunta
+aberta, não um resultado.
+
+**Falha minha de procedimento, não do gate:** F18 já dizia que medir exige
+limpar `.cache/llm`; não limpei antes de lançar E. O gate de versão checou o
+servidor e passou, mas ele não vê o cache. **Os números de E acima NÃO entram
+em C vs E e a predição de E (3–11) NÃO foi testada** por eles; o diretório foi
+preservado como evidência do replay. E será refeita com o cache movido para
+fora (preservado, não apagado), depois de F.
+
+F (1.5B) não é afetada: a chave inclui o `model_id`, então nenhuma chamada do
+1.5B acerta o cache de C.
+
+**Incidente menor:** uma primeira tentativa de F, lançada por engano 29 s antes
+de E (o script só testava que E tinha terminado, não que tinha dado certo),
+morreu na checagem de GPU sem gerar nada; não escreveu registros.
+
+---
+
 ### Modelo de chat: 7B e 1.5B têm o MESMO template (hash), e o que os registros guardam do prompt (2026-10-22)
 
 Comparação feita por programa, não a olho: `POST /api/show` no Ollama do host
