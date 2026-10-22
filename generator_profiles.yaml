@@ -32,6 +32,19 @@ profiles:
       temperature: 0.0                   # pinned, never inherited (F15)
       num_ctx: 16384                     # pinned, never inherited (D10b)
 
+  # Scale control: identical to local-7b in every field but the model.
+  - name: local-1.5b
+    label: "Local — qwen2.5-coder 1.5B (host GPU)"
+    client_type: ollama
+    base_url: http://localhost:11434
+    base_url_env: OLLAMA_BASE_URL
+    model: qwen2.5-coder:1.5b
+    expected_server_version: "0.35.1"
+    determinism:
+      reset_strategy: per_run
+      temperature: 0.0
+      num_ctx: 16384
+
   - name: runpod-30b
     label: "RunPod — qwen3-coder 30B (rented GPU, via SSH tunnel)"
     client_type: ollama

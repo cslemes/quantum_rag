@@ -298,7 +298,7 @@ class _Boom:
 
 def _statuses(**by_name: ProfileStatus):
     def fake_probe(profile, **_):
-        return by_name[profile.name]
+        return by_name.get(profile.name) or _down(profile.name, "not under test")
 
     return fake_probe
 

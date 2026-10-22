@@ -1,0 +1,42 @@
+# Regression-suite configuration (US7, T098b) — the source of truth for one
+# run of `make eval` / `uv run python -m bench.runner --config config.yaml`.
+#
+# One configuration per run: v2's suite compares a change against the SAME
+# configuration before and after (FR-027, SC-008), it is not v1's experimental
+# matrix of conditions. To compare two generators, run the suite twice and
+# compare the two result files.
+#
+# Before any task runs, every reference named here is re-validated; one
+# unverified reference aborts the entire run (Principle IV, FR-028).
+# `--verify-only` performs just that check.
+
+# Generator under test. Any model the configured Ollama server serves.
+# The generator is a PROFILE (generator_profiles.yaml): model, server URL, expected
+# server version and determinism settings all come from it.
+profile: local-1.5b
+
+# ONE seed (2026-09-26). Under reset_per_run the three seeds of a task were
+# byte-identical in every arm of T114 (16/16, three times): at temperature 0
+# the seed does not act, and the ~66% seed difference measured before was
+# cross-task contamination (F28, F29). Three seeds were three copies. The
+# invariant that justifies one seed is checked before every suite by the
+# protocol canary (protocol_canary / canary_seeds, see bench/runner.py) —
+# if it fails, the suite refuses to run.
+seeds: [1]
+
+# "all" = every task under bench/tasks/ (120: 60 canonical + 60 perturbed).
+# A list of task_ids runs exactly those, and an unknown id is an error rather
+# than a silently smaller suite.
+tasks: all
+
+# Retry ceiling per task (D8). Raising it changes what the suite measures, so
+# it belongs in the configuration recorded alongside the results.
+max_iter: 5
+
+results_dir: results
+
+# Unload the model before EVERY (task, seed) — F28. Without it, Ollama's
+# prompt/KV cache carries state from one task to the next and a task's result
+# depends on the task before it, so a per-task comparison cannot localize a
+# regression. Costs one model load per run (SC-007, second amendment).
+reset_per_run: true

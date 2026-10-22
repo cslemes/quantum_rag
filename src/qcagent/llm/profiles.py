@@ -66,7 +66,7 @@ class Determinism(BaseModel):
 class Profile(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    name: str = Field(pattern=r"^[a-z0-9][a-z0-9-]*$")
+    name: str = Field(pattern=r"^[a-z0-9][a-z0-9.-]*$")
     label: str
     client_type: ClientType
     base_url: str | None = None
