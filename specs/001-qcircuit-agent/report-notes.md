@@ -5053,6 +5053,37 @@ refutam; serão relatadas como tais.
 
 ---
 
+### Modelo de chat: 7B e 1.5B têm o MESMO template (hash), e o que os registros guardam do prompt (2026-10-22)
+
+Comparação feita por programa, não a olho: `POST /api/show` no Ollama do host
+(0.40.7), campo `template`, SHA-256 do texto.
+
+| modelo | digest | tamanho do template | SHA-256 do template |
+|---|---|---|---|
+| `qwen2.5-coder:7b` | `dae161e27b0e90dd…` | 1615 caracteres | `1e65450c30670713aa47fe23e8b9662bdf4065e81cc8e3cbfaa98924fcc0d320` |
+| `qwen2.5-coder:1.5b` | `d7372fd828518a4d…` | 1615 caracteres | `1e65450c30670713aa47fe23e8b9662bdf4065e81cc8e3cbfaa98924fcc0d320` |
+
+Hashes idênticos; o `system` padrão do Modelfile também é o mesmo ("You are
+Qwen, created by Alibaba Cloud…"). Ambos são `family: qwen2`. A variante
+instruct-vs-base do 1.5b NÃO é lida de um campo: o que se sabe é que o
+template é o de chat (com marcadores de turno) e idêntico ao do 7B.
+
+**O template é propriedade do pull, não do servidor.** O 7B não foi baixado de
+novo desde a execução C (`modified_at` 2026-09-02). Logo, se C e uma nova
+execução do 7B divergirem, a causa está na renderização ou no caminho de
+inferência do servidor, não num template diferente. Isto vale para o template
+guardado no modelo; não exclui que versões diferentes do servidor renderizem o
+MESMO template de modo diferente.
+
+**O que os registros guardam do prompt:** os registros da execução C NÃO contêm
+o prompt (nem o enviado nem o renderizado). Há `input_tokens` por execução
+(soma de `prompt_eval_count` do servidor sobre as iterações), que serve de
+impressão digital só entre execuções com o mesmo caminho de iterações. O
+prompt renderizado pelo servidor nunca é devolvido por `/api/chat`; só as
+mensagens (`system`, `prompt`) que o cliente envia estão ao alcance.
+
+---
+
 ### Taxa de regressão do baseline T102 (`ce9614fa3a6f60a6`, 2026-09-19) — 63/113 = 55,8% (limite inferior) (2026-10-06)
 
 Mesma definição dos runs B e C: runs que chegaram a uma checagem semântica ou de
