@@ -5181,6 +5181,65 @@ execução fria de E (a primeira E foi replay, ver acima).
 
 ---
 
+### RESULTADO — run E refeita a frio (qwen2.5-coder:7b, Ollama 0.40.8, `7fd09e27763b34ee`, 2026-10-22) e as duas comparações, SEPARADAS (2026-10-22)
+
+E refeita com `.cache/llm` movido para fora (988 arquivos novos; `latency_s`
+somada 67 min contra 66 de C: geração real). Gate `matched` 0.40.8, perfil
+`local-7b`, sem override, 1 semente, `reset_per_run`, mesmo código do laço.
+Parede 81,7 min (04:16:54 → 05:38:37 UTC, inclui ~6 min de verificação).
+Erros de harness: nenhum. Mesmo corpus (875 pontos).
+
+| métrica | C (7B, 0.35.1) | E (7B, 0.40.8) | F (1.5B, 0.40.8) |
+|---|---|---|---|
+| sucesso | 7/120 | **5/120** | 1/120 |
+| `compila@1` | 20/120 | **19/120** | 10/120 |
+| `failed_static` / `failed_semantic` / `aborted` | 61 / 51 / 1 | 56 / 58 / 1 | 107 / 11 / 0 (+1 `rejected_input`) |
+| veredito semântico (success + failed_semantic) | 58/120 | 63/120 | 12/120 |
+| alcançou checagem semântica (trace) | 88/120 | 87/120 | 16/120 |
+| taxa de regressão | 29/88 (33,0%) | 23/87 (26,4%) | 4/16 (25,0%) |
+| sucessos com `compila@1` / só após reparo | 1 / 6 | 0 / 5 | 0 / 1 |
+| parede | 72 min | 81,7 min | 126,5 min |
+
+**Predição de E (3 a 11 de 120): confirmada, 5/120**, dentro da faixa. Pelo
+critério registrado, a versão do servidor não move o AGREGADO materialmente, e a
+seção 5.7 não precisa ser reescrita por causa do agregado.
+
+**Comparação 1 — C vs E (isola a VERSÃO DO SERVIDOR, 0.35.1 → 0.40.8; mesmo
+arquivo de modelo):** o agregado quase não se mexe (7→5, `compila@1` 20→19,
+alcance 88→87). **O nível por tarefa muda muito:** só 84/120 tarefas têm o mesmo
+status; só 18 têm código final idêntico; dos 7 sucessos de C e 5 de E, **apenas
+3 são comuns** (`ghz_linear5_scattered_even`, `vqe_h2_r055`,
+`vqe_h2_r130_perturbed`); o conjunto de `compila@1` coincide em 14, com 6 só em C
+e 5 só em E. Leitura: a versão do servidor não desloca o agregado, mas
+as tarefas individuais NÃO se reproduzem entre versões; com 1 semente e
+7 vs 5 de 120, a diferença de agregado está dentro do que o ruído por tarefa
+explica, e nenhuma conclusão POR TAREFA vale entre C e E.
+
+**Comparação 2 — E vs F (isola a ESCALA DO MODELO, 7B → 1.5B, mesma versão):**
+sucesso 5→1, `compila@1` 19→10, veredito semântico 63→12, alcance da checagem
+semântica 87→16. O gargalo é compilar e ele piora com a escala: o 1.5B
+alcança a checagem semântica em 16 de 120 tarefas, o 7B em 87. A predição de F
+(0–3 sucessos, `compila@1` ≤ 10) se confirmou, no teto. Isto sustenta que a
+escala entre 1,5B e 7B importa para esta tarefa (a refutação — 5+ sucessos ou
+`compila@1` > 15 — não ocorreu).
+
+**Prompt capturado:** a primeira chamada de cada execução é a do PLANEJADOR
+("requirements-extraction stage"), não a do gerador. Em E e F o texto é
+idêntico (mesmo `system` e `prompt`, modelos diferentes), como deveria. Não há
+prompt de C para comparar. Indício indireto de renderização: das 18 tarefas
+com mesmo status, iterações e código final em C e E, 12 têm `input_tokens`
+idêntico e 6 diferem por poucos tokens (p.ex. `bell_phi_minus_2q_perturbed`
+40161 vs 40171, `output_tokens` 895 vs 905), o que indica que TENTATIVAS
+INTERMEDIÁRIAS diferem mesmo quando o código final coincide, ou que a contagem
+do servidor mudou; com os registros atuais não se distingue as duas
+hipóteses. Fica registrado como pergunta aberta, e a captura passa a existir
+só a partir de E (e só a primeira chamada).
+
+**Cache:** a execução replay (`82a2169098ea3783.REPLAY-of-C-not-a-measurement`)
+e o cache de C (`.cache/llm.replay-source-C-2026-10-22`) foram preservados.
+
+---
+
 ### Modelo de chat: 7B e 1.5B têm o MESMO template (hash), e o que os registros guardam do prompt (2026-10-22)
 
 Comparação feita por programa, não a olho: `POST /api/show` no Ollama do host
