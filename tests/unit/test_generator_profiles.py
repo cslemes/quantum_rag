@@ -36,7 +36,7 @@ def _ollama(**kw) -> Profile:
         client_type="ollama",
         base_url="http://backend:11434",
         model="m:1b",
-        expected_server_version="0.40.7",
+        expected_server_version="0.40.8",
         determinism={"reset_strategy": "per_run", "temperature": 0.0, "num_ctx": 16384},
     )
     return Profile(**{**base, **kw})
@@ -73,7 +73,7 @@ def _transport(routes: dict[str, tuple[int, dict]], calls: list | None = None):
 def test_the_shipped_profiles_load_and_carry_their_own_pins() -> None:
     profiles = {p.name: p for p in load_profiles().profiles}
     assert set(profiles) >= {"local-7b", "runpod-30b"}
-    assert profiles["local-7b"].expected_server_version == "0.40.7"
+    assert profiles["local-7b"].expected_server_version == "0.40.8"
     assert profiles["runpod-30b"].expected_server_version == "0.34.4"
     assert (
         profiles["runpod-30b"].setup_hint and "does not start" in profiles["runpod-30b"].setup_hint
@@ -164,14 +164,14 @@ def test_reachable_with_a_matching_version() -> None:
     http = httpx.Client(
         transport=_transport(
             {
-                "/api/version": (200, {"version": "0.40.7"}),
+                "/api/version": (200, {"version": "0.40.8"}),
                 "/api/tags": (200, {"models": [{"name": "m:1b", "digest": "abc"}]}),
             }
         )
     )
     status = probe(_ollama(), client=http)
     assert (status.state, status.version_gate, status.usable) == ("reachable", "matched", True)
-    assert status.server_version == "0.40.7" and status.refusal() is None
+    assert status.server_version == "0.40.8" and status.refusal() is None
 
 
 def test_reachable_but_a_wrong_version_is_refused_not_overridden_from_the_ui() -> None:
@@ -187,7 +187,7 @@ def test_reachable_but_a_wrong_version_is_refused_not_overridden_from_the_ui() -
     assert status.state == "reachable" and not status.usable
     message = status.refusal() or ""
     assert (
-        "0.34.4" in message and "0.40.7" in message and "NOT sent to any other profile" in message
+        "0.34.4" in message and "0.40.8" in message and "NOT sent to any other profile" in message
     )
 
 
@@ -208,7 +208,7 @@ def test_a_model_that_is_not_pulled_is_unreachable_with_that_reason() -> None:
     http = httpx.Client(
         transport=_transport(
             {
-                "/api/version": (200, {"version": "0.40.7"}),
+                "/api/version": (200, {"version": "0.40.8"}),
                 "/api/tags": (200, {"models": []}),
             }
         )
@@ -250,7 +250,7 @@ def test_reachability_is_live_every_time_never_cached() -> None:
         if not up["on"]:
             raise httpx.ConnectError("down", request=request)
         if request.url.path == "/api/version":
-            return httpx.Response(200, json={"version": "0.40.7"})
+            return httpx.Response(200, json={"version": "0.40.8"})
         return httpx.Response(200, json={"models": [{"name": "m:1b"}]})
 
     http = httpx.Client(transport=httpx.MockTransport(handler))
@@ -276,13 +276,13 @@ def test_identity_stamps_name_things_but_carry_no_url_or_credential(monkeypatch)
         profile="p",
         label="P",
         state="reachable",
-        server_version="0.40.7",
+        server_version="0.40.8",
         version_gate="matched",
         model_digest="abc",
     )
     stamps = identity_stamps(_ollama(), status)
     assert stamps["profile"] == "p" and stamps["model_resolved"] == "m:1b"
-    assert stamps["server_version_reported"] == "0.40.7"
+    assert stamps["server_version_reported"] == "0.40.8"
     assert stamps["determinism_temperature"] == "0.0" and stamps["determinism_num_ctx"] == "16384"
     flat = " ".join(stamps.values())
     assert "http" not in flat and SECRET not in flat
@@ -312,8 +312,8 @@ def _up(name: str) -> ProfileStatus:
         profile=name,
         label=name,
         state="reachable",
-        server_version="0.40.7",
-        expected_server_version="0.40.7",
+        server_version="0.40.8",
+        expected_server_version="0.40.8",
         version_gate="matched",
     )
 
@@ -393,7 +393,7 @@ def test_a_served_run_names_its_generator(monkeypatch) -> None:
     monkeypatch.setattr(ui, "run_streaming", fake_run)
     TestClient(ui.app).get("/api/run", params={"spec": "x", "profile": "local-7b"})
     assert seen["profile"] == "local-7b" and seen["model_resolved"] == "qwen2.5-coder:7b"
-    assert seen["server_version_reported"] == "0.40.7"
+    assert seen["server_version_reported"] == "0.40.8"
     assert seen["determinism_reset"] == "per_run"
 
 

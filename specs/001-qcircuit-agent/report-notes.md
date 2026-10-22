@@ -5099,6 +5099,23 @@ duas execuções enviam o mesmo texto para a mesma tarefa, então só `input_tok
 
 ---
 
+### Segunda re-fixação do gate: 0.40.7 → 0.40.8; a execução E foi recusada antes de rodar (2026-10-22)
+
+Ao lançar E, o gate recusou: o servidor do host passou a reportar **0.40.8**
+(provavelmente atualização automática; a sondagem anterior, minutos antes,
+dava 0.40.7). Nenhuma tarefa rodou e nenhum registro foi escrito. É a segunda
+deriva do host no mesmo dia (0.35.1 → 0.40.7 → 0.40.8) e a segunda vez que o
+gate a captura de antemão.
+
+**Decisão do dono: re-fixar em 0.40.8.** As definições passam a ser: **E** =
+7B no Ollama **0.40.8**; **F** = 1.5B no **0.40.8**; C continua em 0.35.1. Logo
+**C vs E cobre 0.35.1 → 0.40.8** (e não 0.40.7); E vs F continua isolando a
+escala. A predição de E (3 a 11 de 120) e a de F não mudam: ainda não foram
+medidas, só o rótulo da versão mudou. Onde as notas acima dizem "0.40.7" para
+E/F, vale 0.40.8.
+
+---
+
 ### Modelo de chat: 7B e 1.5B têm o MESMO template (hash), e o que os registros guardam do prompt (2026-10-22)
 
 Comparação feita por programa, não a olho: `POST /api/show` no Ollama do host
