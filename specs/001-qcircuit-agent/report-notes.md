@@ -5536,6 +5536,67 @@ atuais.
 
 ---
 
+### Destilação, fase 1: professor roteado no OpenRouter — decisões e o que foi implementado (2026-10-23)
+
+**Decidido:** (1) as opções de roteamento entram na chave do cache (um *miss* custa
+dinheiro e se repara re-rodando; um acerto errado custa a história de licença do
+conjunto e não se repara); (2) campo tipado `provider_options` (só chaves
+nomeadas), máquina de estados de recusa, bloco de proveniência; (3) a validação
+de perfil recusa construir um professor sem a garantia, e perfis de professor
+levam o marcador explícito `role: teacher`; (4) **campos não confirmados**: a
+resposta tem seus metadados sem conteúdo guardados por inteiro e os campos
+nomeados são derivados deles; chave ausente = `"unavailable"`, valor `null` na
+resposta = `"returned-null"`, nunca `None`; nada se apoia em `data["provider"]`
+até uma resposta real mostrá-lo; (5) **requisito dos construtores de oráculo**:
+todo construtor de uma família de treino repousa em DUAS implementações
+independentes (a mesma disciplina das 120 referências, que pegou cinco erros de
+método); construtor cujas duas implementações discordam não é usado até a
+discordância ser resolvida e registrada — é isso que dá sentido ao rótulo
+`verified_against_oracle`; (6) **corte de escopo do piloto**: CINCO famílias
+fora do conjunto retido, cobrindo os quatro tipos de oráculo, ~20 variações cada
+(100 enunciados); as demais esperam o piloto; (7) **modelo**: consultar a lista
+de modelos destiláveis na hora de gerar, pegar o mais forte cujo preço caiba, e
+deixar a aceitação por família do piloto decidir se fica ou se tenta o próximo;
+registrar uma vez os termos de licença do autor do modelo (URL, data, hash do
+texto); toda a demais permissão é confirmada por chamada, pelo código.
+
+**Implementado** (commit `6167467`; nada gerado, nada gasto): `ProviderOptions`
+(`enforce_distillable_text`, nada mais); `Profile.role` e `Profile.provider_options`
+com validação (professor ⇒ API hospedada, credencial, garantia ligada) e segunda
+checagem em `build_client`; `OpenAICompatibleClient` envia o objeto `provider` e
+trata uma escolha com erro como erro (antes viraria texto vazio, e seria
+cacheado); `LLMResponse.provenance` (guardada no cache com a resposta); chave do
+cache com as opções; `qcagent/distill/teacher.py` com os estados terminais
+`RESPONDED / REFUSED / PROVIDER_ERROR / NONCONFORMING / INFRASTRUCTURE_FAILED /
+HARD_STOP`, `RefusalBreaker` (10 recusas seguidas ou qualquer `HARD_STOP`
+interrompem o pipeline) e a regra de que 429/5xx são re-tentados com o MESMO corpo
+(a bandeira não pode cair). Perfis de professor não aparecem na interface nem
+rodam na suíte. 14 testes novos com transporte HTTP simulado que conta as
+requisições.
+
+**Limites registrados:** (a) o formato do erro HTTP quando nenhum modelo
+qualifica NÃO está documentado nas páginas alcançadas: a recusa é classificada
+por status e o corpo bruto é guardado; (b) o campo do provedor servido NÃO está
+confirmado; (c) o caminho da listagem de preços/endpoints NÃO foi confirmado
+(a página consultada devolveu 404); (d) a chave do cache guarda o modelo
+PEDIDO, de modo que um acerto devolve a resposta do provedor que a produziu na
+primeira vez: estabilidade desejada para construir o conjunto, e NÃO evidência de
+reprodutibilidade; (e) **a geração não é reprodutível como processo**: uma API
+hospedada não dá build do servidor para fixar nem garantia de semente. O conjunto
+é reprodutível **como dado**: prompt, resposta bruta, modelo pedido e servido,
+provedor, preço, opções enviadas e veredito de cada exemplo estão guardados. Esta é
+a afirmação a fazer na documentação do conjunto.
+
+**Imperfeição de proveniência na run G (repetição de E):** o processo foi
+lançado antes de este commit e carregou os módulos de antes dele; os registros
+trazem o `git_sha` da árvore no momento em que a suíte gravou o `run_id`
+(`6167467`, posterior). A diferença entre o código que rodou (`09047ca`) e o
+carimbado só toca a máquina do professor, a proveniência, os papéis de perfil e a
+chave de cache de clientes hospedados: nada em `nodes/`, no grafo, na
+recuperação nem no caminho de requisição do Ollama.
+
+---
+
 ### Modelo de chat: 7B e 1.5B têm o MESMO template (hash), e o que os registros guardam do prompt (2026-10-22)
 
 Comparação feita por programa, não a olho: `POST /api/show` no Ollama do host
