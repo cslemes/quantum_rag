@@ -5463,6 +5463,79 @@ na mesma build: não feita.
 
 ---
 
+### O hash de QPY NÃO é identidade de circuito: o que varia, e as três divergências de A × A2 explicadas (2026-10-23)
+
+**Teste** (mesmo circuito serializado duas vezes no mesmo processo; mesmo código executado duas vezes no mesmo processo; mesmo código em processos diferentes):
+
+| caso | mesmo objeto, 2 `dump` | mesmo código 2×, 1 processo | entre processos |
+|---|---|---|---|
+| circuito sem nome (`QuantumCircuit(2)`) | idêntico | **difere** | igual só na mesma posição da sequência |
+| circuito com `name=` fixo, sem parâmetros | idêntico | idêntico | idêntico |
+| com `Parameter` | idêntico | **difere** | **difere** |
+| com `ParameterVector` | idêntico | **difere** | **difere** |
+| circuito de biblioteca composto (`WeightedAdder`) | idêntico | **difere** (57 bytes) | — |
+
+**O que varia, nos bytes:** (1) o nome automático `circuit-N` usa um contador
+global do processo (`circuit-160` contra `circuit-161`), então o mesmo código dá
+bytes diferentes conforme a posição do circuito na vida do processo; (2) os
+nomes das instruções de blocos de biblioteca carregam um sufixo hexadecimal
+aleatório (`circuit-160_31746786` contra `circuit-163_983f8770`); (3) cada
+`Parameter` é serializado com um UUID aleatório. O tamanho em bytes é
+estável (2731 nas duas), o conteúdo não.
+
+**As três divergências de A × A2** (`ising_weighted_maxcut_4q`, sementes 1–3) se
+explicam assim: o código gerado (`WeightedAdder(4, [1,2,3,4])`) é idêntico; o
+circuito de biblioteca composto serializa com nomes de instrução aleatórios; o
+`qpy_sha256_16` do erro `CircuitSerializationFailure` difere. **Não é
+divergência do gerador**: é a serialização. (Que esse circuito também não
+sobreviva ao `qpy.load`, Bug 21, é independente.)
+
+**Consequência para o pipeline de destilação:** o hash de QPY **deixa de ser
+usado como identidade de circuito**. Ele identifica *esses bytes* (o que o
+comentário do Bug 21 sempre disse), não o circuito. Substituto testado em
+cenário de teste (não adotado no código): um *fingerprint* canônico = SHA-256 de
+`[num_qubits, num_clbits, [(nome da operação, índices de qubit, índices de
+clbit, parâmetros como texto com `Parameter` pelo nome)]]` calculado sobre o
+circuito **depois de uma transpilação fixa** (`basis_gates=["cx","u"]`,
+`optimization_level=0`, `seed_transpiler=42`). Estável nos quatro casos testados
+(sem parâmetro, `Parameter`, `ParameterVector`, `WeightedAdder`); sobre as
+operações cruas ele falha para o bloco de biblioteca. Identifica estrutura, não
+equivalência. Para o pipeline: identidade da amostra = hash do TEXTO do código;
+identidade do circuito = o fingerprint canônico; QPY, se guardado, como carga
+útil para reconstrução, nunca como chave.
+
+---
+
+### Run G (repetição de E) — predição, e por que E foi fria (2026-10-23)
+
+**O buraco:** o §5.3 não tem uma repetição completa do protocolo vigente numa só
+build. G fecha isso: 7B, 120 tarefas, uma semente, **Ollama 0.40.8**,
+`reset_per_run`, mesmo código do laço e enunciados, comparada com E
+(`7fd09e27763b34ee`), que já existe.
+
+**A taxa de acerto do cache de E não foi gravada** (o relato por execução veio
+depois). O argumento de que E foi fria é o mesmo usado para A2: tempo de parede.
+E levou 81,7 min de relógio (04:16:54–05:38:37 UTC, inclui ~6 min de verificação)
+e 67,2 min de execução, contra 66,1 min de C. A razão por tarefa E/C tem mediana
+**1,04**; só 6 de 118 tarefas ficam abaixo de 0,5, e as 6 terminaram em caminhos
+diferentes (p.ex. `ghz_linear5_mixed`: C esgotou 5 tentativas e E teve sucesso
+na 3ª; `ising_field_coupling_3q`: 312 s contra 29 s, ambos em falha estática na 5ª),
+não em acertos de cache. O contraste é a primeira E, que **foi** um replay: 2,4
+min de execução (9 min de relógio), razão E/C com mediana 0,01 e 115 de 118
+tarefas abaixo de 0,5; e F18 mediu 3,7× mais rápido num piloto de 20 tarefas.
+Além disso `.cache/llm` tinha sido movido para fora antes da E fria.
+
+**Predição de G:** **0 de 120 diferenças** nas quatro métricas — status,
+classificação da tentativa 1, `final_code` byte a byte, sequência de erros —
+entre G e E, e também nas iterações. **Refutação:** qualquer tarefa diferente
+(uma é suficiente para negar identidade de repetição sob o protocolo vigente
+nessa build; então se analisa onde, no planejador ou depois). Esperado também: o
+cache de G aparece como `COLD` (0 acertos, ou só repetições de prompt dentro da
+própria execução); as chaves de E são do formato antigo e não podem casar com as
+atuais.
+
+---
+
 ### Modelo de chat: 7B e 1.5B têm o MESMO template (hash), e o que os registros guardam do prompt (2026-10-22)
 
 Comparação feita por programa, não a olho: `POST /api/show` no Ollama do host
