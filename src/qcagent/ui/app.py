@@ -42,7 +42,12 @@ from qcagent.llm.profiles import (
     reset_server_state,
 )
 from qcagent.retrieval.embedding import FastEmbedEmbedder
-from qcagent.ui.session import check_service_health, check_stored_circuit, run_streaming
+from qcagent.ui.session import (
+    check_service_health,
+    check_stored_circuit,
+    retrieval_index_status,
+    run_streaming,
+)
 from qcagent.validators.assertions import AssertionParseError, parse_assertions, render_assertion
 from qcagent.validators.sandbox import WorkerPool
 
@@ -213,6 +218,15 @@ def run(spec: str, profile: str = "", assertions: str = "", max_iter: int = 5) -
                 f"No generator profile named {profile[:64]!r} (choose one of {names}). "
                 "Nothing was generated.",
                 profile=None,
+            )
+            return
+        index = retrieval_index_status()  # live, now: the same verdict the health panel shows
+        if not index.usable:
+            yield from refused(
+                f"Retrieval index {index.summary()}. Nothing was generated: a run against a "
+                "different or missing corpus is a different system.",
+                profile=chosen.name,
+                state=f"index_{index.state}",
             )
             return
         status = probe(chosen)  # live, now — not what the page showed earlier

@@ -5377,6 +5377,57 @@ pontos (gate); mesmo código do laço e mesma semente. Gancho em
 
 ---
 
+### Cap. 6.5 — o replay da primeira E, como instância de "medir o que se pensa estar medindo"; e o que mudou no instrumento (2026-10-23)
+
+**A instância.** A primeira execução E (`82a2169098ea3783`) produziu 7/120,
+`compila@1` 20/120, veredito semântico 57/120 — números plausíveis, quase iguais
+aos de C — e eram um replay do cache de respostas de C. O cache (F18) era
+chaveado por `modelo|semente|system|prompt`; o NOME do modelo não mudou, a build
+do servidor sob ele sim (0.35.1 → 0.40.8). O gate de versão checou o servidor e
+passou; não vê o cache. **Nada na saída mostrava o replay:** o tempo (9 min
+contra 72) foi o único indício, e eu o li depois de já ter lançado a fila. Se
+não tivesse sido notado, teria entrado como "C vs E: a build do servidor não
+importa", justamente o oposto do que a E fria mediu (34 de 120 saídas do
+planejador diferem entre as duas builds, com entrada idêntica). O perigo não
+estava no cache: estava em ele ser invisível.
+
+**O que mudou (2026-10-23):**
+
+1. **Chave do cache** = tudo de que a resposta depende: `system`, `prompt`,
+   semente, `max_tokens` e a *identidade de quem responde*
+   (`BaseLLMClient.response_identity`): classe do cliente, modelo, e os atributos
+   de amostragem/roteamento que ele tem (`temperature`, `num_ctx`, `effort`,
+   `provider`, `send_temperature`, `headroom`, `thinking_headroom`, URL base nos
+   clientes de API). O `OllamaClient` acrescenta, **consultados ao vivo a cada
+   chamada**, a versão do servidor e o digest resolvido do modelo. Servidor que
+   não diz o que é → a chamada não usa o cache (nem lê, nem grava): uma chave
+   construída sobre um palpite é como nasce um acerto errado. Inclusão na chave
+   basta para a segurança: mudança vira miss frio, não acerto errado.
+   Efeito colateral: as entradas antigas deixam de casar (cache efetivamente frio
+   para todos os modelos). Testes: build, digest, cada parâmetro de amostragem,
+   `max_tokens`, semente e servidor mudo (`tests/unit/test_response_cache.py`).
+2. **Taxa de acerto do cache em toda execução:** cada registro agora traz
+   `llm_calls` e `cache_hits`; ao fim da suíte sai no stderr e em
+   `results/<run_id>/cache_summary.json` uma linha como
+   `response cache: 0/588 generator calls served from the cache (0.0%) — COLD`,
+   com `PARTLY WARM` e `REPLAY: almost nothing was asked of the model; this is
+   not a measurement` (≥ 90%). Lida de volta dos registros, não de um segundo
+   contador. Uma execução tida como fria e 90% quente, ou o inverso, fica visível
+   sem que ninguém precise lembrar de olhar. Não recusa a execução: um replay
+   pode ser desejado (retomar uma execução interrompida).
+3. **Painel de saúde da UI:** mostrava o tamanho do índice sem compará-lo com
+   nada. Agora usa a MESMA comparação do gate do runner
+   (`qcagent.retrieval.pin.index_status`): mostra "875 documents — matches the
+   pin" ou "REFUSED — 1019 documents, the pin says 875 …", e `/api/run` recusa
+   (evento `refused`, estado `index_mismatch|empty|missing|unreachable`) antes de
+   consultar o gerador. O campo tem agora um consumidor que pode falhar.
+
+**Fora de escopo, dito:** o painel e `/api/run` recusam em qualquer divergência
+com o pino, sem opção de override na UI (o override existe só na linha de
+comando, `--allow-index-mismatch`, carimbado no registro).
+
+---
+
 ### Modelo de chat: 7B e 1.5B têm o MESMO template (hash), e o que os registros guardam do prompt (2026-10-22)
 
 Comparação feita por programa, não a olho: `POST /api/show` no Ollama do host

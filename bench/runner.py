@@ -291,28 +291,34 @@ def check_retrieval_index(
     OVERRIDDEN ...`), as for the server version.
     """
     from qcagent.retrieval.index import COLLECTION
+    from qcagent.retrieval.pin import index_status, load_index_pin
 
-    pin = (yaml.safe_load(pin_file.read_text()) or {}).get("retrieval_index") or {}
-    try:
-        points = require_populated_index(client)
-    except EmptyIndexError as exc:
-        raise EnvironmentMismatchError(str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001 - any transport failure is a refusal
+    pin = load_index_pin(pin_file)
+    if pin.collection not in (None, COLLECTION):
+        raise EnvironmentMismatchError(
+            f"the pin names collection {pin.collection!r}, the code queries {COLLECTION!r}"
+        )
+    # The SAME comparison the UI health panel makes (qcagent.retrieval.pin).
+    status = index_status(client, pin, COLLECTION)
+    if status.state in ("missing", "empty"):
+        raise EnvironmentMismatchError(
+            f"collection {COLLECTION!r}: {status.summary()}. Refusing to start: every run would "
+            "fail in the retriever, or measure a generator with no RAG that is reported as "
+            "though it had one."
+        )
+    if status.state == "unreachable":
         raise EnvironmentMismatchError(
             f"the retrieval index (Qdrant at {settings.qdrant_url}) cannot be reached: "
-            f"{type(exc).__name__}. Refusing to start: start the Qdrant container and "
+            f"{status.reason}. Refusing to start: start the Qdrant container and "
             "re-run; the suite would otherwise fail in the retriever on every task."
-        ) from exc
-
-    stamps = {"qdocs_points": str(points)}
-    expected = pin.get("expected_points")
-    if pin.get("collection") not in (None, COLLECTION):
-        raise EnvironmentMismatchError(
-            f"the pin names collection {pin['collection']!r}, the code queries {COLLECTION!r}"
         )
-    if expected is None:
+
+    points = status.points
+    stamps = {"qdocs_points": str(points)}
+    expected = pin.expected_points
+    if status.state == "not_pinned":
         stamps["qdocs_points_gate"] = "not pinned"
-    elif points == expected:
+    elif status.state == "ok":
         stamps["qdocs_points_gate"] = "matched"
         stamps["qdocs_points_expected"] = str(expected)
     elif config.allow_index_mismatch:
@@ -455,10 +461,11 @@ class Usage:
     output_tokens: int = 0
     cost_usd: float = 0.0
     calls: int = 0
+    cache_hits: int = 0
     num_ctx: int | None = None
 
     def reset(self) -> None:
-        self.input_tokens = self.output_tokens = self.calls = 0
+        self.input_tokens = self.output_tokens = self.calls = self.cache_hits = 0
         self.cost_usd = 0.0
 
 
@@ -511,6 +518,8 @@ class AccountingLLM(BaseLLMClient):
             system=system, prompt=prompt, seed=seed, max_tokens=max_tokens
         )
         self.usage.calls += 1
+        if getattr(self.inner, "last_call_cache_hit", False):
+            self.usage.cache_hits += 1
         self.usage.input_tokens += response.input_tokens
         self.usage.output_tokens += response.output_tokens
         self.usage.cost_usd += response.cost_usd
@@ -578,6 +587,8 @@ def _record(
         trace=json.loads(json.dumps(state.get("trace", []), default=repr)),
         input_tokens=usage.input_tokens,
         output_tokens=usage.output_tokens,
+        llm_calls=usage.calls,
+        cache_hits=usage.cache_hits,
         num_ctx=usage.num_ctx,
         cost_usd=usage.cost_usd,
         latency_s=latency_s,
@@ -893,7 +904,42 @@ def run_suite(
                 sink.write(line + "\n")
                 sink.flush()  # append-only and durable per run, not per suite
                 print(f"{task.task_id} seed={seed} -> {record.status}", flush=True)
+    report_cache_use(jsonl)
     return jsonl
+
+
+def cache_use_summary(jsonl: Path) -> dict[str, object]:
+    """How much of the suite's generator traffic came from the response cache,
+    read back from the records so it is the record's number, not a second
+    counter. The first run E was a replay of run C that nothing in its output
+    showed; a run believed cold that is 90% warm, or the reverse, has to be
+    visible without anyone remembering to look."""
+    calls = hits = 0
+    for line in jsonl.read_text().splitlines():
+        record = json.loads(line)
+        calls += record.get("llm_calls") or 0
+        hits += record.get("cache_hits") or 0
+    rate = hits / calls if calls else 0.0
+    if calls == 0:
+        verdict = "NO GENERATOR CALLS RECORDED"
+    elif hits == 0:
+        verdict = "COLD: every call reached the model"
+    elif rate >= 0.9:
+        verdict = "REPLAY: almost nothing was asked of the model; this is not a measurement"
+    else:
+        verdict = "PARTLY WARM: part of the result is replayed responses"
+    return {"llm_calls": calls, "cache_hits": hits, "hit_rate": round(rate, 4), "verdict": verdict}
+
+
+def report_cache_use(jsonl: Path) -> None:
+    summary = cache_use_summary(jsonl)
+    (jsonl.parent / "cache_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    print(
+        f"response cache: {summary['cache_hits']}/{summary['llm_calls']} generator calls "
+        f"served from the cache ({float(summary['hit_rate']):.1%}) — {summary['verdict']}",
+        file=sys.stderr,
+        flush=True,
+    )
 
 
 def _graph_runner(

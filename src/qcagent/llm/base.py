@@ -61,6 +61,23 @@ class BaseLLMClient(ABC):
 
     model_id: str
     cache_dir: Path = CACHE_DIR
+    # Whether the LAST `generate` call was answered from the disk cache. The
+    # accounting wrapper reads it so a run can say how much of it was replayed:
+    # a replay that nothing reports looks exactly like a measurement.
+    last_call_cache_hit: bool = False
+
+    # Attributes, when present on the client, that change what it returns. They
+    # go into the cache key (see `response_identity`).
+    _IDENTITY_ATTRS = (
+        "effort",
+        "provider",
+        "send_temperature",
+        "temperature",
+        "headroom",
+        "thinking_headroom",
+        "num_ctx",
+        "_base_url",
+    )
 
     @abstractmethod
     def _generate_impl(
@@ -77,16 +94,48 @@ class BaseLLMClient(ABC):
     def generate(
         self, *, system: str, prompt: str, seed: int, max_tokens: int = 4096
     ) -> LLMResponse:
-        key = self._cache_key(system=system, prompt=prompt, seed=seed)
-        cached = self._cache_load(key)
-        if cached is not None:
-            return cached
+        self.last_call_cache_hit = False
+        identity = self.response_identity()
+        # None means the identity could not be established (a server that
+        # cannot be asked what it is): the cache is then neither read nor
+        # written, since a key built on a guess is how a wrong hit happens.
+        key = (
+            None
+            if identity is None
+            else self._cache_key(
+                system=system, prompt=prompt, seed=seed, max_tokens=max_tokens, identity=identity
+            )
+        )
+        if key is not None:
+            cached = self._cache_load(key)
+            if cached is not None:
+                self.last_call_cache_hit = True
+                return cached
 
         response = self._generate_with_retry(
             system=system, prompt=prompt, seed=seed, max_tokens=max_tokens
         )
-        self._cache_save(key, response)
+        if key is not None:
+            self._cache_save(key, response)
         return response
+
+    def response_identity(self) -> dict[str, str] | None:
+        """Everything, besides system/prompt/seed/max_tokens, that the response
+        depends on: the client, the model, and the sampling/routing attributes
+        it was built with. Subclasses that talk to a server whose build or
+        model file can change under the same name add those (OllamaClient adds
+        the server version and the resolved model digest).
+
+        Anything that can change the response and is absent here is a
+        silent-replay path (F18): a change then produces a WRONG HIT, where
+        including it produces a cold miss, which is safe.
+        """
+        identity = {"client": type(self).__name__, "model": self.model_id}
+        for attr in self._IDENTITY_ATTRS:
+            value = getattr(self, attr, None)
+            if value is not None:
+                identity[attr.lstrip("_")] = str(value)
+        return identity
 
     def _generate_with_retry(
         self, *, system: str, prompt: str, seed: int, max_tokens: int
@@ -108,12 +157,27 @@ class BaseLLMClient(ABC):
 
     # -- Response cache (FR-028) ------------------------------------------
     #
-    # Keyed by hash(system + prompt + model + seed), so re-running an
-    # identical attempt (e.g. resuming an interrupted matrix run, T054b)
-    # never re-pays API cost for analysis that's already been done.
+    # Keyed by hash(everything the response depends on): the request (system,
+    # prompt, seed, max_tokens) AND the identity of what answers it (model,
+    # resolved digest, server build, sampling parameters — `response_identity`).
+    # Re-running an identical attempt against the identical system (e.g.
+    # resuming an interrupted matrix run, T054b) never re-pays for analysis
+    # already done; any change to the system is a cold miss, not a replay.
 
-    def _cache_key(self, *, system: str, prompt: str, seed: int) -> str:
-        raw = f"{self.model_id}|{seed}|{system}|{prompt}".encode()
+    def _cache_key(
+        self, *, system: str, prompt: str, seed: int, max_tokens: int, identity: dict[str, str]
+    ) -> str:
+        raw = json.dumps(
+            {
+                "identity": identity,
+                "seed": seed,
+                "max_tokens": max_tokens,
+                "system": system,
+                "prompt": prompt,
+            },
+            sort_keys=True,
+            ensure_ascii=False,
+        ).encode()
         return hashlib.sha256(raw).hexdigest()
 
     def _cache_path(self, key: str) -> Path:

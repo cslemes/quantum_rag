@@ -254,6 +254,18 @@ instâncias, todas de **estado ambiente herdado**.
 - Teste fora do regime de produção passa, por melhor que seja — e o regime
   tem de corresponder à pergunta, não só ao ambiente: o piso zero foi medido
   em produção, mas por replay, e a pergunta era independência (F19, F28)
+- **Um número que parece medição e é replay, sem nada na saída que o mostre.** A
+  primeira execução E (7B no Ollama 0.40.8) deu 7/120, `compila@1` 20/120, em 9
+  minutos; era o cache de respostas da execução C, chaveado pelo NOME do modelo,
+  e a build do servidor sob esse nome tinha mudado. Foi pega por acaso (o tempo:
+  9 min contra 72), não por qualquer saída do instrumento. O gate de versão
+  checou o servidor e passou, porque ele não vê o cache. Correção: o cache passa
+  a ser chaveado por tudo de que a resposta depende (digest resolvido do modelo,
+  build do servidor, parâmetros de amostragem, `max_tokens`), de modo que uma
+  mudança é um miss frio e não um acerto errado; e toda execução termina
+  declarando quantas chamadas vieram do cache (COLD / PARTLY WARM / REPLAY), no
+  registro e no stderr. Segunda instância do mesmo mecanismo (F18 foi a
+  primeira): o perigo não era o cache, era ele ser invisível
 
 ### 6.6 Diagnóstico e reparo
 

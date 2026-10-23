@@ -87,6 +87,10 @@ class RunRecord(BaseModel):
     gen_tok_s: float | None = None
     gpu_memory_used_mib: int | None = None  # D10c
     gpu_processor: str | None = None  # ex.: "100% GPU" — detecta offload
+    # How much of this run's generator traffic was answered from the response
+    # cache (F18). None on records written before this field existed.
+    llm_calls: int | None = None
+    cache_hits: int | None = None
     git_sha: str
     lib_versions: dict[str, str]
     timestamp: str

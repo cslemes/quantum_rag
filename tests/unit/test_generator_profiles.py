@@ -291,6 +291,16 @@ def test_identity_stamps_name_things_but_carry_no_url_or_credential(monkeypatch)
 # ----------------------------- UI: no silent fallback ------------------------
 
 
+@pytest.fixture(autouse=True)
+def _index_ok(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests are about the PROFILE verdict; the retrieval index (a live
+    Qdrant) is substituted with a healthy one so a missing Qdrant cannot be the
+    reason a request is refused. The index verdict has its own tests below."""
+    from qcagent.retrieval.pin import IndexStatus
+
+    monkeypatch.setattr(ui, "retrieval_index_status", lambda: IndexStatus("ok", 875, 875))
+
+
 class _Boom:
     def __call__(self, *a, **k):
         raise AssertionError("a client/graph was built for a refused request")
@@ -459,3 +469,60 @@ def test_a_profiled_run_never_compares_against_an_unprofiled_one() -> None:
     with pytest.raises(IncomparableRunsError, match="profile"):
         check_comparable([_rec()], [_rec(profile="local-7b")])
     check_comparable([_rec(profile="local-7b")], [_rec(profile="local-7b")])
+
+
+# ----------------------------- UI: the index has a verdict --------------------
+
+
+def test_run_is_refused_when_the_index_differs_from_the_pin(monkeypatch) -> None:
+    from qcagent.retrieval.pin import IndexStatus
+
+    monkeypatch.setattr(ui, "retrieval_index_status", lambda: IndexStatus("mismatch", 1019, 875))
+    monkeypatch.setattr(ui, "probe", _Boom())  # must refuse BEFORE anything else is asked
+    text = TestClient(ui.app).get("/api/run", params={"spec": "x", "profile": "local-7b"}).text
+    assert "event: refused" in text and "1019" in text and "875" in text
+    assert "index_mismatch" in text
+
+
+def test_health_shows_the_size_with_its_verdict_against_the_pin(monkeypatch) -> None:
+    from qcagent.retrieval.pin import IndexStatus
+    from qcagent.ui import session
+
+    monkeypatch.setattr(session, "retrieval_index_status", lambda: IndexStatus("ok", 875, 875))
+    assert session.check_service_health() == {
+        "qdrant": "875 documents — matches the pin",
+        "qdrant_state": "ok",
+    }
+    monkeypatch.setattr(
+        session, "retrieval_index_status", lambda: IndexStatus("mismatch", 1019, 875)
+    )
+    health = session.check_service_health()
+    assert health["qdrant"].startswith("REFUSED — 1019 documents, the pin says 875")
+    assert health["qdrant_state"] == "mismatch"
+
+
+def test_index_status_classifies_missing_empty_unreachable_ok_and_mismatch() -> None:
+    from types import SimpleNamespace
+
+    from qcagent.retrieval.pin import IndexPin, index_status
+
+    class Q:
+        def __init__(self, exists=True, points=875, boom=False):
+            self.exists, self.points, self.boom = exists, points, boom
+
+        def collection_exists(self, name):
+            if self.boom:
+                raise ConnectionRefusedError
+            return self.exists
+
+        def count(self, name, exact=True):
+            return SimpleNamespace(count=self.points)
+
+    pin = IndexPin("qdocs", 875)
+    assert index_status(Q(), pin, "qdocs").state == "ok"
+    assert index_status(Q(points=1019), pin, "qdocs").state == "mismatch"
+    assert index_status(Q(points=0), pin, "qdocs").state == "empty"
+    assert index_status(Q(exists=False), pin, "qdocs").state == "missing"
+    assert index_status(Q(boom=True), pin, "qdocs").state == "unreachable"
+    assert not index_status(Q(points=1019), pin, "qdocs").usable
+    assert index_status(Q(points=5), IndexPin(None, None), "qdocs").state == "not_pinned"

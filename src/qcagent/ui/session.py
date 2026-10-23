@@ -435,23 +435,25 @@ def _rendered(assertion: Any) -> str:
     return render_assertion(assertion)
 
 
+def retrieval_index_status():
+    """The live index compared with its pin (`qcagent.retrieval.pin`): the same
+    comparison the suite runner refuses on. Module-level so the run endpoint and
+    the health panel share one answer, and tests can substitute it."""
+    from qdrant_client import QdrantClient
+
+    from qcagent.retrieval.index import COLLECTION
+    from qcagent.retrieval.pin import index_status, load_index_pin
+
+    return index_status(QdrantClient(url=settings.qdrant_url), load_index_pin(), COLLECTION)
+
+
 def check_service_health() -> dict[str, str]:
     """Reports what retrieval depends on. The GENERATOR is no longer here: it is
     a profile, probed live per profile (`/api/profiles`), because a single
-    "generator: ok" line cannot say which backend it is about."""
-    from qdrant_client import QdrantClient
+    "generator: ok" line cannot say which backend it is about.
 
-    health = {}
-    try:
-        client = QdrantClient(url=settings.qdrant_url)
-        from qcagent.retrieval.index import COLLECTION
-
-        points = (
-            client.count(COLLECTION, exact=True).count
-            if client.collection_exists(COLLECTION)
-            else 0
-        )
-        health["qdrant"] = f"{points} documents" if points else "EMPTY — run `make index`"
-    except Exception as exc:  # noqa: BLE001
-        health["qdrant"] = f"unreachable: {exc}"
-    return health
+    The index size is shown WITH its verdict against the pin, and the run
+    endpoint refuses on the same verdict: a count nothing is compared with, and
+    nothing can refuse on, is decoration."""
+    status = retrieval_index_status()
+    return {"qdrant": status.summary(), "qdrant_state": status.state}

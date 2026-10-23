@@ -49,6 +49,11 @@ class AnthropicClient(BaseLLMClient):
         self.model_id = model_id
         self._client = anthropic.Anthropic(api_key=api_key)
         self.stop_reasons: dict[str, int] = {}
+        # Module constants that shape the response, exposed so they enter the
+        # cache key (`BaseLLMClient.response_identity`): changing either must
+        # be a cold miss, not a replay of the old setting's answers.
+        self.effort = EFFORT
+        self.thinking_headroom = THINKING_HEADROOM_TOKENS
 
     def _generate_impl(
         self, *, system: str, prompt: str, seed: int, max_tokens: int

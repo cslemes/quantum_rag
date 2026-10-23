@@ -209,6 +209,35 @@ class OllamaClient(BaseLLMClient):
         self.keep_alive = keep_alive
         self._client = httpx.Client(base_url=self.base_url, timeout=300.0)
 
+    def response_identity(self) -> dict[str, str] | None:
+        """The base identity plus what the SERVER is: its build and the resolved
+        digest of the model it serves under this name. Asked live on every call:
+        the host's Ollama has updated itself under a pinned name more than once
+        (0.35.1 -> 0.40.7 -> 0.40.8), and a cache keyed on the model name alone
+        replayed one build's answers as another's (the first run E).
+
+        None when the server cannot say what it is, which makes the call
+        uncacheable rather than keyed on a guess.
+        """
+        base = super().response_identity()
+        try:
+            version = self._client.get("/api/version", timeout=5.0).raise_for_status().json()
+            models = self._client.get("/api/tags", timeout=5.0).raise_for_status().json()
+            digest = next(
+                (
+                    m.get("digest")
+                    for m in models.get("models", [])
+                    if self.model_id in (m.get("name"), m.get("model"))
+                ),
+                None,
+            )
+            server_version = str(version["version"])
+        except (httpx.HTTPError, KeyError, TypeError, ValueError):
+            return None
+        if base is None or not digest:
+            return None
+        return {**base, "server_version": server_version, "model_digest": str(digest)}
+
     def count_tokens(self, text: str) -> int:
         """Conservative pre-flight estimate (~4 chars/token). Deliberately
         approximate and biased to over-count, so the anti-truncation guard
