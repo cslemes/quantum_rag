@@ -529,7 +529,7 @@ estável, a *ordem* não, e a ordem é a ordem em que aparecem no prompt. **Font
 3**: o estado interno do servidor entre tarefas (cache de prompt e KV)
 descarregado uma vez por execução, não por (tarefa, semente). **Fonte 4**: a
 própria build do servidor (abaixo). **[a]**, com os números de cada etapa. O
-teste que validou `temperature=0` foram quatro chamadas do mesmo prompt,
+teste feito para confirmar `temperature=0` foi de quatro chamadas do mesmo prompt,
 quentes, em sequência: provou que o modelo é determinístico dado um prompt, e
 não que o prompt era o mesmo.
 
