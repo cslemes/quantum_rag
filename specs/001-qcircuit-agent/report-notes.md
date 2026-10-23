@@ -5590,7 +5590,7 @@ a afirmação a fazer na documentação do conjunto.
 **Imperfeição de proveniência na run G (repetição de E):** o processo foi
 lançado antes de este commit e carregou os módulos de antes dele; os registros
 trazem o `git_sha` da árvore no momento em que a suíte gravou o `run_id`
-(`6167467`, posterior). A diferença entre o código que rodou (`09047ca`) e o
+(`8e2ed92`, posterior; o commit `6167467` é o que mudou o código). A diferença entre o código que rodou (`09047ca`) e o
 carimbado só toca a máquina do professor, a proveniência, os papéis de perfil e a
 chave de cache de clientes hospedados: nada em `nodes/`, no grafo, na
 recuperação nem no caminho de requisição do Ollama.
