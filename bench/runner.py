@@ -161,6 +161,11 @@ class RunConfig(BaseModel):
             profile = get_profile(self.profile)
         except ProfileError as exc:
             raise ValueError(str(exc)) from exc
+        if profile.role != "generator":
+            raise ValueError(
+                f"profile {profile.name!r} is a {profile.role} profile; a regression run "
+                "uses generator profiles only"
+            )
         self.model = profile.model
         self.provider = "ollama" if profile.client_type == "ollama" else "openai_compatible"
         self.reset_per_run = profile.determinism.reset_strategy == "per_run"

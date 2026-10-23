@@ -24,6 +24,7 @@ from typing import Final
 import httpx
 
 from qcagent.llm.base import BaseLLMClient, LLMResponse, TransientProviderError
+from qcagent.llm.provenance import UNAVAILABLE, build_provenance
 
 DEFAULT_BASE_URL: Final = "https://openrouter.ai/api/v1"
 
@@ -48,7 +49,22 @@ EFFORT: Final = "high"
 _TRANSIENT_STATUS = {408, 429, 500, 502, 503, 504}
 
 
+class ProviderReportedError(Exception):
+    """A 200 response whose choice carries an error (`error`, or
+    `finish_reason == "error"`). Not transient, not a completion, never cached;
+    the provenance of the failed call travels with it."""
+
+    def __init__(self, message: str, *, provenance: dict) -> None:
+        super().__init__(message)
+        self.provenance = provenance
+
+
 class OpenRouterClient(BaseLLMClient):
+    # Off for the historical API arms (their behaviour is unchanged); on for
+    # `OpenAICompatibleClient`, where an errored choice must not become empty,
+    # cached text.
+    raise_on_choice_error: bool = False
+
     def __init__(
         self,
         api_key: str,
@@ -111,6 +127,24 @@ class OpenRouterClient(BaseLLMClient):
             )
         latency_s = time.perf_counter() - start
         data = response.json()
+        provenance = build_provenance(
+            requested_model=self.model_id,
+            body=body,
+            http_status=response.status_code,
+            data=data,
+        )
+
+        if self.raise_on_choice_error:
+            choice_error = provenance["derived"]["choice_error"]
+            reason = provenance["derived"]["finish_reason"]
+            if choice_error not in (UNAVAILABLE,) or reason == "error":
+                # A 200 whose choice reports an error is not a completion. Left
+                # alone it would come back as empty text and be CACHED, then
+                # served again as if it were the model's answer.
+                raise ProviderReportedError(
+                    f"choice error: {choice_error!r}, finish_reason {reason!r}",
+                    provenance=provenance,
+                )
 
         served = str(data.get("provider", "unknown"))
         self.served_by[served] = self.served_by.get(served, 0) + 1
@@ -133,6 +167,7 @@ class OpenRouterClient(BaseLLMClient):
             cost_usd=cost_usd,
             latency_s=latency_s,
             model_id=self.model_id,
+            provenance=provenance,
         )
 
     def count_tokens(self, text: str) -> int:

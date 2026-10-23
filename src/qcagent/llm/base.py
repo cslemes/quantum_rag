@@ -11,6 +11,7 @@ import hashlib
 import json
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel
 from tenacity import Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -31,6 +32,10 @@ class LLMResponse(BaseModel):
     # to RunRecord so the *effective* value is in the result, not only in
     # config (tasks.md T011c).
     num_ctx: int | None = None
+    # What actually served the call (qcagent.llm.provenance): None for clients
+    # that do not record it. Stored in the cache entry with the response, so a
+    # cache hit reports the provenance of the call that produced it.
+    provenance: dict[str, Any] | None = None
 
 
 class TransientProviderError(Exception):
@@ -76,6 +81,7 @@ class BaseLLMClient(ABC):
         "headroom",
         "thinking_headroom",
         "num_ctx",
+        "provider_options",
         "_base_url",
     )
 

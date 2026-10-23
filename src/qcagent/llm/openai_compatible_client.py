@@ -13,12 +13,16 @@ It is never stored on the instance as an attribute and never formatted into a
 message (see `redact`).
 """
 
+import json
+
 import httpx
 
 from qcagent.llm.openrouter_client import OpenRouterClient
 
 
 class OpenAICompatibleClient(OpenRouterClient):
+    raise_on_choice_error = True
+
     def __init__(
         self,
         api_key: str,
@@ -29,6 +33,7 @@ class OpenAICompatibleClient(OpenRouterClient):
         pricing_usd_per_mtok: tuple[float, float] | None = None,
         max_tokens_headroom: int = 0,
         timeout_s: float = 300.0,
+        provider_options: dict | None = None,
     ) -> None:
         # Deliberately does not call OpenRouterClient.__init__: it demands an
         # OpenRouter pricing entry and pins an upstream provider.
@@ -38,6 +43,12 @@ class OpenAICompatibleClient(OpenRouterClient):
         self.temperature = temperature
         self.pricing = pricing_usd_per_mtok
         self.headroom = max_tokens_headroom
+        # The routing options sent in the `provider` object. Held as canonical
+        # JSON so they enter the response-cache key (`response_identity`): an
+        # entry produced without them must never answer a request with them.
+        self.provider_options = (
+            json.dumps(provider_options, sort_keys=True) if provider_options else None
+        )
         self._base_url = base_url.rstrip("/")
         self._http = httpx.Client(timeout=timeout_s, headers={"Authorization": f"Bearer {api_key}"})
         self.finish_reasons: dict[str, int] = {}
@@ -55,6 +66,8 @@ class OpenAICompatibleClient(OpenRouterClient):
         }
         if self.temperature is not None:
             body["temperature"] = self.temperature
+        if self.provider_options is not None:
+            body["provider"] = json.loads(self.provider_options)
         return body
 
     def _cost(self, input_tokens: int, output_tokens: int) -> float:

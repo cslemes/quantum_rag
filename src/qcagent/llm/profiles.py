@@ -63,6 +63,23 @@ class Determinism(BaseModel):
     num_ctx: int | None = None
 
 
+class ProviderOptions(BaseModel):
+    """The routing options a profile may send, by NAME. Not an open dict: a
+    free-form `provider` object is where a silent routing change or a stray
+    credential would get in. A new key is a code change and a review."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    # Restrict routing to models whose author allows text distillation.
+    enforce_distillable_text: bool | None = None
+
+    def as_body(self) -> dict:
+        return {k: v for k, v in self.model_dump().items() if v is not None}
+
+
+Role = Literal["generator", "teacher"]
+
+
 class Profile(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -81,6 +98,12 @@ class Profile(BaseModel):
     credential_env: str | None = None
     determinism: Determinism = Determinism()
     pricing_usd_per_mtok: tuple[float, float] | None = None
+    # `teacher` is an explicit marker for a profile that produces TRAINING DATA.
+    # It is held to a stricter rule than a generator: it cannot exist without
+    # the distillation guarantee in its routing options (checked here AND again
+    # when the client is built).
+    role: Role = "generator"
+    provider_options: ProviderOptions | None = None
     # Shown when the backend is unreachable: what must already be up.
     setup_hint: str | None = None
 
@@ -119,7 +142,21 @@ class Profile(BaseModel):
                 raise ValueError("an openai_compatible endpoint has no server version to pin")
             if self.credential_env is None:
                 raise ValueError("an openai_compatible profile needs credential_env")
+        if self.provider_options is not None and self.client_type != "openai_compatible":
+            raise ValueError("provider_options apply to an openai_compatible profile only")
+        if self.role == "teacher":
+            if self.client_type != "openai_compatible":
+                raise ValueError("a teacher profile must be openai_compatible (a hosted API)")
+            if not teacher_guarantee_present(self.provider_options):
+                raise ValueError(
+                    "a teacher profile must set provider_options.enforce_distillable_text: "
+                    "true — without it the training data has no licensing guarantee"
+                )
         return self
+
+
+def teacher_guarantee_present(options: "ProviderOptions | None") -> bool:
+    return options is not None and options.enforce_distillable_text is True
 
 
 class ProfileSet(BaseModel):
@@ -326,6 +363,14 @@ def build_client(profile: Profile, *, env_file: Path = ENV_FILE) -> BaseLLMClien
     if url is None:
         raise ProfileError(f"profile {profile.name!r} has no base URL")
     d = profile.determinism
+    if profile.role == "teacher" and not teacher_guarantee_present(profile.provider_options):
+        # Schema validation already refuses this; checked again here because a
+        # model built around the validators (`model_construct`) would otherwise
+        # produce a teacher client with no licensing guarantee.
+        raise ProfileError(
+            f"profile {profile.name!r} is a teacher profile without "
+            "provider_options.enforce_distillable_text: true; refusing to build a client"
+        )
     if profile.client_type == "ollama":
         from qcagent.llm.ollama_client import OllamaClient
 
@@ -344,6 +389,7 @@ def build_client(profile: Profile, *, env_file: Path = ENV_FILE) -> BaseLLMClien
         url,
         temperature=d.temperature,
         pricing_usd_per_mtok=profile.pricing_usd_per_mtok,
+        provider_options=profile.provider_options.as_body() if profile.provider_options else None,
     )
 
 

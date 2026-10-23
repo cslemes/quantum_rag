@@ -130,13 +130,14 @@ def profiles() -> dict:
     startup: the natural order is app, then pod, then tunnel, so a boot-time
     read would show a false 'unreachable' for a backend that is up now."""
     loaded = load_profiles()
-    with ThreadPoolExecutor(max_workers=max(1, len(loaded.profiles))) as pool:
-        statuses = list(pool.map(probe, loaded.profiles))
+    # Teacher profiles produce training data; they are not offered as generators.
+    shown = [p for p in loaded.profiles if p.role == "generator"]
+    with ThreadPoolExecutor(max_workers=max(1, len(shown))) as pool:
+        statuses = list(pool.map(probe, shown))
     return {
         "default": loaded.default,
         "profiles": [
-            _public(p, st, default=loaded.default)
-            for p, st in zip(loaded.profiles, statuses, strict=True)
+            _public(p, st, default=loaded.default) for p, st in zip(shown, statuses, strict=True)
         ],
     }
 
@@ -213,11 +214,18 @@ def run(spec: str, profile: str = "", assertions: str = "", max_iter: int = 5) -
         try:
             chosen = get_profile(profile)
         except ProfileError:
-            names = [p.name for p in load_profiles().profiles]
+            names = [p.name for p in load_profiles().profiles if p.role == "generator"]
             yield from refused(
                 f"No generator profile named {profile[:64]!r} (choose one of {names}). "
                 "Nothing was generated.",
                 profile=None,
+            )
+            return
+        if chosen.role != "generator":
+            yield from refused(
+                f"Profile {chosen.name!r} is a teacher profile (training data), not a generator. "
+                "Nothing was generated.",
+                profile=chosen.name,
             )
             return
         index = retrieval_index_status()  # live, now: the same verdict the health panel shows
