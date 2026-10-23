@@ -15,7 +15,8 @@ sequence on ONE server build (Ollama 0.34.1, single model unload, 2026-09-22),
 divergence was 0/360 on every axis (SC-008 as amended, research.md D20). That
 is replay-identity, not task independence (F28), and it does not carry across
 server builds (0.35.1 vs 0.40.8: 34/120 planner outputs differ).
-`divergence_rate` is measured over tasks present in both runs, and a run comparing different code is expected to diverge — the
+`divergence_rate` is measured over tasks present in both runs, and a run
+comparing different code is expected to diverge — the
 criterion is a stability claim about the harness, not a quality claim about
 a change.
 """
