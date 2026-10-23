@@ -133,6 +133,31 @@ O que foi verificado, como, e o que não foi. O caso sem asserção.
 Diagrama, distribuição, streaming das tentativas, a afordância de rascunho e o
 `circular=True`.
 
+### 3.8 Requisitos extraídos por LLM: vetam, nunca estabelecem
+
+*Decisão de desenho.* O planner lê a descrição e extrai requisitos verificáveis
+(`n_qubits`, `gate_set`). A comparação com o circuito gerado é determinística
+(um inteiro, uma diferença de conjuntos); a **premissa** não é, é a leitura de um
+modelo de linguagem. O peso do resultado depende da direção, e por isso o
+desenho é assimétrico:
+
+- requisito que **passa** diz apenas "o circuito concorda com o que o planner
+  leu"; não estabelece `functional_correctness_verified`;
+- requisito que **reprova** é uma discordância diretamente checável entre o
+  circuito e a descrição; **veta** a alegação de corretude no caminho de produto;
+- valor que não dá para avaliar (`"three"`, `"hadamard"` como nome de porta) é
+  "não checável": não veta nada e nunca é reportado como reprovação do circuito;
+- no caminho da suíte, um requisito reprovado **não** veta `semantic.passed`: um
+  oráculo verificado é verdade-terreno (Princípio IV) e, quando os dois
+  discordam, quem errou foi o planner.
+
+Uma violação de requisito é reportada e bloqueia `success`, mas não entra na
+taxonomia fechada de `error_type` e não dispara `retry_generation`: fica fora do
+laço de reparo. A decisão é justificada por argumento, não por medida de que
+produza vereditos melhores; é o desenho, e é registrada como tal. Um defeito que
+ela exigiu corrigir está em §6.3: a coerção silenciosa de tipos antes da
+checagem. [FONTE: `report-notes.md`, F9]
+
 ---
 
 ## 4. A suíte de referência — ESSENCIAL
@@ -214,7 +239,7 @@ pergunta óbvia: o gargalo é a arquitetura ou o gerador?
 
 ## 6. Achados de engenharia — ESSENCIAL, e é o capítulo diferencial
 
-*Vinte e dois achados documentados com evidência medida. Poucos trabalhos deste
+*Trinta e dois achados documentados (F1–F32 em `report-notes.md`), agrupados em seis temas; cada um com o grau de evidência marcado (medido, mecanismo traçado num caso, ou fino). Poucos trabalhos deste
 porte têm isso. Cada subseção: a afirmação, as instâncias, a evidência, a
 generalização.*
 

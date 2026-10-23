@@ -7,18 +7,12 @@ GRAU DE EVIDÊNCIA. Cada achado traz, entre colchetes, o grau da evidência:
   [c] fino — afirmado nas notas sem nenhum dos dois.
 Os achados de grau [c] estão listados também no relatório de entrega, para decidir o que cortar.
 
-CONFLITOS COM O CAPÍTULO 5 (o capítulo 5 é a autoridade; onde diverge, a nota está velha — não escolhi em silêncio):
-  1. §5.2 diz que a taxa de regressão é "estável entre os dois estados anteriores". A leitura defensável é a mais fraca
-     usada em 6.5 (ambos os estados anteriores caem numa faixa de 46–64% e a rodada C fica abaixo dela). §5.2 precisa da mesma redação.
-  2. §5.3 atribui o "zero em 360" a um protocolo que inclui `reset_per_run`. As notas (F28; "Piso de ruído de replay medido: zero")
-     dizem que o zero foi medido sob reset único, no Ollama 0.34.1, e que mede determinismo de replay. §5.3 precisa ser corrigido.
-  3. §5.7 ainda carrega a predição da re-execução em 0.34.4 (5 a 9 de 120), aposentada. Os números das execuções E e F e a
-     comparação C×E (inclusive 34/120 e 102/120 abaixo) NÃO estão no capítulo 5; este capítulo os usa com a marca "[a pôr no cap. 5]".
-  4. O esqueleto fala em "vinte e dois achados"; as notas vão até F32.
+CONFLITOS COM O CAPÍTULO 5: resolvidos em 2026-10-23 (§5.2, §5.3, §5.7 e o esqueleto foram corrigidos; ver o histórico).
+  Resta uma pendência: o texto de substituição do §5.3 para o resultado do planejador citado no pedido não existe nos registros da
+  sessão; o parágrafo do §5.3 sobre as 34 de 120 foi escrito a partir das notas.
 
 LEITURAS A CONFIRMAR.
-  - "Lado consultivo" (6.5): li como "o enunciado do teste — hipótese, predição ou pedido de verificação — e não o código sob teste".
-    As quatro instâncias usadas estão no texto; confirme se são as suas quatro.
+  - "Lado consultivo" (6.5): as seis instâncias são as indicadas pelo autor; a terceira (GATES_SUBSET_OF) está rotulada como falha de revisão.
   - 6.4(c): o portão de versão, uma checagem de início de execução, FOI o que recusou. O que nenhuma checagem anterior ou
     feita em outro lugar teria pego é a atualização entre a leitura e o lançamento. Escrevi assim; uma atualização DURANTE a
     execução continua sem cobertura.
@@ -123,17 +117,16 @@ independente por ser editado, escrito noutra linguagem, vir de outra execução
 do mesmo modelo, nem de um modelo diferente — se todos derivam do mesmo
 requisito ambíguo ou do mesmo artefato, os erros são correlacionados pelo
 mesmo motivo que um modelo lendo duas vezes o mesmo texto erra duas vezes.
-Isso alcança **snapshot testing** (a primeira execução grava a saída como
-esperada, e se a implementação original estava errada o snapshot registra o
-erro como especificação, tornando invisível toda regressão em relação ao
-comportamento correto) e **testes escritos por um LLM para código escrito por
-um LLM**, que parecem verificação independente — há dois artefatos, em
-arquivos e momentos diferentes — enquanto a fonte do critério e a fonte do
-comportamento são a mesma. Trocar o modelo que escreve os testes muda a fonte
-do artefato sem mudar a fonte do critério, e é a segunda que precisava mudar.
-*(Esta generalização é um argumento por analogia com práticas conhecidas, não
-um resultado medido neste trabalho: [c] enquanto afirmação sobre práticas
-externas, [b] enquanto afirmação sobre este sistema.)*
+A mesma estrutura aparece em **snapshot testing**: a primeira execução grava a
+saída como esperada e as seguintes comparam contra ela, de modo que, se a
+implementação original estava errada, o snapshot registra o erro como
+especificação e o critério vem do artefato. A mesma estrutura aparece em
+**testes escritos por um LLM para código escrito por um LLM**: há dois
+artefatos, em arquivos e momentos diferentes, e a fonte do critério e a do
+comportamento é a mesma. Nenhum dos dois casos foi medido neste trabalho; são
+analogias estruturais com o caso medido acima, e valem como tais. Pela mesma
+estrutura, trocar o modelo que escreve os testes muda a fonte do artefato sem
+mudar a fonte do critério.
 
 ### Investigado e não confirmado: o orçamento de recursos "frouxo"
 
@@ -209,29 +202,23 @@ sinal QUBO→Ising (§6.1); e um controle fixo em vez de variável no oráculo
 perturbado de dois Deutsch–Jozsa, que, sendo o `CX` autoinverso, colapsaria
 silenciosamente para uma função de um único bit.
 
-**Evidência [a] para a contagem, [c] para o contrafactual.** Cinco erros, cada
-um reproduzido por computação. As notas afirmam que nenhum seria detectado "só
-lendo o circuito de referência e concordando que parece certo", mas isso é um
-contrafactual que nenhuma medição sustenta, e o total de referências
-construídas (o denominador) não está registrado junto da contagem.
+**Evidência [a].** Cinco erros em **120 referências construídas** (uma por
+tarefa da suíte: 114 circuitos QPY e 6 Hamiltonianos em JSON), cada erro
+reproduzido por computação.
 
-### O escopo real de uma gramática, definido por uso e não por revisão
+### O escopo de uma gramática, achado por uso
 
 Antes de implementar a gramática de asserções, três tarefas de tiers
 diferentes foram escritas à mão, sem consultar a especificação, para forçar à
-tona onde um usuário tropeçaria. O exercício revelou limites que uma rodada
-inteira de revisão da gramática proposta não revelara. O mais claro: toda
+tona onde um usuário tropeçaria. O exercício revelou limites de escopo. O mais claro: toda
 asserção, sem um mecanismo de preparar entrada, só testa comportamento a
 partir de `|0…0⟩`, e a QFT aplicada a `|0…0⟩` produz a mesma superposição
 uniforme que um `H` em cada qubit — nenhuma asserção ancorada só em `|0…0⟩`
 distingue uma QFT correta de uma implementação que não é QFT nenhuma. Isso
 motivou o prefixo `INPUT(…) THEN <asserção>`.
 
-**Evidência [b] para cada limite, [c] para a comparação.** O caso da QFT foi
-verificado por computação. A afirmação de que o exercício a frio definiu o
-escopo "mais do que qualquer revisão de desenho" é uma comparação entre dois
-métodos feita num único projeto, sem controle: é uma observação, não uma
-medida.
+**Evidência [b] para cada limite**, apresentados como ilustração. O caso da QFT
+foi verificado por computação.
 
 **Generalização.** Testar um verificador contra um defeito *injetado* revela
 lacunas estruturais que nenhum ajuste de tolerância revela, e o teste de
@@ -289,24 +276,18 @@ cerca de 220 unitários e de contrato. A concentração é a medida: o defeito
 dominante vivia na *relação* entre dois campos, que nenhum teste unitário
 exercia.
 
-### Uma premissa extraída por LLM pesa em uma direção só
+### Uma premissa extraída por um LLM: a coerção silenciosa
 
 Os requisitos que o planner extrai da descrição (`n_qubits`, `gate_set`) são
 checados de forma determinística contra o circuito gerado, mas a *premissa* é a
-leitura de um modelo de linguagem. O desenho é assimétrico: um requisito que
-passa diz apenas "o circuito concorda com o que o planner leu" e não
-estabelece corretude; um requisito que reprova veta a alegação de corretude no
-caminho de produto; um valor não avaliável é "não checável" e não vota. No
-caminho da suíte um requisito reprovado não veta o veredito semântico, porque
-um oráculo verificado é verdade-terreno e, quando discordam, errou o planner.
-Antes da checagem, a coerção silenciosa do Pydantic transformava
-`"value": true` num requisito de 1 qubit, `false` num de 0 e `3.0` em `3`,
-tratando-os como requisitos checados.
+leitura de um modelo de linguagem. Antes da checagem, a coerção silenciosa do
+Pydantic transformava `"value": true` num requisito de 1 qubit, `false` num de 0
+e `3.0` em `3`, tratando-os como requisitos checados: um valor que o planner
+não produziu como número virava um número a verificar. A regra de desenho que
+governa o peso desses requisitos ("requisitos vetam, nunca estabelecem") é uma
+decisão de desenho e está no capítulo 3 (§3.8).
 
-**Evidência [b] para a coerção, [c] para a regra.** A coerção é um defeito
-reproduzido. A regra "requisitos vetam, nunca estabelecem" é uma decisão de
-desenho justificada por argumento, sem medida de que ela produza vereditos
-melhores.
+**Evidência [b].** A coerção é um defeito reproduzido em casos individuais.
 
 ### Um campo gravado que nada verifica é decoração
 
@@ -355,10 +336,9 @@ sem que ninguém tenha verificado.
 **A afirmação.** Uma regra correta, enunciada num lugar, não alcança o código
 ao lado. As notas registram a classe de maior rendimento como **estado ambiente
 herdado**: tudo que o experimento herda do ambiente sem declarar nem fixar, e
-que pode alterar a medição. A prescrição que as notas extraem não é "regras
-não se propagam" (que prevê tudo e portanto nada), e sim que uma regra
-enunciada sobre uma *instância* não se propaga, e uma enunciada sobre uma
-*classe* pode se propagar *se existir mecanismo que falhe quando for violada*.
+que pode alterar a medição. Nomear a classe permite enumerar os candidatos
+(driver da GPU, binário do Ollama, estado interno do servidor), o que "regras
+não se propagam" não permite.
 
 ### Instâncias: o estado herdado e a pergunta que não se fez
 
@@ -394,22 +374,6 @@ enunciada sobre uma *instância* não se propaga, e uma enunciada sobre uma
   era feito uma vez por execução da suíte, não por (tarefa, semente); o cache
   interno de prompt e KV do Ollama carregava estado de uma tarefa para a
   seguinte (§6.5).
-
-**O mecanismo, medido sobre as próprias regras do projeto [c].** Quatro
-princípios da constituição do projeto, todos quantificados sobre uma classe
-("toda afirmação de corretude…", "toda tarefa…", "toda mudança…"), dois
-nasceram com um mecanismo que falha quando violado (um teste de arquitetura;
-um portão de validação de oráculos) e nunca foram violados; dois só ganharam o
-mecanismo depois de repetidas violações, e foram violados enquanto não o
-tinham (os vereditos de §6.3; as comparações entre execuções). A autoridade do
-documento não discrimina nada (os quatro estão no mesmo arquivo, com a mesma
-autoridade declarada). O que sobrevive é: quantificar sobre a classe é
-necessário e insuficiente, porque **não se escreve um mecanismo para uma regra
-sobre uma instância** — um teste para "`num_ctx` deve ser explícito" só pode
-checar `num_ctx`, não alcança `temperature`. As próprias notas listam as
-limitações: N = 4, com a ordem temporal confundida com a presença do
-mecanismo, e o período posterior à correção de dois deles com um dia de idade.
-É uma tese bem formulada com evidência fina, e é marcada **[c]**.
 
 ### Defesa à distância: três formas, agora com magnitude
 
@@ -544,7 +508,7 @@ ambiente: o "piso de ruído zero", **0 em 360**, foi medido em produção e em
 escala (execuções A e A2, Ollama 0.34.1), mas sob uma sequência de chamadas
 fixa e um único descarregamento do modelo. Mediu determinismo de *replay* —
 mesma história, mesma saída — e não que o resultado de uma tarefa independe das
-outras. O número estava certo; a leitura estava errada. Seis execuções
+outras. O número estava certo (re-derivado dos registros: nenhum dos 360 pares divergiu em status, código final, iterações, contagem de tokens nem sequência de erros, e as duas execuções levaram o mesmo tempo de parede por tarefa, mediana da razão 1,00, o que exclui que a segunda tenha sido servida pelo cache de respostas); a leitura estava errada. Seis execuções
 repetidas a frio mostraram `dj_constant_4q` idêntica nas três sementes e
 `qaoa_maxcut_4q_perturbed` divergente nas três; rodada sozinha, duas vezes,
 idêntica; precedida de `dj_constant_4q`, diferente. Com o descarregamento por
@@ -557,8 +521,9 @@ há independência sobre 360.
 Cometido duas vezes nas notas, e uma terceira depois. Primeiro, uma justificativa para a validação de
 nomes de portas em `GATES_SUBSET_OF` ("um nome digitado errado torna a asserção
 vacuamente verdadeira, mesma direção de falha das três instâncias anteriores")
-era convincente por casar com um padrão estabelecido e foi endossada antes de
-implementar; ao derivar a lógica de conjuntos, a alegação estava errada — uma
+era convincente por casar com um padrão estabelecido e foi confirmada na
+revisão antes de implementar (a falha de revisão é tratada abaixo, entre as
+seis premissas); ao derivar a lógica de conjuntos, a alegação estava errada — uma
 checagem de subconjunto é fail-closed por construção. **[b]** Depois, um *smoke*
 de quatro execuções após a correção de `ImportError` mostrou um sucesso e dois
 chegando ao semântico (contra zero antes) e foi lido como confirmação
@@ -628,9 +593,9 @@ mudança nessa coisa produz acertos errados, e a saída do teste parece idêntic
 
 ### Uma premissa não verificada sob um teste que parecia discriminar
 
-Registra-se aqui uma quarta instância de construir um teste discriminante sobre
-uma premissa não verificada, e ela tem uma origem comum. O teste da contagem de
-tokens assumia que o registro de erro armazenado serve de impressão digital da
+Registra-se aqui uma instância recente de construir um teste discriminante
+sobre uma premissa não verificada. O teste da contagem de tokens assumia que o
+registro de erro armazenado serve de impressão digital da
 tentativa: se o registro de erro é idêntico entre C e E e os tokens diferem,
 a causa seria a contagem do servidor, e não tentativas intermediárias
 diferentes. Não serve, e não pode servir: a taxonomia de erros é fechada, e
@@ -651,21 +616,45 @@ mostram que a contagem de prompt não mudou. **[a, n = 18 / 6]**: as 6 sustentam
 "tentativas intermediárias diferentes com o mesmo registro de erro", e nenhuma
 sustenta "a contagem mudou".
 
-As quatro instâncias que as notas permitem reconstituir são: a hipótese de
-que as sementes seriam redundantes sob `temperature=0` (a premissa, de que as
-duas execuções comparadas eram independentes, era do orientador); o teto de 9
-sucessos tratado como suspeito na predição de T090d (escrita no próprio
-registro, e retratada: a heurística de teto estava errada, e o controle é que
-decide); a premissa de que uma execução abortada por recursos tinha cinco
-`ResourceExcess` quando tinha um (estava no pedido de verificação); e o teste de
-contagem acima (também no pedido). Nas quatro, a premissa errada estava no
-enunciado do teste, na hipótese, na predição ou no pedido de verificação, antes
-de qualquer código rodar, e nenhuma foi produzida pelo código sob teste. Isso
-importa para o remédio: o que falta a um teste discriminante não é
-mais código, é uma checagem da premissa contra os registros *antes* de
-construir o teste em cima dela, que é barata quando os registros existem.
+**Seis premissas erradas do lado consultivo.** A palavra "consultivo" cobre aqui
+o enunciado do teste: a hipótese, a predição, o pedido de verificação e a
+revisão. Em nenhuma das seis o erro foi produzido pelo código sob teste; todas
+estavam no enunciado antes de qualquer código rodar.
 
----
+1. **As sementes redundantes sob `temperature=0`.** Hipótese do orientador: as
+   três sementes por tarefa seriam cópias, e a suíte poderia cair para um
+   terço. A refutação rodou sobre um instrumento que contaminava as sementes
+   umas com as outras (acima).
+2. **`oracle_kind="resource"` para o tier 4 (D3h).** A especificação previa esse
+   tipo de oráculo para as tarefas de recursos. Antes de qualquer construção,
+   `grep` mostrou que o despacho de `make_semantic_check_node` não tem ramo para
+   ele. As tarefas do tier 4 usam `statevector` ou `unitary`; o que as torna
+   tier 4 é o mapa de acoplamento, e a checagem de recursos é ortogonal ao tipo
+   de oráculo.
+3. **`GATES_SUBSET_OF`: "vacuamente verdadeiro" para um nome de porta
+   digitado errado. Falha de revisão, categoria distinta e pior.** A premissa
+   errada nasceu na proposta de desenho; foi confirmada na revisão por
+   reconhecimento de padrão ("mesma direção de falha das instâncias
+   anteriores"), e não por derivação. Uma premissa que nasce errada é um erro;
+   uma que passa pela revisão que existia para pegá-la é um erro com autoridade
+   emprestada, porque a revisão a legitima. Só a derivação da lógica de
+   conjuntos, ao implementar, a pegou.
+4. **Os cinco `ResourceExcess` e a gêmea não perturbada.** A premissa do pedido
+   de verificação era que a execução abortada por recursos tinha cinco
+   `ResourceExcess`; tinha um, na quinta tentativa. A investigação que partiu
+   dela adotou a profundidade da gêmea não perturbada como linha de base, e
+   chegou ao orçamento "frouxo" retratado em §6.1: a gêmea é outra tarefa.
+5. **O teste da contagem de tokens** (acima): o registro de erro não é impressão
+   digital da tentativa.
+6. **"Nenhuma verificação anterior à execução poderia ter pego a deriva de 37
+   minutos."** Afirmada no pedido que originou esta própria seção. É falsa: o
+   portão de versão, uma verificação de início de execução, foi o que recusou
+   (§6.4(c)); o que nenhuma verificação feita antes ou em outro lugar pega é a
+   atualização entre a leitura e o lançamento. **A sexta foi cometida enquanto a
+   seção que documenta o padrão estava sendo escrita.**
+
+O remédio comum às seis é barato quando os registros existem: checar a premissa
+contra eles *antes* de construir o teste em cima dela.
 
 ### A leitura da taxa de regressão
 
@@ -758,9 +747,9 @@ Os símbolos inventados não são aleatórios: dos 499, **261 (52%)** são nome
 exato de operação do PennyLane 0.38 instalado no mesmo ambiente (`RZ` 118,
 `CNOT` 48, `Hadamard` 44, `RY` 36), e 94 (19%) são o nome do PennyLane com o
 sufixo `Gate` do Qiskit (`CNOTGate` 85): 71% é nomenclatura de outro
-*framework*. **[a]** para a correspondência. A leitura causal, "transferência
-de vocabulário vinda do pré-treino", é uma inferência (o PennyLane não está no
-corpus) que nenhuma medida isolou: **[c]** para a causa.
+*framework*. **[a]** para a correspondência. Como hipótese, não medida, os
+nomes vêm de transferência de vocabulário do pré-treino (o PennyLane não está
+no corpus).
 
 ### O trace descartado era o que o diagnóstico precisava
 

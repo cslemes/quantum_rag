@@ -75,9 +75,13 @@ Um segundo sinal aponta na mesma direção. Chamando de **regressão** a execuç
 que alcança verificação semântica e depois volta a falhar em estático, a taxa
 caiu de 40 em 74 (54,1%; rodada B, fatia da semente 1 — 120 tarefas, 74 com checagem semântica; as três sementes dão o mesmo 74/40) para 29 em 88 (33,0%; rodada C): o loop não só avança mais,
 destrói menos do que já havia conseguido. O baseline de 19/09 (anterior ao
-*trace*; contagem por `error_history`, limite inferior) dá 63 em 113 (55,8%):
-estável entre os dois estados anteriores, com a ressalva de que eles diferem em
-protocolo e corpus.
+*trace*; contagem por `error_history`, limite inferior) dá 63 em 113 (55,8%)
+agregado, mas por semente dá 10/19 (52,6%), 35/55 (63,6%) e 18/39 (46,2%): três
+sementes não independentes numa faixa de 46% a 64%, que o agregado esconde. A
+leitura defensável é a mais fraca: os dois estados anteriores (baseline de
+19/09, Ollama 0.34.1, e rodada B, 0.34.4, 54,1%) caem na mesma faixa de 46–64%,
+e a rodada C (33,0%) fica abaixo dela. Não se afirma que a taxa estivesse
+"estável". Os estados diferem em protocolo e corpus.
 
 A métrica é apurada a partir do *trace* de execução, não da contagem de
 `error_history`. A contagem anterior deixava escapar uma tarefa
@@ -85,6 +89,30 @@ A métrica é apurada a partir do *trace* de execução, não da contagem de
 como erro estático embora a verificação semântica tivesse rodado. Diferente das
 duas afirmações acima, esta é comparação entre rodadas e está sujeita ao
 confundimento de versão de servidor tratado em §5.7.
+
+### Runs E e F: a mesma suíte em outra build, e em outra escala
+
+Duas execuções posteriores, ambas na build **Ollama 0.40.8** e sob o mesmo
+código do laço, os mesmos enunciados, uma semente e `reset_per_run`:
+**E**, o mesmo `qwen2.5-coder:7b` (arquivo de modelo não baixado de novo desde
+C), e **F**, `qwen2.5-coder:1.5b`. A comparação C × E isola a versão do servidor;
+E × F isola a escala do modelo. As duas são lidas separadamente.
+
+| run | modelo | Ollama | sucesso (IC 95%) | `compila@1` | falha estática / semântica / abortada | veredito semântico alcançado | checagem semântica em alguma tentativa | regressão |
+|---|---|---|---|---|---|---|---|---|
+| C `1bf505bf…` | 7B | 0.35.1 | 7/120 (2,9–11,6%) | 20 | 61 / 51 / 1 | 58 | 88 | 29/88 (33,0%) |
+| **E** `7fd09e27…` | 7B | **0.40.8** | **5/120** (1,8–9,4%) | 19 | 56 / 58 / 1 | 63 | 87 | 23/87 (26,4%) |
+| **F** `a6a6a63f…` | 1,5B | **0.40.8** | **1/120** (0,1–4,6%) | 10 | 107 / 11 / 0 (+1 `rejected_input`) | 12 | 16 | 4/16 (25,0%) |
+
+As previsões foram registradas antes das execuções e se confirmaram: E, 3 a 11
+de 120 (resultado 5); F, 0 a 3 sucessos e `compila@1` de no máximo 10/120
+(resultado 1 e 10, este exatamente no teto da faixa). Nenhuma das duas execuções
+usou o parâmetro de exceção do portão de versão. E foi executada com o cache de
+respostas frio; uma primeira execução E foi, na verdade, um replay do cache de
+C e foi descartada (capítulo 6, §6.5). O resultado entre builds está em §5.3;
+o de escala é que o 1,5B alcança a checagem semântica em 16 de 120 tarefas
+contra 87 do 7B: o gargalo de compilar piora com a escala, e a conclusão do
+capítulo de que o gargalo está no gerador se sustenta.
 
 ### O que estes números não permitem afirmar
 
@@ -111,20 +139,69 @@ como evidência.
 
 ## 5.3 Determinismo
 
-Zero divergências em 360 execuções, em quatro métricas apuradas. O protocolo
-que viabiliza esse resultado é parte da contribuição e não é automático:
+O determinismo relatado depende do que se mediu e da build do servidor. Há três
+medidas, e cada uma vale só nas condições dela.
 
-- `reset_per_run` — reinício do servidor entre execuções;
-- `temperature=0` fixada explicitamente no cliente;
-- `num_ctx` fixado, para evitar truncamento silencioso de contexto;
-- ordenação `warm → check → unload` no ciclo de carga do modelo.
+**(1) Repetição sob uma sequência de chamadas fixa: zero divergências em 360,
+Ollama 0.34.1.** Execuções A (`99960870…`, 2026-09-22, 02:23–05:43 UTC) e A2
+(`7de38e77…`, 05:49–09:09 UTC): mesmo commit, 120 tarefas × sementes 1, 2 e 3,
+corpus de 1.019 pontos, mesmo host e ambiente, `temperature=0` e `num_ctx`
+fixados, ordem de recuperação determinística, servidor **descarregado uma única
+vez** antes de cada execução. Quatro métricas, re-derivadas dos registros:
+status, classificação da tentativa 1, código final byte a byte e sequência de
+erros (iteração, estágio, tipo e mensagem): 0/360 em cada uma (IC 95% 0–1,1%);
+vetor de resultado por tarefa, 0/120. Iterações e contagens de tokens também
+coincidem em 360/360. Uma exceção fora das métricas: o resumo (hash) do
+circuito serializado (`qpy_sha256_16`) no *payload* de um erro de serialização difere em
+3 registros (`ising_weighted_maxcut_4q`, sementes 1 a 3), com código final
+idêntico; não foi investigado.
 
-Este protocolo foi construído *em resposta* a uma medida anterior: uma métrica
-de controle, escolhida por não poder mudar, mudou 43%, revelando que o cliente
-não fixava temperatura e que 26% das execuções divergiam entre rodadas
-idênticas. O capítulo 6 trata do episódio como achado metodológico; aqui ele
-registra apenas que o determinismo relatado é condicional ao protocolo, e não
-uma propriedade do servidor.
+O cache de respostas **não pode** ter servido as chamadas da segunda execução.
+A razão por tarefa entre os tempos de parede de A2 e A tem mediana 1,00 (mínimo
+0,98, nenhuma tarefa abaixo de 0,5), e as duas execuções levaram o mesmo tempo
+de execução, 200 minutos; um replay servido por cache foi medido antes em 2 min
+24 s contra 8 min 51 s (3,7 vezes mais rápido). Os registros de projeto dizem
+que o diretório do cache foi limpo antes das duas execuções (isso não é
+re-verificável hoje). E um acerto dentro de uma execução não esconderia uma
+divergência entre as duas, porque a primeira ocorrência de um prompt é uma
+chamada real em ambas.
+
+O que esse zero mede é **identidade de replay**: as duas execuções percorreram a
+mesma ordem de tarefas, portanto o mesmo histórico de estado do servidor em cada
+ponto. Ele **não** mede que o resultado de uma tarefa independe das que a
+precederam, e depois se mostrou que não independe (estado interno de prompt e KV
+do Ollama passa de uma tarefa à seguinte). Vale nas condições acima: uma build
+(0.34.1), um único descarregamento, a mesma sequência de chamadas, cache frio, o
+mesmo host. **Não é o protocolo vigente** (reset por execução, adotado em
+2026-09-26, depois dessa descoberta), e versões anteriores deste capítulo o
+atribuíam a ele: a atribuição estava errada.
+
+**(2) Sob o protocolo vigente, dentro de uma execução.** Na rodada B (`9e19fa12…`,
+2026-09-26, Ollama 0.34.4, `reset_before_each_run`, 360 registros, 236 minutos
+de execução, geração real) as três sementes de cada tarefa são **byte-idênticas**
+em status, código final e sequência de erros em **120 de 120 tarefas** (as
+sementes têm chaves de cache distintas, portanto não servem umas às outras). O
+verificador de protocolo (duas tarefas × três sementes byte-idênticas) passou
+antes de C, E e F, nas builds 0.35.1 e 0.40.8. É determinismo dentro de uma
+execução e de uma build. Uma repetição da suíte completa sob o protocolo
+vigente, na mesma build, **não foi feita**.
+
+**(3) Entre builds do servidor, o determinismo não vale.** C e E diferem só na
+versão do servidor (0.35.1 e 0.40.8): mesmo arquivo de modelo, mesmo código do
+laço, mesmos enunciados, mesma semente, servidor reiniciado a cada execução. O
+nó planejador recebe apenas o enunciado da tarefa e um *prompt* de sistema
+fixo — sem recuperação, sem tentativa anterior, sem estado acumulado — e o
+código dele não mudou. Mesmo assim os requisitos que ele devolveu diferem entre
+as duas builds em **34 das 120 tarefas (28%)**, com entrada idêntica (em
+`vqe_h2_r055`, o `output_format` saiu `"numeric"` em C e `"fixed_circuit"` em
+E). No grafo inteiro, o código final difere em **102 das 120 tarefas** e o
+status final em **36 das 120** (84 coincidem). O agregado quase não se move (7
+para 5 sucessos, `compila@1` 20 para 19), mas os sucessos que as duas execuções
+têm em comum são 3, e o conjunto de `compila@1` coincide em 14 tarefas (6 só em
+C, 5 só em E). Nenhuma conclusão por tarefa passa de uma build para a outra, e
+"zero em 360" significa zero em 360 para uma build.
+
+---
 
 ---
 
@@ -220,18 +297,23 @@ execução, e a ferramenta de comparação se recusava a comparar rodadas de
 versões diferentes. A comparação foi feita em prosa, lado a lado, fora dessa
 ferramenta. O capítulo 6 trata o padrão — uma verificação que só dispara dentro
 de uma ferramenta de uso opcional não é verificação; aqui registra-se o
-reparo: a versão esperada passou a ser fixada em `bench/environment.yaml`, o
-runner aborta na inicialização em caso de divergência nomeando as duas versões,
+reparo: a versão esperada passou a ser fixada no perfil do gerador
+(`generator_profiles.yaml`), o runner aborta na inicialização em caso de divergência nomeando as duas versões,
 servidor inacessível conta como divergência, e a execução com
 `--allow-ollama-version-mismatch` é estampada no registro, de modo que rodada
 sob exceção não possa ser confundida com rodada limpa.
 
-Uma re-execução completa das 120 tarefas em 0.34.4, idêntica em todo o resto,
-limita o efeito. A previsão foi registrada antes da execução: 5 a 9 sucessos de
-120, sendo 3 ou menos — ou 12 ou mais — motivo para retirar qualquer atribuição
-do delta ao loop. *[PREENCHER com o resultado. Ver §5.2: o resultado desta
-rodada não altera as duas afirmações centrais da seção, que são
-intra-rodada.]*
+A re-execução completa das 120 tarefas em 0.34.4 (run D), que limitaria o efeito,
+foi **aposentada**: a comparação C × E (§5.3) a substitui. Ela testa a
+sensibilidade à versão numa distância maior (0.35.1 para 0.40.8, contra 0.34.4
+para 0.35.1) e dispensa baixar o Ollama. A previsão registrada para o run D (5 a
+9 sucessos de 120) nunca foi testada. O que C × E mostra: o agregado quase não
+se move, as tarefas individuais sim; a atribuição do delta de 1 para 7 ao loop
+continua apoiada apenas nas duas afirmações intra-rodada de §5.2. A deriva não
+parou ali: em 2026-10-22 o servidor do host passou de 0.35.1 a 0.40.7 e a
+0.40.8 em cerca de 37 minutos; o portão de versão recusou o lançamento
+antes de produzir um número, e as
+execuções E e F foram feitas sob a nova fixação, 0.40.8.
 
 **Modelo de GPU declarado, não verificado.** O servidor local não expõe o
 modelo de GPU por nenhum dos endpoints disponíveis. O campo passou a ser
@@ -280,8 +362,8 @@ Não fazem parte do texto final; remover quando resolvidas.
    *trace*.
 2. ~~Diagnóstico das duas tarefas com orçamento suspeito.~~ Resolvido: nada a
    alterar; a suspeita era baseada em linha de base inválida.
-3. Preencher o resultado da re-execução em Ollama 0.34.4 em §5.7. **Não
-   bloqueante** — nenhuma afirmação central depende dela.
+3. ~~Preencher o resultado da re-execução em Ollama 0.34.4 em §5.7.~~ Aposentado:
+   o run D foi substituído pela comparação C × E (§5.3).
 4. ~~Reconciliar ou aposentar as figuras de 1,8% / 84% / 331-de-335.~~
    Resolvido: as três se re-derivam do run `ce9614fa…` (6/341, 287/341, 331 de
    335); o enunciado do 84% foi corrigido nos três documentos.

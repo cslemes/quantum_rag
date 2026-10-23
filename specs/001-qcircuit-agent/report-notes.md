@@ -5428,6 +5428,41 @@ comando, `--allow-index-mismatch`, carimbado no registro).
 
 ---
 
+### Re-derivação do 0/360 (runs A e A2) e correção da atribuição no capítulo 5 (2026-10-23)
+
+Re-derivado dos registros. **Qual execução:** A `99960870239e97e7` (2026-09-22
+02:23–05:43 UTC) e A2 `7de38e77ac071bd3` (05:49–09:09), mesmo commit `3ef5c217`,
+Ollama **0.34.1**, 360 registros cada (120 tarefas × sementes 1, 2, 3), corpus de
+1.019 pontos, servidor descarregado **uma vez** por execução (não por run),
+`temperature=0`, `num_ctx` fixado. **As quatro métricas:** status, classificação
+da tentativa 1, `final_code` byte a byte, sequência de erros (iteração, estágio,
+tipo, mensagem): 0/360 em cada; vetor de resultado por tarefa 0/120. Também
+idênticos: iterações e tokens (360/360). Fora das métricas: o `qpy_sha256_16` do
+*payload* de um `CircuitSerializationFailure` difere em 3 registros
+(`ising_weighted_maxcut_4q`, sementes 1–3), com código final idêntico; não
+investigado.
+
+**O cache de respostas pode ter servido as 360?** Não: razão de tempo de parede
+por tarefa A2/A com mediana 1,00 (mín. 0,98; 0 de 360 abaixo de 0,5); 200,1 min
+de execução em cada; um replay por cache custou 3,7× menos em F18. As notas
+dizem que `.cache/llm` foi limpo antes de ambas (não verificável hoje: o cache
+atual não tem entradas anteriores a 29/09). Acertos DENTRO de uma execução não
+esconderiam divergência entre as duas (a primeira ocorrência é real nas duas).
+
+**Conclusão:** o zero NÃO é replay de cache; é **identidade de replay sob uma
+sequência de chamadas fixa**, em UMA build (0.34.1), com um único
+descarregamento, cache frio, mesmo host. Não mede independência entre tarefas
+(F28) e não é o protocolo vigente (reset por execução é de 26/09). O capítulo 5
+§5.3 atribuía o zero a um protocolo com `reset_per_run`: errado, corrigido. O
+mesmo erro estava em dois comentários de `analysis/compare.py`, corrigidos.
+**Medida sob o protocolo vigente:** na rodada B (0.34.4, reset por execução,
+236 min de execução), as três sementes são byte-idênticas em status, código
+final e sequência de erros em 120 de 120 tarefas; o verificador de protocolo
+passou antes de C, E e F. Repetição da suíte completa sob o protocolo vigente,
+na mesma build: não feita.
+
+---
+
 ### Modelo de chat: 7B e 1.5B têm o MESMO template (hash), e o que os registros guardam do prompt (2026-10-22)
 
 Comparação feita por programa, não a olho: `POST /api/show` no Ollama do host

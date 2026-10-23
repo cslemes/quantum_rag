@@ -10,9 +10,11 @@ regressions listed first.
 
 SC-008 reads on the same output: two runs of the SAME code and versions
 must diverge on ZERO tasks, not "under 5%". The 5% threshold was written
-before any measurement existed; measured over two full runs under the
-controlled protocol, divergence was 0/360 on every axis (SC-008 as amended,
-research.md D20). `divergence_rate` is measured over tasks present in both
+before any measurement existed; measured over two full runs of the same call
+sequence on ONE server build (Ollama 0.34.1, single model unload, 2026-09-22),
+divergence was 0/360 on every axis (SC-008 as amended, research.md D20). That
+is replay-identity, not task independence (F28), and it does not carry across
+server builds (0.35.1 vs 0.40.8: 34/120 planner outputs differ). `divergence_rate` is measured over tasks present in both
 runs, and a run comparing different code is expected to diverge — the
 criterion is a stability claim about the harness, not a quality claim about
 a change.
@@ -29,10 +31,11 @@ from bench.runner import iter_records
 from bench.schema import RunRecord
 
 # Fields whose equality is what makes a per-task difference MEAN something.
-# Measured over two full runs under this protocol, divergence was 0/360 on
-# every axis — status, attempt-1 classification, byte-identical `final_code`,
-# full error sequence. That zero is not a property of the system alone; it is
-# a property of the system RUN THIS WAY:
+# Measured over two full runs of one call sequence on one server build
+# (Ollama 0.34.1, runs A and A2), divergence was 0/360 on every axis — status,
+# attempt-1 classification, byte-identical `final_code`, full error sequence.
+# That zero is not a property of the system alone; it is a property of the
+# system RUN THIS WAY (and on that build; reset_per_run came later, F28):
 #
 #   ollama_temperature  pinned, never inherited from the Modelfile (F15)
 #   qdocs_points        the retrieval corpus is scraped live and drifts (F13)
