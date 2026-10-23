@@ -545,7 +545,11 @@ entrada, mesmos pesos (o arquivo do modelo não foi baixado de novo),
 
 A generalização é que uma afirmação de determinismo sem qualificação é falsa.
 Ela vale para uma build de servidor, e o "0 em 360" significa 0 em 360 *para
-uma build* — e, pelo parágrafo anterior, para um regime de replay. Quem pensa
+uma build* — e, pelo parágrafo anterior, para um regime de replay. Sob o
+protocolo vigente há agora uma repetição da suíte na mesma build: **0 em 120**
+diferenças entre as execuções G e E (Ollama 0.40.8, uma repetição, uma semente),
+e a invariância das três sementes na rodada B (Ollama 0.34.4, 120 em 120). Cada
+medida vale para o seu escopo, e a mais forte não substitui as outras. Quem pensa
 em fixar a semente e a temperatura como garantia de reprodutibilidade de um
 modelo hospedado deve tratar a versão do servidor de inferência como parte
 da semente.

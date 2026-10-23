@@ -5372,7 +5372,9 @@ minutos de relógio sem supervisão** para essa execução (a medida de F: 126,5
 incluindo ~6 de verificações). Condições: cache `.cache/llm` frio (F18; note que a
 chave NÃO inclui a build do servidor: uma refeita do 1.5B com os mesmos prompts
 seria um replay das respostas de F, e o gate de versão não a vê); índice a 875
-pontos (gate); mesmo código do laço e mesma semente. Gancho em
+pontos (gate); mesmo código do laço e mesma semente. **Duas execuções, não
+uma** (decisão de 2026-10-23): a repetição do 1,5B base (identidade de repetição,
+como G × E para o 7B) sai de graça desse ponto; 2 × ~126 min de relógio. Gancho em
 `relatorio-esqueleto.md` (lista de trabalhos futuros).
 
 ---
@@ -5594,6 +5596,46 @@ trazem o `git_sha` da árvore no momento em que a suíte gravou o `run_id`
 carimbado só toca a máquina do professor, a proveniência, os papéis de perfil e a
 chave de cache de clientes hospedados: nada em `nodes/`, no grafo, na
 recuperação nem no caminho de requisição do Ollama.
+
+---
+
+### RESULTADO — run G (repetição de E), `f64b946466e0ba65`, 2026-10-23 — PREDIÇÃO CONFIRMADA (2026-10-23)
+
+7B, Ollama **0.40.8**, `reset_before_each_run`, 120 tarefas, uma semente, gate
+`matched`, verificador de protocolo passou, índice a 875. Estampa
+`git_sha=8e2ed92` (o processo carregou os módulos de `09047ca`; ver acima).
+Tempo: 02:15:54–03:39:46 UTC (83,9 min de relógio; 68,1 min de execução).
+
+**G × E: 0/120** em status, classificação da tentativa 1, `final_code` byte a
+byte e sequência de erros (iteração, estágio, tipo, mensagem); também 0/120 em
+iterações, tokens de entrada, tokens de saída e *trace* inteiro. Sucesso: 5/120
+(`qaoa_maxcut_4q_perturbed`, `vqe_h2_r055`, `vqe_h2_r130_perturbed`,
+`ghz_linear5_mixed`, `ghz_linear5_scattered_even`), os mesmos 5 de E. Única
+diferença do `error_history` completo: o `qpy_sha256_16` de erros de serialização
+em `ising_weighted_maxcut_5q` (artefato de QPY, não do gerador).
+
+**Taxa de acerto do cache de G: 112/1.064 = 10,5%** (`PARTLY WARM`), contra a
+predição de "COLD, ou só repetições de prompt dentro da própria execução". A
+predição se sustenta no conteúdo e não no rótulo: dos 112 acertos, 12 são o
+verificador de protocolo (o que a predição não previu: ele roda antes da suíte,
+com a semente 1, as duas tarefas de controle, e a suíte as encontra no cache —
+`dj_constant_4q` 9/9 e `qaoa_maxcut_4q_perturbed` 3/3) e 100 são prompts
+idênticos repetidos dentro de execuções de tarefa (63 de 120 tarefas, 1 a 3
+acertos). Verificação de que nenhum veio de E: as chaves de E são do formato
+antigo (`modelo|semente|system|prompt`, as de G são JSON com identidade); havia
+988 arquivos antes de G (os de E) e 988 gravados depois (952 faltas + 36 chamadas
+do verificador de protocolo, 12 por semente), batendo com 1.064 − 112 = 952.
+
+**Limite do instrumento, registrado e não corrigido** (o arnês está encerrado):
+o resumo de cache não distingue acertos em entradas criadas NESTA execução de
+acertos em entradas pré-existentes. Os dois significam coisas diferentes (o
+primeiro é inofensivo; o segundo é o replay). Aqui a distinção foi reconstruída
+por contagem de arquivos e por formato de chave.
+
+**Para a destilação:** a repetição do 1,5B vem de graça no ponto em que a
+precondição já exige refazer o 1,5B base imediatamente antes da execução
+ajustada: **duas execuções em vez de uma**, e a repetição (identidade entre as
+duas) sai dali, a ~126 min de relógio cada.
 
 ---
 

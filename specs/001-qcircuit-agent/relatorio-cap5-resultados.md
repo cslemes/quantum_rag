@@ -140,7 +140,15 @@ como evidência.
 ## 5.3 Determinismo
 
 O determinismo relatado depende do que se mediu e da build do servidor. Há três
-medidas, e cada uma vale só nas condições dela.
+medidas de estabilidade, em três escopos, e cada uma vale só nas condições dela;
+uma quarta medida (entre builds) mostra que a estabilidade não se transfere. Nenhuma
+das três substitui as outras:
+
+| escopo | protocolo | build | n | resultado | o que NÃO mostra |
+|---|---|---|---|---|---|
+| (1) repetição sob sequência de chamadas fixa (A × A2) | um descarregamento por execução | 0.34.1 | 360 | 0 divergências nas 4 métricas | independência entre tarefas; outras builds; o protocolo vigente |
+| (2) invariância de semente dentro da execução (B) | reset por execução | 0.34.4 | 120 tarefas × 3 sementes | 120/120 tarefas idênticas | repetição da suíte; outras builds |
+| (3) repetição da suíte (G × E) | reset por execução | 0.40.8 | 120 | **0/120 divergências** nas 4 métricas | outras builds; o 1,5B; mais de uma repetição |
 
 **(1) Repetição sob uma sequência de chamadas fixa: zero divergências em 360,
 Ollama 0.34.1.** Execuções A (`99960870…`, 2026-09-22, 02:23–05:43 UTC) e A2
@@ -183,10 +191,37 @@ em status, código final e sequência de erros em **120 de 120 tarefas** (as
 sementes têm chaves de cache distintas, portanto não servem umas às outras). O
 verificador de protocolo (duas tarefas × três sementes byte-idênticas) passou
 antes de C, E e F, nas builds 0.35.1 e 0.40.8. É determinismo dentro de uma
-execução e de uma build. Uma repetição da suíte completa sob o protocolo
-vigente, na mesma build, **não foi feita**.
+execução e de uma build, e não é uma repetição da suíte.
 
-**(3) Entre builds do servidor, o determinismo não vale.** C e E diferem só na
+**(3) Repetição da suíte sob o protocolo vigente, na mesma build: 0 em 120.**
+A execução G (`f64b9464…`, 2026-10-23, Ollama **0.40.8**, `reset_before_each_run`,
+7B, 120 tarefas, uma semente, mesmo código do laço e mesmos enunciados) foi
+comparada com a execução E (`7fd09e27…`, mesma build e configuração), que já
+existia. As quatro métricas, **0/120** cada: status, classificação da
+tentativa 1, código final byte a byte e sequência de erros (iteração, estágio,
+tipo e mensagem). Também 0/120: iterações, tokens de entrada e de saída, e o
+*trace* inteiro. A única diferença no registro de erros completo, incluindo o
+*payload*, é 1 tarefa (`ising_weighted_maxcut_5q`), e é o resumo (hash) do
+circuito serializado em erros de serialização, instável por construção para
+circuitos de biblioteca (§6.4), não uma divergência do gerador. O tempo de
+execução é compatível (68,1 min contra 67,2; razão por tarefa com mediana 1,02).
+
+*Cache.* A taxa de acerto de G é **112 de 1.064 chamadas (10,5%)**, e o resumo a
+rotula "parcialmente quente". Todos os acertos são de entradas que a própria G
+gravou antes: 12 do verificador de protocolo, que roda as duas tarefas de
+controle com a semente 1 antes da suíte (os 9 de `dj_constant_4q` e os 3 de
+`qaoa_maxcut_4q_perturbed` na suíte), e 100 de prompts idênticos repetidos
+dentro de uma mesma execução de tarefa. Nenhum pode vir de E: as chaves de E são
+de um formato anterior e não casam com as atuais, e os 988 arquivos de cache que
+existiam antes de G são os de E. Para as duas tarefas de controle, o registro
+da suíte é a cópia da geração do verificador de protocolo, comparada com E do
+mesmo modo. A taxa de acerto de E **não foi gravada** (o relato por execução veio
+depois); o argumento de que E foi fria é o tempo de parede (81,7 min de relógio
+contra uma primeira E, que foi replay, de 9; razão por tarefa em relação a C
+com mediana 1,04). Uma repetição só, em uma build: não mostra que duas outras
+repetições coincidiriam.
+
+**(4) Entre builds do servidor, o determinismo não vale.** C e E diferem só na
 versão do servidor (0.35.1 e 0.40.8): mesmo arquivo de modelo, mesmo código do
 laço, mesmos enunciados, mesma semente, servidor reiniciado a cada execução. O
 nó planejador recebe apenas o enunciado da tarefa e um *prompt* de sistema

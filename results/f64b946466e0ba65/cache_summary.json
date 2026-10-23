@@ -1,0 +1,6 @@
+{
+  "llm_calls": 1064,
+  "cache_hits": 112,
+  "hit_rate": 0.1053,
+  "verdict": "PARTLY WARM: part of the result is replayed responses"
+}

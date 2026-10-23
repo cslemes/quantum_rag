@@ -334,7 +334,7 @@ Um diagnóstico incorreto é pior que nenhum — ancora o modelo numa direção 
 - Reparo incremental — a hipótese H-inc, registrada com condições de falsificação
 - Verificar circuito escrito pelo próprio usuário (`/api/check` já é 80% disso)
 - Oráculo de fidelidade de canal para teleportação
-- Ajuste fino destilando o loop nos pesos — **precondição: o 1.5B base é refeito na MESMA build do servidor imediatamente antes da execução destilada** (ver report-notes.md, "Destilação: precondição de build")
+- Ajuste fino destilando o loop nos pesos — **precondição: o 1.5B base é refeito DUAS vezes, na MESMA build do servidor, imediatamente antes da execução destilada (a segunda dá a identidade de repetição)** (ver report-notes.md, "Destilação: precondição de build")
 
 ---
 
