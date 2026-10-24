@@ -6448,3 +6448,26 @@ directly, which is what the two pre-distillation 1.5B runs will use.
 - **Run G's stored summary annotated, not rewritten**:
   `results/f64b946466e0ba65/cache_summary.ANNOTATION.md` next to the unchanged
   JSON (hash recorded in it).
+
+## 2026-10-24 — pilot families approved with changes; held-out slice fixed by rule
+
+Details in `specs/001-qcircuit-agent/distill-pilot-families.md`. Families 1, 2,
+3, 5 approved. Reframe: where a closed form exists it is the oracle and the
+circuits are constructions checked against it (the adder's arithmetic
+permutation matrix is the oracle for both adders); where none exists, two
+independent constructions check each other plus analytic limit cases. Family 4
+swapped from the transverse-field Ising chain to random local Pauli
+Hamiltonians (calibration: single term c*P gives -|c|; diagonal Hamiltonian
+gives the bitstring minimum; Pauli label order declared). Family 3 excludes
+the enumerated local-Clifford class of GHZ, not two named shapes. Family 5's
+distribution checker is validated on a hand-computed case before accepting any
+example. Pilot data is not the first 100 training examples: some may be
+discarded when the held-out list is applied.
+
+Held-out slice `bench/heldout.yaml` (rule heldout-v1, test
+`tests/unit/test_heldout_slice.py`): 7 families, 24 tasks. First hand-typed
+version of the list in this session was wrong (I sorted hash prefixes by eye
+and skipped qaoa_maxcut); the test that re-applies the rule caught it before
+anything was committed, and the file holds the computed result. Overlap with
+known outcomes, found after the rule ran: qft_3q_perturbed (1.5B, run F) and
+qaoa_maxcut_4q_perturbed (7B, runs E and G) are in the slice.

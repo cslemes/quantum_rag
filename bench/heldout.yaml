@@ -1,0 +1,60 @@
+# The out-of-family slice of the 120-task suite: families that NO training
+# statement may belong to. Fixed 2026-10-24, before any training data is drawn.
+# Re-derived from the rule below by tests/unit/test_heldout_slice.py; editing
+# the list without editing the rule (or the reverse) fails that test.
+#
+# Rule (heldout-v1)
+#   pool    the 66 tasks that are neither GHZ-type (14) nor Ising-type (40:
+#           ising_*, qubo_ising_*, field_coupling_*, zstring_*), grouped into the 18
+#           families of the task-id table (id with the size suffix and
+#           _perturbed removed). A family enters whole: canonical tasks and
+#           their perturbed twins together.
+#   strata  by oracle_kind. Quotas: unitary 2 families, energy 1, statevector 4
+#           (7 families, inside 6-8). distribution has no task in the suite, so
+#           it cannot be covered; that is a property of the suite, recorded here.
+#   order   within a stratum, ascending sha256("heldout-v1:" + family); the first
+#           quota families are taken. No discretion, no reference to any run's
+#           per-task outcome.
+#   checks  20-30 tasks in total; at least 3 distinct perturbation_family
+#           values among the selected perturbed tasks; canonical and perturbed
+#           both present. The rule is reported as it came out: a failed check
+#           would be reported, not repaired by swapping a family.
+heldout:
+  rule: heldout-v1
+  salt: "heldout-v1:"
+  quotas: {unitary: 2, energy: 1, statevector: 4}
+  families:
+    - vqe_h2_r075
+    - reversible_full_adder
+    - qft
+    - bell_phi_plus
+    - qaoa_maxcut
+    - dj_balanced
+    - bell_psi_plus
+  task_count: 24
+  tasks_sha256: ec397d1d2dfc91bd29faa231c1d76d0b11ba4ceb6003c200e3bac1e026789807
+  tasks:
+    - bell_phi_plus_2q
+    - bell_phi_plus_2q_perturbed
+    - bell_psi_plus_2q
+    - bell_psi_plus_2q_perturbed
+    - dj_balanced_4q
+    - dj_balanced_4q_perturbed
+    - dj_balanced_6q
+    - dj_balanced_6q_perturbed
+    - qaoa_maxcut_3q
+    - qaoa_maxcut_3q_perturbed
+    - qaoa_maxcut_4q
+    - qaoa_maxcut_4q_perturbed
+    - qaoa_maxcut_5q
+    - qaoa_maxcut_5q_perturbed
+    - qft_3q
+    - qft_3q_perturbed
+    - qft_5q
+    - qft_5q_perturbed
+    - qft_8q
+    - qft_8q_perturbed
+    - reversible_full_adder_5q
+    - reversible_full_adder_5q_perturbed
+    - vqe_h2_r075
+    - vqe_h2_r075_perturbed
