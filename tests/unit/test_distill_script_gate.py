@@ -54,3 +54,42 @@ def test_a_grant_below_the_stop_ceiling_refuses(script, monkeypatch, tmp_path, c
     )
     assert script.main() == 2
     assert "below the stop ceiling" in capsys.readouterr().err
+
+
+def test_the_sandbox_pool_is_forked_before_anything_does_linear_algebra(
+    script, monkeypatch, tmp_path
+) -> None:
+    order: list[str] = []
+
+    class Pool:
+        def __init__(self, *a, **k) -> None:
+            order.append("pool")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a) -> None:
+            return None
+
+    def listing(*_a, **_k):
+        order.append("listing")
+        raise RuntimeError("stop here")
+
+    monkeypatch.setattr(script, "WorkerPool", Pool)
+    monkeypatch.setattr(script, "listing_entry", listing)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "x",
+            "--out-dir",
+            str(tmp_path / "o"),
+            "--dataset-version",
+            "v",
+            "--authorize-spend",
+            "0.36",
+        ],
+    )
+    with pytest.raises(RuntimeError, match="stop here"):
+        script.main()
+    assert order == ["pool", "listing"]

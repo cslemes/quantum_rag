@@ -135,6 +135,7 @@ def run_negative_control(
     control `fired` only if every wrong answer was rejected with a reason code
     and every correct one was labelled."""
     work = work_dir or Path(tempfile.mkdtemp(prefix="distill-negative-control-"))
+    work.mkdir(parents=True, exist_ok=True)
     registry = StatementRegistry(work / "registry.jsonl")
     plan: dict[str, tuple[str, str]] = {}  # statement text -> (kind, code)
     chosen: dict[str, tuple[str, str]] = {}  # statement id -> (family, kind)

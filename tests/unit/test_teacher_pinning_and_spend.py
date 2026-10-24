@@ -434,3 +434,55 @@ def test_a_teacher_cannot_leave_sampling_to_the_provider() -> None:
     ):
         with pytest.raises(ValidationError, match="temperature and top_p"):
             Profile.model_validate(_profile_dict(determinism=determinism))
+
+
+# -- an infrastructure fault is not a verdict on the teacher's answer -----------
+
+
+class _TimingOutPool:
+    """Stands in for the sandbox pool: every execution times out."""
+
+    def __init__(self, real) -> None:
+        self.real = real
+        self.timeouts = True
+
+    def submit(self, code: str, timeout: int = 60):
+        if self.timeouts:
+            from qcagent.validators.sandbox import SandboxResult
+
+            return SandboxResult(
+                ok=False,
+                circuit_qpy=None,
+                stdout="",
+                stderr=f"timeout after {timeout}s",
+                wall_time_s=0.0,
+                exec_time_s=0.0,
+            )
+        return self.real.submit(code, timeout)
+
+
+def test_a_sandbox_timeout_is_an_infrastructure_failure_and_is_checked_again_for_free(
+    tmp_path, pool
+) -> None:
+    profile, family, registry, server, client = _setup(tmp_path)
+    flaky = _TimingOutPool(pool)
+    first = _run(tmp_path, flaky, profile, family, registry, client)
+    records = [json.loads(x) for x in (tmp_path / "out" / "records.jsonl").read_text().splitlines()]
+    assert {r["reject_reason"] for r in records} == {"infrastructure_failed:sandbox_timeout"}
+    assert first["outcomes"] == {"infrastructure_failed:sandbox_timeout": 20}
+    calls_before = len(server.bodies)
+
+    flaky.timeouts = False  # the fault is fixed; the same statements are checked again
+    second = _run(tmp_path, flaky, profile, family, registry, client)
+    assert len(server.bodies) == calls_before  # answered from the cache: no new request
+    latest = {}
+    for line in (tmp_path / "out" / "records.jsonl").read_text().splitlines():
+        r = json.loads(line)
+        latest[r["statement_id"]] = r
+    assert len(latest) == 20 and all(
+        r["label"] == "verified_against_oracle" for r in latest.values()
+    )
+    retry = next(iter(latest.values()))
+    assert retry["cost"]["source"] == "cache"
+    assert retry["retry_of_infrastructure_failure"]["original_cost"]["source"] == "usage.cost"
+    assert second["outcomes"] == {"verified_against_oracle": 20}

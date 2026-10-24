@@ -84,3 +84,8 @@ def test_the_control_uses_no_network_and_no_real_credential(pool, tmp_path) -> N
     meta = json.loads((tmp_path / "out" / "dataset_meta.json").read_text())
     assert "no network" in meta["spend_authorization"]["granted_by"]
     assert report["fired"]
+
+
+def test_the_control_creates_its_own_working_directory(pool, tmp_path) -> None:
+    report = _control(pool, tmp_path=tmp_path / "does" / "not" / "exist" / "yet")
+    assert report["fired"]

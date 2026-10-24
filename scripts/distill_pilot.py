@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -69,19 +70,29 @@ def main() -> int:
         granted_by=f"operator, via --authorize-spend {args.authorize_spend}",
     )
 
+    # The sandbox workers are forked from this process, so the pool is created
+    # FIRST. Verified on 2026-10-24: once the parent has run the Pauli-energy
+    # family's builder A (SparsePauliOp.to_matrix and eigvalsh), a worker forked
+    # afterwards hangs on the same call in generated code (the first live run lost
+    # ten energy statements to 60 s sandbox timeouts). Single-thread environment
+    # variables (BLAS, Rayon, QISKIT_PARALLEL) did not help; forking first did.
+    with WorkerPool(
+        size=settings.worker_pool_size, recycle_after=settings.worker_recycle_after
+    ) as pool:
+        return _run(args, guard, authorization, pool)
+
+
+def _run(args, guard: SpendGuard, authorization: SpendAuthorization, pool: WorkerPool) -> int:
     profile = get_profile(PROFILE)
     facts = snapshot_facts(listing_entry(profile.model))  # public listing; no credential
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
     # 2. The negative control, on the real pipeline, with no network and no spend.
-    with WorkerPool(size=2, recycle_after=50) as control_pool:
-        control = run_negative_control(
-            families=PILOT_FAMILIES,
-            profile=profile,
-            snapshot=facts,
-            pool=control_pool,
-            work_dir=args.out_dir / "negative_control",
-        )
+    control_dir = args.out_dir / "negative_control"
+    shutil.rmtree(control_dir, ignore_errors=True)  # our own output, rebuilt each time
+    control = run_negative_control(
+        families=PILOT_FAMILIES, profile=profile, snapshot=facts, pool=pool, work_dir=control_dir
+    )
     (args.out_dir / "negative_control.json").write_text(json.dumps(control, indent=2) + "\n")
     print(
         f"negative control: fired={control['fired']}, wrong rejected "
@@ -99,32 +110,26 @@ def main() -> int:
 
     n_statements = sum(1 for e in registry.entries() if e["verdict"] == "pass")
     estimate = estimate_from_tokens(
-        n_statements,
-        ASSUMED_INPUT_TOKENS,
-        ASSUMED_OUTPUT_TOKENS,
-        now=datetime.now(UTC),
+        n_statements, ASSUMED_INPUT_TOKENS, ASSUMED_OUTPUT_TOKENS, now=datetime.now(UTC)
     )
     print(
         f"{n_statements} statements; labelled estimate ${estimate.usd} ({estimate.window}); "
         f"registered estimate ${REGISTERED_ESTIMATE_USD}, stop above ${guard.ceiling_usd:.2f}",
         file=sys.stderr,
     )
-    with WorkerPool(
-        size=settings.worker_pool_size, recycle_after=settings.worker_recycle_after
-    ) as pool:
-        summary = run_pilot(
-            registry=registry,
-            families=PILOT_FAMILIES,
-            client=client,
-            profile=profile,
-            out_dir=args.out_dir,
-            guard=guard,
-            estimate=estimate,
-            dataset_version=args.dataset_version,
-            pool=pool,
-            snapshot=facts,
-            authorization=authorization,
-        )
+    summary = run_pilot(
+        registry=registry,
+        families=PILOT_FAMILIES,
+        client=client,
+        profile=profile,
+        out_dir=args.out_dir,
+        guard=guard,
+        estimate=estimate,
+        dataset_version=args.dataset_version,
+        pool=pool,
+        snapshot=facts,
+        authorization=authorization,
+    )
     print(json.dumps(summary["spend"], indent=2))
     print(f"outcomes: {summary['outcomes']}; halted: {summary['halted']}", file=sys.stderr)
     return 1 if summary["halted"] else 0

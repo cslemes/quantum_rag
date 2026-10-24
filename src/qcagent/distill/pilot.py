@@ -157,10 +157,22 @@ def lock_dataset_identity(
     )
 
 
-def _done_ids(records: Path) -> set[str]:
+INFRASTRUCTURE_PREFIX = "infrastructure_failed:"
+
+
+def _latest_records(records: Path) -> dict[str, dict[str, Any]]:
     if not records.exists():
-        return set()
-    return {json.loads(line)["statement_id"] for line in records.read_text().splitlines() if line}
+        return {}
+    latest: dict[str, dict[str, Any]] = {}
+    for line in records.read_text().splitlines():
+        if line:
+            record = json.loads(line)
+            latest[record["statement_id"]] = record
+    return latest
+
+
+def _is_infrastructure_failure(record: dict[str, Any]) -> bool:
+    return str(record.get("reject_reason") or "").startswith(INFRASTRUCTURE_PREFIX)
 
 
 def _teacher_record(
@@ -231,7 +243,12 @@ def run_pilot(
     client.accepted_served_models = accepted_served_models(snapshot)  # type: ignore[attr-defined]
     breaker = breaker or RefusalBreaker()
     records = out_dir / "records.jsonl"
-    done = _done_ids(records)
+    latest = _latest_records(records)
+    # A statement whose check hit an infrastructure fault (the sandbox timed out) is
+    # not a verdict on the teacher's answer: it is checked again. The teacher call
+    # is answered from the cache (the request is identical), so the retry costs
+    # nothing and the original call's cost and tokens are carried on the new record.
+    done = {sid for sid, r in latest.items() if not _is_infrastructure_failure(r)}
     by_name = {f.name: f for f in families}
     halted: str | None = None
     counts: dict[str, int] = {}
@@ -254,6 +271,13 @@ def run_pilot(
                 max_tokens=MAX_TOKENS,
             )
             record = _teacher_record(outcome, family=family, v=v, entry=entry, identity=identity)
+            earlier = latest.get(entry["id"])
+            if earlier is not None:
+                record["retry_of_infrastructure_failure"] = {
+                    "original_cost": earlier.get("cost"),
+                    "original_tokens": earlier.get("tokens"),
+                    "original_recorded_reason": earlier["reject_reason"],
+                }
             stop: Exception | None = None
             if outcome.response is not None:
                 stop = _account(record, outcome, guard, now())
@@ -262,7 +286,7 @@ def run_pilot(
             # never lost to the stop that it triggered.
             sink.write(json.dumps(record) + "\n")
             sink.flush()
-            key = LABEL if record["label"] else record["state"]
+            key = LABEL if record["label"] else (record["reject_reason"] or record["state"])
             counts[key] = counts.get(key, 0) + 1
             try:
                 if stop is not None:
@@ -338,7 +362,14 @@ def _score(
     if not (static.executed and static.circuit_qpy):
         record["acceptance"] = None
         error = static.error.error_type if static.error else "no_circuit"
-        record["reject_reason"] = f"static_failed:{error}"
+        message = static.error.message if static.error else ""
+        if "timeout after" in message:
+            # The sandbox timed out: the cascade labels it like any execution
+            # failure, but it says nothing about the answer. Never counted as a
+            # rejection; the statement is checked again on the next run.
+            record["reject_reason"] = f"{INFRASTRUCTURE_PREFIX}sandbox_timeout"
+        else:
+            record["reject_reason"] = f"static_failed:{error}"
         return
     (circuit,) = qpy.load(io.BytesIO(static.circuit_qpy))
     check = family.accepts(v, circuit)
