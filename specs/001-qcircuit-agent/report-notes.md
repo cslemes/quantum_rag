@@ -6491,3 +6491,15 @@ A distilled 1.5B must reach 5/96 or more in-family on the same build to support
 "a 1.5B outperforms a 7B". Half of the 4 (vqe_h2_r055, vqe_h2_r130_perturbed)
 sit on the energy kind that family 4 targets; the other half are GHZ tasks the
 pilot does not train on. Context: C (0.35.1) read 7/96 and 0/24.
+
+## 2026-10-24 — pilot machinery built (strict check, four families, distribution loader, leakage gate)
+
+See "Built" at the end of `distill-pilot-families.md`. Findings worth keeping in
+the report: (1) the first gate design's calibration rule is unusable on this
+suite's twins (min Jaccard 0.0076; twins and cross-family pairs overlap
+lexically), so the thresholds are the median twin and the cross-family p95;
+(2) the existing sampled distribution check cannot detect a bit-reversed register
+when biases are close (reads above 0.99), so family 5 acceptance adds an exact
+comparison; (3) for family 4 the label order does not affect the oracle energy
+(a spectrum), only which state reaches it. All 80 statements pass the gate
+(max lexical 0.029). Nothing has been generated.

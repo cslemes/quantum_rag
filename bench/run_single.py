@@ -74,10 +74,18 @@ def _load_oracle(task: TaskSpec) -> Oracle:
             payload = json.load(f)
         hamiltonian = SparsePauliOp(payload["pauli_labels"], coeffs=payload["coeffs"])
         return hamiltonian, float(payload["exact_ground_energy"])
+    if task.oracle_kind == "distribution":
+        # Reference counts, {"counts": {bitstring: n}} with Qiskit's counts keys
+        # (leftmost character = highest qubit). The graph's counts-based path
+        # (check_distribution) consumed this oracle shape before any loader
+        # produced it; the first producer is the distillation pilot's family 5
+        # (qcagent.distill.families.biased_bits). The suite has no such task.
+        with open(task.oracle_path) as f:
+            payload = json.load(f)
+        return {str(k): int(v) for k, v in payload["counts"].items()}
     raise NotImplementedError(
-        f"oracle_kind={task.oracle_kind!r} has no loader yet — bench/oracles/ "
-        "construction (T049) hasn't defined a format for it. This dev tool only "
-        "supports 'unitary', 'statevector', and 'energy'."
+        f"oracle_kind={task.oracle_kind!r} has no loader. This dev tool supports "
+        "'unitary', 'statevector', 'energy' and 'distribution'."
     )
 
 

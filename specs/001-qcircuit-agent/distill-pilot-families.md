@@ -198,3 +198,55 @@ not repaired by swapping. The overlap found after the rule ran:
 `qft_3q_perturbed` (1.5B, F) and `qaoa_maxcut_4q_perturbed` (7B, E and G) are in
 the slice. `vqe_h2_r055` and `vqe_h2_r130` are not held out, and the 7B passes
 both.
+
+## Built (2026-10-24; nothing generated, nothing spent)
+
+Code: `src/qcagent/distill/strict.py`, `families/` (four families), `gate.py`;
+tests `tests/unit/test_distill_{strict,families,distribution_path,gate}.py`.
+
+- **Strict equivalence** (`strict.py`): global phase forgiven, nothing else; no
+  reversal or permutation search. Tests: a bit-reversed circuit and a bit-reversed
+  state are reported NOT equivalent; the QFT without its swaps is not the QFT.
+  Training-data acceptance uses it for unitary and statevector families; the
+  cascade's endianness-tolerant checks are not used on training data.
+- **Four families, 80 variations**, each with oracle and construction agreeing
+  and a test that a wrong construction is caught (the reversed swap order for
+  permutations). Graph states: the GHZ local-Clifford class is enumerated (38
+  connected graphs on 4 vertices, 5 in the class; 728 on 5, 6 in the class);
+  10 graphs per size are drawn round-robin over isomorphism classes.
+- **Family 4, what the label order does and does not decide.** The ground energy
+  is a spectrum, invariant under relabelling the qubits, so the oracle value
+  cannot disagree between builders because of endianness, and the limit-case
+  calibration (30 checks) would not catch a reversal either. The order decides
+  which STATE reaches the energy, and is exercised where a state is involved: the
+  reference circuit must pass the cascade's `check_energy`, and a teacher's
+  circuit is judged by the expectation of H under the declared label order.
+  (The earlier wording "label order is this family's endianness" holds for the
+  state, not for the energy.)
+- **Family 5 and the distribution path.** The cascade already had a counts-based
+  distribution check (`check_distribution`, Hellinger fidelity) and a graph
+  branch for a counts oracle, but no loader; `bench/run_single._load_oracle`
+  now loads `{"counts": ...}` for the `distribution` kind. The checker was
+  validated on the hand-computed case (accepts the right circuit, rejects the
+  bit-reversed one at Hellinger 0.5625) before it accepts anything. The same
+  validation found that the sampled check alone cannot tell a reversed register
+  from the right one when the biases are close (a reversed (0.75, 0.8, 0.7)
+  reads above 0.99). So acceptance also requires the exact output distribution to
+  match within 1e-3, and a variation is used only if reversing its register
+  changes the distribution by at least 0.05.
+- **Leakage gate, phase 1.** Lexical (word 5-gram Jaccard, exact), structural
+  (family id vs the suite's task-id families; one registration per key) and the
+  post-generation circuit check against the references of the same width and
+  kind. Registry is the only writer; generation takes ids; `export` re-runs the
+  gate and refuses on any failure; the gate version is a hash of the test set's
+  content. Semantic measure: phase 2, and each reject log says "not measured".
+  **Calibration finding:** the first design's rule (reject anything as close as the
+  LEAST similar twin pair) is unusable: that pair is at Jaccard 0.0076, and the 5th
+  percentile of twins (0.051) is below the 95th percentile of cross-family
+  test-vs-test pairs (0.122), so lexically twins and unrelated tasks overlap.
+  Thresholds in use (`bench/leakage_calibration.json`): reject at the median twin
+  (0.283), review from the cross-family 95th percentile (0.122). The lexical
+  measure finds copies and light edits; what it cannot see (a perturbed rewrite,
+  a shared mechanism) is what the semantic measure and the adjacency table are for.
+  Result on the 80 pilot statements: all pass; the highest lexical score against
+  any test task is 0.029.

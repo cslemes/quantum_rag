@@ -1,0 +1,13 @@
+{
+  "reject_at": 0.28330658105939005,
+  "review_at": 0.12244897959183673,
+  "twin_pairs": 60,
+  "twin_min": 0.007575757575757576,
+  "twin_p5": 0.05144562334217507,
+  "twin_median": 0.28330658105939005,
+  "cross_pairs": 6956,
+  "cross_p95": 0.12244897959183673,
+  "cross_max": 1.0,
+  "test_set_hash": "34d57a45cfed84634d3fe92bba9dcc6022193f846d0c6c61a19a08f22352114e",
+  "measures": "lexical-jaccard-word5gram-v1;structural-family-v1;circuit-strict-v1"
+}
