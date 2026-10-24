@@ -91,6 +91,10 @@ class RunRecord(BaseModel):
     # cache (F18). None on records written before this field existed.
     llm_calls: int | None = None
     cache_hits: int | None = None
+    # Of those hits, the ones on entries that pre-dated the process: the replay.
+    # The rest are self-hits (entries this run wrote itself). None on records
+    # written before this field existed.
+    cache_hits_preexisting: int | None = None
     git_sha: str
     lib_versions: dict[str, str]
     timestamp: str

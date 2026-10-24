@@ -13,6 +13,7 @@ import httpx
 import pytest
 
 from bench.runner import AccountingLLM, Usage, cache_use_summary
+from qcagent.llm import base
 from qcagent.llm.base import BaseLLMClient, LLMResponse
 from qcagent.llm.ollama_client import OllamaClient
 
@@ -136,11 +137,36 @@ def test_accounting_counts_hits_per_run(tmp_path: Path) -> None:
     assert (usage.calls, usage.cache_hits) == (0, 0)
 
 
-def _jsonl(tmp_path: Path, rows: list[tuple[int, int]]) -> Path:
+def test_a_hit_on_an_entry_this_process_wrote_is_a_self_hit(tmp_path: Path) -> None:
+    usage = Usage()
+    llm = AccountingLLM(_Counting(tmp_path), usage)
+    llm.generate(system="s", prompt="p", seed=1)
+    llm.generate(system="s", prompt="p", seed=1)
+    assert (usage.cache_hits, usage.cache_hits_preexisting) == (1, 0)
+
+
+def test_a_hit_on_an_entry_from_before_the_process_is_pre_existing(tmp_path: Path) -> None:
+    _Counting(tmp_path).generate(system="s", prompt="p", seed=1)
+    # Another process's entry is one this process never wrote.
+    base._WRITTEN_THIS_PROCESS.discard((tmp_path / next(tmp_path.glob("*.json")).name).resolve())
+    usage = Usage()
+    llm = AccountingLLM(_Counting(tmp_path), usage)
+    llm.generate(system="s", prompt="p", seed=1)
+    llm.generate(system="s", prompt="p", seed=1)
+    # The first hit is the replay; once served, it is still not this run's entry.
+    assert (usage.cache_hits, usage.cache_hits_preexisting) == (2, 2)
+
+
+def _jsonl(tmp_path: Path, rows: list[tuple[int, ...]]) -> Path:
+    """Rows are (calls, hits) or (calls, hits, pre-existing hits)."""
     path = tmp_path / "runs.jsonl"
-    path.write_text(
-        "\n".join(json.dumps({"llm_calls": c, "cache_hits": h}) for c, h in rows) + "\n"
-    )
+    records = []
+    for row in rows:
+        record = {"llm_calls": row[0], "cache_hits": row[1]}
+        if len(row) == 3:
+            record["cache_hits_preexisting"] = row[2]
+        records.append(json.dumps(record))
+    path.write_text("\n".join(records) + "\n")
     return path
 
 
@@ -151,7 +177,22 @@ def _jsonl(tmp_path: Path, rows: list[tuple[int, int]]) -> Path:
         ([(10, 10), (10, 9)], "REPLAY"),
         ([(10, 5), (10, 0)], "PARTLY WARM"),
         ([(0, 0)], "NO GENERATOR CALLS"),
+        # Run G's shape: hits, all of them on entries the run wrote itself.
+        ([(10, 5, 0), (10, 4, 0)], "COLD"),
+        ([(10, 10, 9), (10, 9, 9)], "REPLAY"),
+        ([(10, 6, 2), (10, 0, 0)], "PARTLY WARM"),
     ],
 )
 def test_cache_summary_names_a_cold_a_warm_and_a_replayed_run(tmp_path, rows, word) -> None:
     assert word in str(cache_use_summary(_jsonl(tmp_path, rows))["verdict"])
+
+
+def test_summary_reports_both_numbers_and_decides_on_pre_existing_only(tmp_path: Path) -> None:
+    summary = cache_use_summary(_jsonl(tmp_path, [(10, 5, 0), (10, 4, 1)]))
+    assert (summary["cache_hits"], summary["cache_hits_preexisting"]) == (9, 1)
+    assert summary["cache_hits_self"] == 8 and "PARTLY WARM" in str(summary["verdict"])
+
+
+def test_a_record_without_the_split_counts_all_its_hits_as_pre_existing(tmp_path: Path) -> None:
+    summary = cache_use_summary(_jsonl(tmp_path, [(10, 3)]))
+    assert summary["cache_hits_preexisting"] == 3

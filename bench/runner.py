@@ -467,10 +467,12 @@ class Usage:
     cost_usd: float = 0.0
     calls: int = 0
     cache_hits: int = 0
+    cache_hits_preexisting: int = 0
     num_ctx: int | None = None
 
     def reset(self) -> None:
         self.input_tokens = self.output_tokens = self.calls = self.cache_hits = 0
+        self.cache_hits_preexisting = 0
         self.cost_usd = 0.0
 
 
@@ -525,6 +527,8 @@ class AccountingLLM(BaseLLMClient):
         self.usage.calls += 1
         if getattr(self.inner, "last_call_cache_hit", False):
             self.usage.cache_hits += 1
+            if getattr(self.inner, "last_call_cache_hit_preexisting", False):
+                self.usage.cache_hits_preexisting += 1
         self.usage.input_tokens += response.input_tokens
         self.usage.output_tokens += response.output_tokens
         self.usage.cost_usd += response.cost_usd
@@ -594,6 +598,7 @@ def _record(
         output_tokens=usage.output_tokens,
         llm_calls=usage.calls,
         cache_hits=usage.cache_hits,
+        cache_hits_preexisting=usage.cache_hits_preexisting,
         num_ctx=usage.num_ctx,
         cost_usd=usage.cost_usd,
         latency_s=latency_s,
@@ -918,30 +923,51 @@ def cache_use_summary(jsonl: Path) -> dict[str, object]:
     read back from the records so it is the record's number, not a second
     counter. The first run E was a replay of run C that nothing in its output
     showed; a run believed cold that is 90% warm, or the reverse, has to be
-    visible without anyone remembering to look."""
-    calls = hits = 0
+    visible without anyone remembering to look.
+
+    Hits are split by whether the entry pre-dated the process. Self-hits (the
+    protocol check's control tasks, a prompt repeated within a task run) are
+    harmless; hits on pre-existing entries are the replay, and only those
+    decide the verdict. A record written before the split existed carries no
+    `cache_hits_preexisting`; its hits are all counted as pre-existing, the
+    cautious reading."""
+    calls = hits = preexisting = 0
     for line in jsonl.read_text().splitlines():
         record = json.loads(line)
         calls += record.get("llm_calls") or 0
-        hits += record.get("cache_hits") or 0
-    rate = hits / calls if calls else 0.0
+        record_hits = record.get("cache_hits") or 0
+        hits += record_hits
+        split = record.get("cache_hits_preexisting")
+        preexisting += record_hits if split is None else split
+    rate = preexisting / calls if calls else 0.0
     if calls == 0:
         verdict = "NO GENERATOR CALLS RECORDED"
-    elif hits == 0:
-        verdict = "COLD: every call reached the model"
+    elif preexisting == 0:
+        verdict = "COLD: no call was answered by an entry that pre-dated the run"
     elif rate >= 0.9:
         verdict = "REPLAY: almost nothing was asked of the model; this is not a measurement"
     else:
         verdict = "PARTLY WARM: part of the result is replayed responses"
-    return {"llm_calls": calls, "cache_hits": hits, "hit_rate": round(rate, 4), "verdict": verdict}
+    return {
+        "llm_calls": calls,
+        "cache_hits": hits,
+        "cache_hits_preexisting": preexisting,
+        "cache_hits_self": hits - preexisting,
+        "hit_rate_preexisting": round(rate, 4),
+        "hit_rate": round(hits / calls if calls else 0.0, 4),
+        "verdict": verdict,
+    }
 
 
 def report_cache_use(jsonl: Path) -> None:
     summary = cache_use_summary(jsonl)
     (jsonl.parent / "cache_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(
-        f"response cache: {summary['cache_hits']}/{summary['llm_calls']} generator calls "
-        f"served from the cache ({float(summary['hit_rate']):.1%}) — {summary['verdict']}",
+        f"response cache: {summary['cache_hits_preexisting']}/{summary['llm_calls']} generator "
+        f"calls answered by entries that pre-date the run "
+        f"({float(summary['hit_rate_preexisting']):.1%}); "
+        f"{summary['cache_hits_self']} more were self-hits (written by this run) — "
+        f"{summary['verdict']}",
         file=sys.stderr,
         flush=True,
     )

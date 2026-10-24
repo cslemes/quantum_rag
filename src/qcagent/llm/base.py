@@ -18,6 +18,11 @@ from tenacity import Retrying, retry_if_exception_type, stop_after_attempt, wait
 
 CACHE_DIR = Path(".cache/llm")
 
+# Cache files this process wrote. A hit on one of these is a self-hit (the
+# protocol check's control tasks, a prompt repeated within a task run); a hit on
+# any other file is an entry that pre-dates the process, which is the replay.
+_WRITTEN_THIS_PROCESS: set[Path] = set()
+
 
 class LLMResponse(BaseModel):
     text: str
@@ -70,6 +75,9 @@ class BaseLLMClient(ABC):
     # accounting wrapper reads it so a run can say how much of it was replayed:
     # a replay that nothing reports looks exactly like a measurement.
     last_call_cache_hit: bool = False
+    # Of a hit, whether the entry pre-dates this process (the replay) rather
+    # than having been written by it. False on a miss.
+    last_call_cache_hit_preexisting: bool = False
 
     # Attributes, when present on the client, that change what it returns. They
     # go into the cache key (see `response_identity`).
@@ -101,6 +109,7 @@ class BaseLLMClient(ABC):
         self, *, system: str, prompt: str, seed: int, max_tokens: int = 4096
     ) -> LLMResponse:
         self.last_call_cache_hit = False
+        self.last_call_cache_hit_preexisting = False
         identity = self.response_identity()
         # None means the identity could not be established (a server that
         # cannot be asked what it is): the cache is then neither read nor
@@ -116,6 +125,9 @@ class BaseLLMClient(ABC):
             cached = self._cache_load(key)
             if cached is not None:
                 self.last_call_cache_hit = True
+                self.last_call_cache_hit_preexisting = (
+                    self._cache_path(key).resolve() not in _WRITTEN_THIS_PROCESS
+                )
                 return cached
 
         response = self._generate_with_retry(
@@ -198,3 +210,4 @@ class BaseLLMClient(ABC):
     def _cache_save(self, key: str, response: LLMResponse) -> None:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._cache_path(key).write_text(json.dumps(response.model_dump()))
+        _WRITTEN_THIS_PROCESS.add(self._cache_path(key).resolve())

@@ -6396,3 +6396,24 @@ nenhum lugar — não reconstruídos de memória, listados aqui como pendência.
   além dos 1.020 chunks atuais — D17 exige reavaliação de M1 a cada
   expansão significativa; o número de 0,9524 vale para o corpus como está
   hoje, não é uma garantia permanente.
+
+## 2026-10-24 — cache summary splits self-hits from pre-existing hits (harness item reopened, closed again)
+
+Run G's summary (112/1,064, "PARTLY WARM") could not tell the harmless hits
+(protocol-check control tasks, prompts repeated within a task) from the one
+the summary exists to detect, a replay of entries that pre-date the run; the
+split was rebuilt by counting files. The cache layer now keeps the set of
+cache files the process wrote; a hit on a file outside that set is
+"pre-existing". Records carry `cache_hits_preexisting`; `cache_summary.json`
+and the stderr line report `cache_hits`, `cache_hits_preexisting`,
+`cache_hits_self` and both rates, and the verdict (labels unchanged: COLD,
+PARTLY WARM, REPLAY) is computed from pre-existing hits only. The COLD
+description now reads "no call was answered by an entry that pre-dated the
+run" (it used to say every call reached the model, which self-hits falsify).
+
+Limits: the set is per process, so a run resumed in a new process counts its
+own earlier entries as pre-existing (errs toward warning). Records written
+before this change (A–G) lack the field and are read with all hits counted as
+pre-existing, so re-summarising G's file would still say PARTLY WARM; G's
+split stays the file-count one in section 5.3. Runs from now on report it
+directly, which is what the two pre-distillation 1.5B runs will use.
