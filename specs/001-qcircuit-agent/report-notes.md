@@ -6417,3 +6417,34 @@ before this change (A–G) lack the field and are read with all hits counted as
 pre-existing, so re-summarising G's file would still say PARTLY WARM; G's
 split stays the file-count one in section 5.3. Runs from now on report it
 directly, which is what the two pre-distillation 1.5B runs will use.
+
+## 2026-10-24 — pilot decisions after review (modular adder builders, strict check back in phase 1)
+
+- **Modular constant adder: builder 1 is ripple-carry, builder 2 is QFT-based
+  (Draper).** The pair is chosen for independence of mechanism: "ancilla
+  chaining in the adder" and "QFT loop direction" are two of the five method
+  errors independent construction caught in the 120 references, so the failure
+  modes are documented and do not overlap. Supersedes the earlier table row
+  (builder 1 = permutation matrix from the arithmetic), which is not a circuit
+  construction and shares nothing with a mechanism.
+- **Modulus fixed at 2^n for the pilot.** The QFT adder is modular by
+  construction; ripple-carry drops the final carry. Arbitrary N would need
+  extra machinery that ends up shared between the builders.
+- **Register convention is declared in the family spec**, not left to the
+  builders: Qiskit little-endian, qubit 0 is the least significant bit, basis
+  index k = sum b_i 2^i, the oracle is x -> (x + c) mod 2^n on that index.
+  Applies to every pilot family that has a register (permutations: qubit i is
+  index bit i).
+- **Strict equivalence check is back in phase 1** (the earlier deferral to the
+  agreement path was wrong): comparing two independent builders is the same
+  operation as agreement, and an endianness-tolerant check would hide the
+  disagreement the double builder exists to expose. Equal up to global phase
+  only; no qubit-reversal or permutation search. It gets a test that a
+  bit-reversed circuit is reported NOT equivalent. DAG isomorphism, the second
+  teacher and the gate's semantic measure remain phase 2.
+- **Held-out family list: not decided.** No record of it exists in the repo or
+  the notes; the five pilot families are outside all 120 tasks, so the pilot
+  does not depend on it.
+- **Run G's stored summary annotated, not rewritten**:
+  `results/f64b946466e0ba65/cache_summary.ANNOTATION.md` next to the unchanged
+  JSON (hash recorded in it).
