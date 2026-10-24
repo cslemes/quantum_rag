@@ -86,6 +86,7 @@ class BaseLLMClient(ABC):
         "provider",
         "send_temperature",
         "temperature",
+        "top_p",
         "headroom",
         "thinking_headroom",
         "num_ctx",

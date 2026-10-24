@@ -2,9 +2,14 @@
 
     python scripts/distill_pilot.py --out-dir results/distill/pilot-v1 --dataset-version pilot-v1
 
-Refuses to start unless OPENROUTER_API_KEY is set (in the environment or .env). It
-reads the key only to hand it to the HTTP client; it is never printed or written.
-Stops, and reports, if actual spend passes 3x the registered estimate.
+Refuses to start unless it is told, in so many words, to spend: `--authorize-spend USD`
+(the most it may spend; it must be at least the 3x stop ceiling). A credential being
+present is NOT permission: the flag is checked before the credential is even looked
+up. Then, before any real call, the NEGATIVE CONTROL runs against the real pipeline
+over a local transport and the run proceeds only if it fired (wrong circuits
+rejected with reason codes, correct ones accepted). The key is read only to hand it
+to the HTTP client; it is never printed or written. Stops, and reports, if actual
+spend passes 3x the registered estimate.
 """
 
 from __future__ import annotations
@@ -16,10 +21,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from qcagent.config import settings
+from qcagent.distill.control import run_negative_control
 from qcagent.distill.families import PILOT_FAMILIES
 from qcagent.distill.gate import StatementRegistry
 from qcagent.distill.listing import listing_entry, snapshot_facts
-from qcagent.distill.pilot import run_pilot
+from qcagent.distill.pilot import SpendAuthorization, run_pilot
 from qcagent.distill.spend import SpendGuard, estimate_from_tokens
 from qcagent.llm.profiles import build_client, get_profile
 from qcagent.validators.sandbox import WorkerPool
@@ -35,12 +41,58 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument("--dataset-version", required=True)
+    parser.add_argument(
+        "--authorize-spend",
+        type=float,
+        default=None,
+        metavar="USD",
+        help="explicit permission to spend up to USD; without it nothing is spent",
+    )
     args = parser.parse_args()
 
+    # 1. The positive gate, before anything that could spend or even look for a key.
+    guard = SpendGuard(estimate_usd=REGISTERED_ESTIMATE_USD)
+    if args.authorize_spend is None:
+        print(
+            "refusing: no --authorize-spend given (a credential is not permission)", file=sys.stderr
+        )
+        return 2
+    if args.authorize_spend < guard.ceiling_usd:
+        print(
+            f"refusing: --authorize-spend {args.authorize_spend} is below the stop ceiling "
+            f"${guard.ceiling_usd:.2f}",
+            file=sys.stderr,
+        )
+        return 2
+    authorization = SpendAuthorization(
+        ceiling_usd=args.authorize_spend,
+        granted_by=f"operator, via --authorize-spend {args.authorize_spend}",
+    )
+
     profile = get_profile(PROFILE)
-    client = build_client(profile)  # ProfileError, without the value, if the key is absent
-    facts = snapshot_facts(listing_entry(profile.model))
+    facts = snapshot_facts(listing_entry(profile.model))  # public listing; no credential
     args.out_dir.mkdir(parents=True, exist_ok=True)
+
+    # 2. The negative control, on the real pipeline, with no network and no spend.
+    with WorkerPool(size=2, recycle_after=50) as control_pool:
+        control = run_negative_control(
+            families=PILOT_FAMILIES,
+            profile=profile,
+            snapshot=facts,
+            pool=control_pool,
+            work_dir=args.out_dir / "negative_control",
+        )
+    (args.out_dir / "negative_control.json").write_text(json.dumps(control, indent=2) + "\n")
+    print(
+        f"negative control: fired={control['fired']}, wrong rejected "
+        f"{control['wrong_rejected']}, correct accepted {control['correct_accepted']}",
+        file=sys.stderr,
+    )
+    if not control["fired"]:
+        print("refusing: the negative control did not fire; nothing was spent", file=sys.stderr)
+        return 3
+
+    client = build_client(profile)  # ProfileError, without the value, if the key is absent
     registry = StatementRegistry(args.out_dir / "registry.jsonl")
     for family in PILOT_FAMILIES:
         registry.admit_family(family)  # BuilderDisagreement stops here, before any spend
@@ -52,7 +104,6 @@ def main() -> int:
         ASSUMED_OUTPUT_TOKENS,
         now=datetime.now(UTC),
     )
-    guard = SpendGuard(estimate_usd=REGISTERED_ESTIMATE_USD)
     print(
         f"{n_statements} statements; labelled estimate ${estimate.usd} ({estimate.window}); "
         f"registered estimate ${REGISTERED_ESTIMATE_USD}, stop above ${guard.ceiling_usd:.2f}",
@@ -72,6 +123,7 @@ def main() -> int:
             dataset_version=args.dataset_version,
             pool=pool,
             snapshot=facts,
+            authorization=authorization,
         )
     print(json.dumps(summary["spend"], indent=2))
     print(f"outcomes: {summary['outcomes']}; halted: {summary['halted']}", file=sys.stderr)

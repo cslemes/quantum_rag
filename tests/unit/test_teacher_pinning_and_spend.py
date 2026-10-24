@@ -24,6 +24,8 @@ from qcagent.distill.listing import (
 )
 from qcagent.distill.pilot import (
     DatasetVersionMismatch,
+    SpendAuthorization,
+    SpendNotAuthorized,
     identity_of,
     lock_dataset_identity,
     run_pilot,
@@ -132,6 +134,8 @@ def _client(profile: Profile, server: _Server, cache_dir: Path, **over) -> OpenA
         SECRET,
         profile.model,
         "https://openrouter.example/api/v1",
+        temperature=profile.determinism.temperature,
+        top_p=profile.determinism.top_p,
         provider_options=profile.provider_options.as_body(),
         reasoning_effort=over.pop("reasoning_effort", profile.reasoning_effort),
         max_tokens_headroom=profile.max_tokens_headroom,
@@ -261,6 +265,9 @@ def test_a_run_stops_when_actual_passes_three_times_the_estimate() -> None:
 # -- the pilot run ------------------------------------------------------------
 
 
+AUTH = SpendAuthorization(ceiling_usd=10.0, granted_by="test")
+
+
 def _code_for(pi: list[int], *, wrong: bool = False) -> str:
     lines = ["from qiskit import QuantumCircuit", f"qc = QuantumCircuit({len(pi)})"]
     for cycle in cycles(pi):
@@ -301,7 +308,7 @@ def _setup(
     return profile, family, registry, server, client
 
 
-def _run(tmp_path, pool, profile, family, registry, client, estimate_usd=1.0):
+def _run(tmp_path, pool, profile, family, registry, client, estimate_usd=1.0, authorization=AUTH):
     now = datetime(2026, 10, 24, 12, tzinfo=UTC)
     estimate = estimate_from_tokens(20, 900, 2100, now=now)
     return run_pilot(
@@ -315,6 +322,7 @@ def _run(tmp_path, pool, profile, family, registry, client, estimate_usd=1.0):
         dataset_version="pilot-test",
         pool=pool,
         snapshot=FACTS,
+        authorization=authorization,
         now=lambda: now,
     )
 
@@ -376,3 +384,53 @@ def test_a_run_with_no_reported_cost_prices_from_tokens_and_says_so(tmp_path, po
     first = json.loads((tmp_path / "out" / "records.jsonl").read_text().splitlines()[0])
     assert first["cost"]["source"] == "computed"
     assert summary["spend"]["calls_priced_from_tokens"] == 20
+
+
+# -- spend authorization is a positive gate -----------------------------------
+
+
+def test_a_run_with_a_credential_and_no_authorization_does_not_spend(tmp_path, pool) -> None:
+    profile, family, registry, server, client = _setup(tmp_path)
+    with pytest.raises(SpendNotAuthorized, match="not permission to spend"):
+        _run(tmp_path, pool, profile, family, registry, client, authorization=None)
+    assert server.bodies == []  # not one request left the process
+
+
+def test_an_authorization_below_the_guards_ceiling_does_not_spend(tmp_path, pool) -> None:
+    profile, family, registry, server, client = _setup(tmp_path)
+    small = SpendAuthorization(ceiling_usd=0.01, granted_by="test")
+    with pytest.raises(SpendNotAuthorized, match="above the authorized"):
+        _run(tmp_path, pool, profile, family, registry, client, authorization=small)
+    assert server.bodies == []
+
+
+def test_the_grant_is_recorded_in_the_dataset_meta(tmp_path, pool) -> None:
+    profile, family, registry, server, client = _setup(tmp_path)
+    _run(tmp_path, pool, profile, family, registry, client)
+    meta = json.loads((tmp_path / "out" / "dataset_meta.json").read_text())
+    assert meta["spend_authorization"] == {"ceiling_usd": 10.0, "granted_by": "test"}
+
+
+def test_temperature_and_top_p_are_sent_and_are_part_of_the_identity(tmp_path) -> None:
+    profile = get_profile(PROFILE_NAME)
+    assert (profile.determinism.temperature, profile.determinism.top_p) == (1.0, 1.0)
+    server = _Server(lambda b: httpx.Response(200, json=_completion(profile.model)))
+    client = _client(profile, server, tmp_path)
+    client.temperature, client.top_p = 1.0, 1.0
+    client.generate(system="s", prompt="p", seed=1, max_tokens=10)
+    assert (server.bodies[0]["temperature"], server.bodies[0]["top_p"]) == (1.0, 1.0)
+    client.top_p = 0.9
+    client.generate(system="s", prompt="p", seed=1, max_tokens=10)
+    assert len(server.bodies) == 2  # another top_p is another teacher: a cache miss
+    assert (
+        identity_of(profile, FACTS).top_p == 1.0 and identity_of(profile, FACTS).temperature == 1.0
+    )
+
+
+def test_a_teacher_cannot_leave_sampling_to_the_provider() -> None:
+    for determinism in (
+        {"reset_strategy": "none", "temperature": None, "top_p": 1.0, "num_ctx": None},
+        {"reset_strategy": "none", "temperature": 1.0, "top_p": None, "num_ctx": None},
+    ):
+        with pytest.raises(ValidationError, match="temperature and top_p"):
+            Profile.model_validate(_profile_dict(determinism=determinism))

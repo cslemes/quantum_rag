@@ -60,6 +60,10 @@ class Determinism(BaseModel):
     # none: nothing to reset (a hosted API has no state to unload).
     reset_strategy: Literal["per_run", "none"] = "per_run"
     temperature: float | None = 0.0
+    # Sent explicitly when set (openai_compatible only). An unsent sampling
+    # parameter means the provider's default applies, and that can change
+    # without notice.
+    top_p: float | None = Field(default=None, gt=0.0, le=1.0)
     num_ctx: int | None = None
 
 
@@ -182,6 +186,11 @@ class Profile(BaseModel):
                 raise ValueError(
                     "a teacher profile must state reasoning_effort: it is part of the "
                     "teacher's identity, not a provider default"
+                )
+            if self.determinism.temperature is None or self.determinism.top_p is None:
+                raise ValueError(
+                    "a teacher profile must send temperature and top_p explicitly: an unsent "
+                    "parameter means the provider's default applies, and it can change"
                 )
         return self
 
@@ -419,6 +428,7 @@ def build_client(profile: Profile, *, env_file: Path = ENV_FILE) -> BaseLLMClien
         profile.model,
         url,
         temperature=d.temperature,
+        top_p=d.top_p,
         pricing_usd_per_mtok=profile.pricing_usd_per_mtok,
         provider_options=profile.provider_options.as_body() if profile.provider_options else None,
         reasoning_effort=profile.reasoning_effort,

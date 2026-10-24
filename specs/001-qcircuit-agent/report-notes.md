@@ -6589,3 +6589,44 @@ and 14,043 output tokens), against the $0.12 registered for 80. Families 4 (ener
 and 5 (distribution) have NOT run live. Because the cache key is the request, a
 real pilot run re-asking those 40 statements is answered from the cache (cost 0,
 `from_cache: true`) unless the cache entries are removed.
+
+## 2026-10-24 — before the real pilot: negative control, spend gate, cache cleared, sampling pinned
+
+1. **Negative control through the pipeline** (`qcagent/distill/control.py`, run by
+   the script before any real call, and by `tests/unit/test_distill_negative_control.py`).
+   The real `run_pilot` is driven over a local transport that answers with, per
+   family, one deliberately wrong circuit, plus one unparseable program, plus one
+   correct circuit per family (so "rejects everything" cannot pass). Result: 5 of 5
+   wrong answers rejected, 4 of 4 correct accepted; reason codes in the record:
+   permutations, a different permutation: `rejected_by_oracle:strict_unitary`
+   (max diff 1.0); graph state with one CZ edge missing:
+   `rejected_by_oracle:strict_state` (0.5); Pauli energy, the highest-energy basis
+   state: `rejected_by_oracle:check_energy` (energy error 4.514); biased bits,
+   bit-reversed biases: `rejected_by_oracle:check_distribution_and_exact` (0.4225);
+   unparseable program: `static_failed:SyntaxError`. This was also the first
+   end-to-end run of families 4 and 5 through the pipeline (the correct circuits
+   were accepted there). The control is itself tested to NOT fire when the filter
+   accepts everything or rejects everything. Every record now carries `reject_reason`.
+2. **Spend is a positive gate.** `scripts/distill_pilot.py` refuses unless given
+   `--authorize-spend USD` (>= the 3x stop ceiling), checked before the credential is
+   looked up; `run_pilot` cannot be called without a `SpendAuthorization`, whatever
+   client it gets; the grant is written to `dataset_meta.json`. Refusal tests call
+   the script with a credential present and assert nothing was reached. New instance
+   of defence at a distance, chapter 6 section 6.4(d).
+3. **Cache cleared** for the dry run: the 40 files in `.cache/llm` whose
+   `generation_id` appears in the dry-run records (found by matching, all written
+   02:07-02:08, no other file carried teacher provenance); removed, 1,976 files
+   remain. (They would not have matched the new identity anyway, since
+   temperature and top_p are now in the request.)
+4. **Sampling pinned and sent:** temperature 1.0, top_p 1.0 (the model README's
+   recommended values). For identity, not quality: an unsent parameter means the
+   provider's default applies, and it can change without notice. Not lowered, because
+   what is distilled is the teacher's behaviour in the distribution it was tuned for.
+   A teacher profile cannot be built without both set; both are in the cache key and
+   in the dataset identity.
+5. **The outstanding licence reading is OpenRouter's terms of service, not
+   DeepSeek's.** MIT on the weights with nothing restricting outputs settles the
+   model author's side; OpenRouter is the party contracted with. (Supersedes the
+   wording of item 7 above, which said "DeepSeek's licence terms".)
+6. **Teacher upgrade preference:** V4 Pro 0813, which has a dated id. Whether the API
+   accepts a slug for V4 Pro 0423 is deliberately not tested.

@@ -375,7 +375,7 @@ não se propagam" não permite.
   interno de prompt e KV do Ollama carregava estado de uma tarefa para a
   seguinte (§6.5).
 
-### Defesa à distância: três formas, agora com magnitude
+### Defesa à distância: quatro formas, agora com magnitude
 
 Um caso mais recente mostra o padrão sob uma forma mais traiçoeira: a
 correção que existe, mas cuja garantia depende de uma verificação em outro
@@ -419,7 +419,20 @@ versão é, por desenho, uma checagem de início de execução; uma atualizaçã
 chaveado pela versão do servidor lida a cada chamada, o que fecha a repetição
 silenciosa, mas não a mistura de duas builds numa mesma execução.)
 
-**Evidência [a] para (a), [b] para (b), [b] para (c).** (a) é demonstrável
+**(d) A ausência de uma pré-condição fazendo o papel de autorização.** O
+script do piloto de destilação precisava de uma credencial para chamar a API, e
+ninguém precisou escrever "só gaste quando mandarem": enquanto a chave não estava
+no `.env`, o script não gastava. Quando a chave foi posta lá para outro fim, o
+script que eu só queria ver *iniciar* fez **40 chamadas reais** (US$ 0,0096)
+antes de ser interrompido. Nada o recusou, porque a recusa nunca existiu: o que
+existia era um impedimento ambiental que passava por controle. A correção é a
+recusa *positiva e local*: o script exige `--authorize-spend USD` (um teto,
+no mínimo o teto de parada), checado antes de a credencial ser sequer procurada,
+e a função que chama a API exige um objeto de autorização, não um cliente. Uma
+credencial presente não é permissão para gastar. *[b: um evento, rastreado nos
+40 registros e no custo reportado pela API]*
+
+**Evidência [a] para (a), [b] para (b), [b] para (c), [b] para (d).** (a) é demonstrável
 pelo próprio capítulo 5 (§5.7). (b) e (c) são casos únicos traçados nos
 registros e no histórico de commits; o horário das duas leituras e do commit
 da recusa os sustenta, mas é um evento.

@@ -66,6 +66,21 @@ MAX_TOKENS = 4096  # the profile's headroom is added on top for reasoning
 LABEL = "verified_against_oracle"
 
 
+class SpendNotAuthorized(RuntimeError):
+    """A run that could spend money was started without an explicit authorization.
+    A credential being present is not permission to spend."""
+
+
+@dataclass(frozen=True)
+class SpendAuthorization:
+    """Created only by a caller that was told, in so many words, to spend: the
+    script's `--authorize-spend` flag. `run_pilot` cannot be called without one,
+    whatever credential or client it is given."""
+
+    ceiling_usd: float
+    granted_by: str  # where the grant came from, recorded in the dataset meta
+
+
 class DatasetVersionMismatch(RuntimeError):
     """The teacher identity of this run differs from the dataset's."""
 
@@ -77,6 +92,8 @@ class TeacherIdentity:
     canonical_slug: str  # the dated release the id resolved to when the dataset began
     reasoning_effort: str
     provider_options: dict[str, Any]
+    temperature: float  # sent explicitly: an unsent parameter is the provider's default
+    top_p: float
     system_prompt_sha256: str
     seed: int
     max_tokens: int
@@ -92,6 +109,8 @@ def identity_of(profile: Profile, facts: dict[str, Any]) -> TeacherIdentity:
         canonical_slug=facts["canonical_slug"],
         reasoning_effort=profile.reasoning_effort,
         provider_options=profile.provider_options.as_body(),
+        temperature=profile.determinism.temperature,  # type: ignore[arg-type]
+        top_p=profile.determinism.top_p,  # type: ignore[arg-type]
         system_prompt_sha256=hashlib.sha256(TEACHER_SYSTEM_PROMPT.encode()).hexdigest()[:16],
         seed=SEED,
         max_tokens=MAX_TOKENS,
@@ -106,6 +125,7 @@ def lock_dataset_identity(
     dataset_version: str,
     facts: dict[str, Any],
     problems: list[str],
+    authorization_record: dict[str, Any] | None = None,
 ) -> None:
     """Write the identity on first use; on every later use require it unchanged."""
     meta = out_dir / "dataset_meta.json"
@@ -126,6 +146,7 @@ def lock_dataset_identity(
                 "dataset_version": dataset_version,
                 "identity": asdict(identity),
                 "first_estimate": asdict(estimate),
+                "spend_authorization": authorization_record,
                 "snapshot_facts": facts,
                 "listing_discrepancies": problems,
                 "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -159,6 +180,8 @@ def _teacher_record(
         "served_model_differs": outcome.served_model_differs,
         "from_cache": outcome.from_cache,
         "label": None,
+        # Why an example was not labelled; None when it was. One code per cause.
+        "reject_reason": None,
     }
 
 
@@ -174,11 +197,22 @@ def run_pilot(
     dataset_version: str,
     pool: WorkerPool,
     snapshot: dict[str, Any],
+    authorization: SpendAuthorization | None,
+    only_ids: set[str] | None = None,
     breaker: RefusalBreaker | None = None,
     now=lambda: datetime.now(UTC),
 ) -> dict[str, Any]:
     """Returns a summary. Raises nothing for a halt: the halt is recorded in the
     summary (and the records written so far are kept)."""
+    if authorization is None:
+        raise SpendNotAuthorized(
+            "no spend authorization given; a credential present is not permission to spend"
+        )
+    if guard.ceiling_usd > authorization.ceiling_usd:
+        raise SpendNotAuthorized(
+            f"the guard's ceiling ${guard.ceiling_usd:.4f} is above the authorized "
+            f"${authorization.ceiling_usd:.4f}"
+        )
     require_teacher_client(client, profile)
     assert profile.reasoning_effort is not None
     problems = effort_problems(snapshot, profile.reasoning_effort)
@@ -186,7 +220,13 @@ def run_pilot(
         raise DatasetVersionMismatch(f"the pinned effort is not offered: {problems}")
     identity = identity_of(profile, snapshot)
     lock_dataset_identity(
-        out_dir, identity, estimate, dataset_version, snapshot, rate_discrepancies(snapshot)
+        out_dir,
+        identity,
+        estimate,
+        dataset_version,
+        snapshot,
+        rate_discrepancies(snapshot),
+        asdict(authorization),
     )
     client.accepted_served_models = accepted_served_models(snapshot)  # type: ignore[attr-defined]
     breaker = breaker or RefusalBreaker()
@@ -199,6 +239,8 @@ def run_pilot(
     with records.open("a") as sink:
         for entry in registry.entries():
             if entry["id"] in done or entry["verdict"] != "pass":
+                continue
+            if only_ids is not None and entry["id"] not in only_ids:
                 continue
             registry.require_pass(entry["id"])  # by id, and the gate is still current
             family = by_name[entry["family"]]
@@ -295,12 +337,18 @@ def _score(
     }
     if not (static.executed and static.circuit_qpy):
         record["acceptance"] = None
+        error = static.error.error_type if static.error else "no_circuit"
+        record["reject_reason"] = f"static_failed:{error}"
         return
     (circuit,) = qpy.load(io.BytesIO(static.circuit_qpy))
     check = family.accepts(v, circuit)
     record["acceptance"] = asdict(check)
-    if check.passed:
-        leak = circuit_leak_check(family.oracle_kind, circuit)
-        record["leak_check"] = leak
-        if not leak["matches"]:
-            record["label"] = LABEL
+    if not check.passed:
+        record["reject_reason"] = f"rejected_by_oracle:{check.name}"
+        return
+    leak = circuit_leak_check(family.oracle_kind, circuit)
+    record["leak_check"] = leak
+    if leak["matches"]:
+        record["reject_reason"] = "matches_test_reference:" + ",".join(leak["matches"])
+    else:
+        record["label"] = LABEL

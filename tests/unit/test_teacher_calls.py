@@ -89,6 +89,7 @@ def _teacher_profile(**over) -> dict:
         credential_env="OPENROUTER_API_KEY",
         role="teacher",
         reasoning_effort="high",
+        determinism={"reset_strategy": "none", "temperature": 1.0, "top_p": 1.0, "num_ctx": None},
         provider_options={"enforce_distillable_text": True},
     )
     base.update(over)

@@ -30,6 +30,7 @@ class OpenAICompatibleClient(OpenRouterClient):
         base_url: str,
         *,
         temperature: float | None = None,
+        top_p: float | None = None,
         pricing_usd_per_mtok: tuple[float, float] | None = None,
         max_tokens_headroom: int = 0,
         timeout_s: float = 300.0,
@@ -44,6 +45,7 @@ class OpenAICompatibleClient(OpenRouterClient):
         # the request and is part of the cache key (`_IDENTITY_ATTRS`).
         self.effort = reasoning_effort or ""
         self.temperature = temperature
+        self.top_p = top_p
         self.pricing = pricing_usd_per_mtok
         self.headroom = max_tokens_headroom
         # The routing options sent in the `provider` object. Held as canonical
@@ -69,6 +71,8 @@ class OpenAICompatibleClient(OpenRouterClient):
         }
         if self.temperature is not None:
             body["temperature"] = self.temperature
+        if self.top_p is not None:
+            body["top_p"] = self.top_p
         if self.effort:
             body["reasoning"] = {"effort": self.effort}
         if self.provider_options is not None:

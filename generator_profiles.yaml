@@ -101,6 +101,11 @@ profiles:
       enforce_distillable_text: true
     reasoning_effort: high
     max_tokens_headroom: 12000           # reasoning tokens share the completion budget
-    determinism: {reset_strategy: none, temperature: null, num_ctx: null}
+    # Sampling pinned to the vendor-recommended values (the model README: temperature
+    # 1.0, top_p 1.0) and SENT, for identity rather than quality: an unsent
+    # parameter means the provider's default applies, and that can change without
+    # notice. Not lowered: what is distilled is the teacher's behaviour in the
+    # distribution it was tuned for.
+    determinism: {reset_strategy: none, temperature: 1.0, top_p: 1.0, num_ctx: null}
     # No pricing here: the price is time-varying (peak/off-peak), so cost comes
     # from usage.cost per call; see qcagent/distill/spend.py.
