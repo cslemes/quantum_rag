@@ -329,6 +329,23 @@ com metadados de proveniência, de versão ou de ambiente: o metadado sem
 consumidor que falha é o mesmo defeito que um relatório que afirma "verificado"
 sem que ninguém tenha verificado.
 
+### Um rótulo que não discrimina: a resposta vazia que virou erro de sintaxe
+
+Na primeira execução real do piloto de destilação, uma resposta do professor
+terminou com `finish_reason: length`, 16.096 tokens, **todos de raciocínio**, e
+nenhum texto visível. O registro saiu como `static_failed:SyntaxError`. Não houve
+erro de sintaxe, porque não houve código: o veredito não correspondia ao que
+aconteceu. A causa é o fechamento do classificador: o classificador de falhas do sandbox
+termina em `SyntaxError` como rótulo de fechamento (a convenção do contrato), e
+tudo que não é reconhecido cai nele. Um *timeout* do sandbox de 60 s (no piloto e
+na execução A), um `CircuitError` de contagem de qubits (o código da execução A,
+reexecutado num *worker* limpo) e uma resposta vazia aterrissam no mesmo rótulo, e
+nenhum leitor do registro distingue um do outro. O piloto passou a codificar a truncagem como
+`truncated:finish_reason_length` e o *timeout* como
+`infrastructure_failed:sandbox_timeout`, para que as taxas fiquem visíveis. **[a]**
+Três causas distintas observadas num único rótulo; o classificador do cascata não
+foi alterado (o conjunto de regressão está fechado).
+
 ---
 
 ## 6.4 Regras que não se propagam
@@ -370,6 +387,21 @@ não se propagam" não permite.
   Toda observação manual rodou com uma semente que a suíte nunca executa.
   *[a]* para a divergência enumerada (a tabela de parâmetros); o efeito
   atribuído à semente foi depois reinterpretado (§6.5).
+- **O estado do processo-pai herdado por um `fork`.** Depois que o orquestrador
+  usou o pool Rust do Qiskit (`SparsePauliOp.to_matrix()`, ou `Operator` de um
+  `SparsePauliOp`), um *worker* do sandbox criado por `fork` a partir dele trava,
+  até o *timeout* de 60 s, na mesma chamada dentro do código gerado; o cascata
+  rotula o *timeout* `SyntaxError`. Reproduzido de forma determinística. A
+  primeira correção, criar o pool antes, protegia só os *workers* que existiam
+  naquele momento: um *worker* substituído depois (após *timeout* ou após 50 usos)
+  é bifurcado do pai já contaminado, e o teste dessa trajetória travou. O
+  executor da suíte de regressão estava exposto desde sempre, porque `main()`
+  roda `verify_references` (que usa `Operator` de `SparsePauliOp` nos oráculos de
+  energia) *antes* de criar o pool. O dano medido nas execuções A, A2, B, C, E, F
+  e G foi de **um registro em A e o mesmo em A2** (§5.7). A correção estrutural é
+  os *workers* serem interpretadores novos, não *forks*: a ordem deixa de
+  importar. *[a para o mecanismo, reproduzido; o alcance é o da varredura dos
+  registros]*
 - **O estado interno do servidor entre tarefas.** O descarregamento do modelo
   era feito uma vez por execução da suíte, não por (tarefa, semente); o cache
   interno de prompt e KV do Ollama carregava estado de uma tarefa para a
@@ -735,6 +767,16 @@ tentativas, o mesmo algoritmo errado. O prompt do crítico era montado com o
 tipo do erro, a mensagem e o código, e mais nada. A informação que desfaria o
 erro (`expected_gate_counts = {h: 7, x: 1}` contra `actual = {Q: 1}`) existia e
 era descartada, por uma tensão legítima: o conteúdo vinha da referência. **[b]**
+
+**Import faltando, do 7B ao professor.** Na linha de base original, o import
+faltando (`NameError` sobre símbolo que existe) era a causa final de **39,0% dos
+`failed_static`** do 7B (112 de 287) e estava roteado como símbolo inexistente;
+com o roteamento corrigido ele cai, nas execuções C e E (0.35.1 e 0.40.8), a 3,3%
+a 4,2% de todos os erros registrados e a 3,3% a 3,6% dos `failed_static` finais, e
+a 3 das 120 tarefas na primeira tentativa da execução E. O mesmo modo de falha aparece **uma vez em vinte** (uma permutação
+cujo código não importava `QuantumCircuit`) num professor de classe de fronteira,
+1 em 80 no piloto. **[b]** n = 1 do lado do professor: o que o achado sustenta é
+que o modo de falha não é só de modelo pequeno, não que as taxas sejam comparáveis.
 
 ### O laço quase sempre desiste
 

@@ -6687,3 +6687,76 @@ Findings:
    decision.
 4. Listing check: no discrepancy between the listing's prices/windows and
    `spend.py`; effort high is offered by the model.
+
+## 2026-10-24 — the fork-poisoning hazard in the regression runner: answers, fix, no change to chapter 5's numbers
+
+**Mechanism, narrowed.** Bisected: the trigger in the parent is `SparsePauliOp.to_matrix()`
+or `Operator(SparsePauliOp)` (qiskit's Rust thread pool); `eigvalsh`, `Statevector.expectation_value`
+and the other BLAS paths do NOT poison, and in the child it is the same Rust-pool call
+(`to_matrix`) that hangs, not `eigh`. This corrects the pilot note above, which blamed
+`eigvalsh` as well.
+
+**a. Pool, replacement, order.** `WorkerPool(size=6, recycle_after=50)` is created once per
+suite run, in `_graph_runner` (`bench/runner.py`), and a worker is replaced on EITHER a timeout
+or its 50th use (crashes were not handled: a dead worker only showed up as a 60 s timeout).
+It is created AFTER the parent has run oracle computation: `main()` calls
+`verify_references(tasks)` (the "every reference verified" line) before `run_suite`. Reproduced:
+after `verify_references` in the parent, every worker of a new pool, initial ones included,
+hangs on `to_matrix` in generated code. So the premise "the initial pool was clean and
+replacements were poisoned" was too weak: all workers were exposed.
+
+**b. Does the parent touch the trigger?** Yes, before any pool exists: the energy validation in
+`verify_references` (reproduced end to end). During the suite the parent's `check_energy` uses
+`expectation_value`, which does not poison; the other `to_matrix` use in `src` is the assertion
+evaluator (`assertions.py:591`), not on the suite's path.
+
+**c. How timeouts were coded.** `check_static` -> `_classify_sandbox_failure` -> the closed
+taxonomy's catch-all: `error_type: SyntaxError`, `stage: static`, message `timeout after 60s`;
+the record's `status` is `failed_static`. (A timeout is therefore indistinguishable from a
+syntax error except by its message.)
+
+**d. How many.** Scan of `error_history` and the final static result for "timeout after":
+A 2 errors in 1 record (`ising_field_coupling_5q`, seed 2, iteration 5 of 5); A2 the same
+record, identical; B 0; **C 0; E 0; F 0; G 0**. The hazard did not materialise in the four runs of
+chapter 5's headline numbers, and chapter 5 needs no restatement. A and A2: the timed-out code
+(`HamiltonianGate(SparsePauliOp ...)`) in a CLEAN worker raises `CircuitError` (3-qubit gate on 5
+qubits), also labelled `SyntaxError`, on the final iteration: status (`failed_static`), error
+type and failure count are unchanged; only the message and 60 s of latency differ. Worker
+replacement almost certainly happened in C/E/F/G (more than 300 static executions), and made no
+difference: those workers were exposed from the start and no generated code hit the trigger.
+Also checked: the 479 final codes of C, E, F and G re-run through `check_static` in the
+corrected executor give the same `parsed/executed/transpiled/error_type` in every case.
+
+**Fix.** The first fix proposed (pool first) was tested and is insufficient: workers created at
+pool creation survive, a worker REPLACED after the parent was poisoned still hangs (3 of 4 uses
+in the test, replacement path). The structural fix: sandbox workers are fresh interpreters
+(`python -m qcagent.validators.sandbox_worker`) started with `subprocess`, never forks of the
+orchestrator, with a ready handshake so that the first task is not charged the import and a
+`worker died` outcome instead of a silent 60 s wait. The only place generated code is executed is
+still `validators/sandbox.py` (the contract test passes unchanged). Tests, with the parent poisoned
+AFTER the pool exists: initial workers, replacement after use count, replacement after a timeout, a
+dead worker, shutdown. The reorder of `main()` (pool before `verify_references`) was therefore NOT
+applied: it adds nothing once workers are never forks, and it was shown not to cover replacement.
+Instrument change after C-G: stated here and in chapter 5 section 5.7; the equivalence check above
+is the evidence that the static verdicts do not move.
+
+**Chapter 6.** New instance in 6.4 (state of the parent inherited by a fork); new 6.3 instance
+(an empty response recorded as `SyntaxError`, the catch-all label); one MissingImport paragraph.
+Correction to the figure supplied for it: the 39% (112 of 287 `failed_static`) is the ORIGINAL
+baseline, before the routing fix, not the current 7B runs, where MissingImport is 3.3-4.2% of
+errors and 3.3-3.6% of final `failed_static` (C, E); the paragraph says so and does not call it
+dominant now. Teacher: 1 of 80 (1 of 20 on permutations); 7B attempt 1 in E: 3 of 120.
+
+**Pilot decisions.** (2) Headroom raised 12,000 -> 32,000; `truncated:finish_reason_length` kept
+as its own code; this is part of the teacher identity (cache key), so a training set needs a new
+dataset version; if truncation stays non-trivial it is reported as a teacher characteristic.
+(3) Providers are NOT pinned (schema change, availability, 20 per family cannot show whether it
+helps); the provider is recorded per call, `report.json` now has `acceptance_by_provider`, to be
+read at full scale (about 450 calls per provider across 11); one provider's examples can be
+excluded retroactively. Risk the filter does not cover: a provider with more aggressive
+quantisation yields correct-but-poor code, which the oracle (correctness only) cannot see, and
+training on it teaches correct-but-poor code. (4) pilot-v1 is kept as the pilot RECORD, not as
+training data, annotated in `results/distill/pilot-v1/DATASET_CARD.md`, not cleaned. (6) Cost
+follows the FAMILY MIX, not the example count: the three non-energy families averaged about 355
+output tokens per call, energy about 5,000 (14x); at $0.0703 per 80 (0.59x the estimate), about
+$4 per 5,000 at a 20% energy mix. Choose the mix of the full set on the usefulness of the data.

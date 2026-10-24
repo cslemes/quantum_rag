@@ -80,3 +80,63 @@ def test_worker_recycled_after_n_executions_does_not_leak_state() -> None:
 
         third = p.submit(VALID_CODE, timeout=10)
         assert third.ok
+
+
+# -- workers are fresh interpreters, not forks of the orchestrator -------------
+#
+# Once the orchestrator has used qiskit's Rust thread pool (SparsePauliOp.to_matrix,
+# Operator(SparsePauliOp)), a worker FORKED from it hangs on the same call in
+# generated code until the timeout. Creating the pool first protected only the
+# workers that existed at that moment; a worker replaced later was forked from the
+# poisoned parent. These tests poison the orchestrator and then exercise every path
+# that creates a worker.
+
+TO_MATRIX_CODE = """
+from qiskit import QuantumCircuit
+from qiskit.quantum_info import SparsePauliOp
+SparsePauliOp(["ZZ", "XI"], coeffs=[1.0, 0.5]).to_matrix()
+qc = QuantumCircuit(2)
+"""
+
+
+def _poison_the_orchestrator() -> None:
+    from qiskit.quantum_info import SparsePauliOp
+
+    SparsePauliOp(["ZZ", "XI"], coeffs=[1.0, 0.5]).to_matrix()
+
+
+def test_workers_created_after_the_orchestrator_used_the_rust_pool_still_run_to_matrix() -> None:
+    _poison_the_orchestrator()
+    with WorkerPool(size=2, recycle_after=100) as p:
+        assert p.submit(TO_MATRIX_CODE, timeout=20).ok
+
+
+def test_a_worker_replaced_after_use_count_runs_to_matrix_after_the_parent_was_poisoned() -> None:
+    with WorkerPool(size=1, recycle_after=1) as p:  # pool FIRST, as the first fix had it
+        _poison_the_orchestrator()  # ... and the parent is poisoned only afterwards
+        for _ in range(3):  # use 1 = the initial worker, uses 2 and 3 = replacements
+            assert p.submit(TO_MATRIX_CODE, timeout=20).ok
+
+
+def test_a_worker_replaced_after_a_timeout_runs_to_matrix_after_the_parent_was_poisoned() -> None:
+    with WorkerPool(size=1, recycle_after=100) as p:
+        _poison_the_orchestrator()
+        hung = p.submit("import time\ntime.sleep(30)\nqc = None", timeout=1)
+        assert not hung.ok and "timeout" in hung.stderr
+        assert p.submit(TO_MATRIX_CODE, timeout=20).ok  # the replacement worker
+
+
+def test_a_worker_that_dies_is_reported_and_replaced() -> None:
+    with WorkerPool(size=1, recycle_after=100) as p:
+        p._workers[0].proc.kill()
+        p._workers[0].proc.wait()
+        died = p.submit(VALID_CODE, timeout=10)
+        assert not died.ok and "worker died" in died.stderr
+        assert p.submit(VALID_CODE, timeout=10).ok
+
+
+def test_a_worker_exits_when_its_orchestrator_closes_the_pipe() -> None:
+    with WorkerPool(size=1, recycle_after=100) as p:
+        proc = p._workers[0].proc
+        assert p.submit(VALID_CODE, timeout=10).ok
+    assert proc.poll() is not None  # shutdown ended the worker; nothing is left behind

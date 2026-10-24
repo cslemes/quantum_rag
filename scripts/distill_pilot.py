@@ -70,12 +70,11 @@ def main() -> int:
         granted_by=f"operator, via --authorize-spend {args.authorize_spend}",
     )
 
-    # The sandbox workers are forked from this process, so the pool is created
-    # FIRST. Verified on 2026-10-24: once the parent has run the Pauli-energy
-    # family's builder A (SparsePauliOp.to_matrix and eigvalsh), a worker forked
-    # afterwards hangs on the same call in generated code (the first live run lost
-    # ten energy statements to 60 s sandbox timeouts). Single-thread environment
-    # variables (BLAS, Rayon, QISKIT_PARALLEL) did not help; forking first did.
+    # Sandbox workers are fresh interpreters (validators/sandbox.py), so the order in
+    # which this process does its own linear algebra no longer matters. It used to:
+    # workers FORKED after the parent used SparsePauliOp.to_matrix hung on the same
+    # call in generated code (the first live run lost ten energy statements to 60 s
+    # sandbox timeouts). The pool is still created first, which is now harmless.
     with WorkerPool(
         size=settings.worker_pool_size, recycle_after=settings.worker_recycle_after
     ) as pool:

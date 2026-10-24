@@ -387,6 +387,22 @@ independentes: citar só como histórico, com run e denominador, nunca ao lado
 dos números de 120 execuções sem esse rótulo. Ver `report-notes.md`,
 "Reconciliação das figuras".
 
+**Timeouts do sandbox: verificados, sem efeito nos números deste capítulo.** Um
+defeito do executor (um *worker* criado por `fork` depois que o orquestrador usou o
+pool Rust do Qiskit trava em `SparsePauliOp.to_matrix()`; ver capítulo 6, §6.4)
+podia transformar código correto em `timeout after 60s`, rotulado `SyntaxError`. Os
+registros foram varridos em busca desse texto, na lista de erros e no resultado
+estático. Contagem: **0 em B, C, E, F e G**; **1 registro em A e o mesmo em A2**
+(`ising_field_coupling_5q`, semente 2, iteração 5 de 5), que termina
+`failed_static` com ou sem o defeito: o mesmo código, num *worker* limpo, levanta
+`CircuitError` (3 qubits do gate contra 5 do circuito), rotulado também
+`SyntaxError`, de modo que o `status`, o tipo de erro e a contagem de falhas
+não mudam; só a mensagem. A comparação A × A2 (0/360) não é afetada: os dois
+registros são idênticos entre si. Além disso, os 479 códigos finais de C, E, F e G
+foram reexecutados no executor corrigido (*workers* novos) e o veredito estático
+(`parsed`, `executed`, `transpiled`, tipo de erro) coincide em **todos**. Nenhum
+número do capítulo é reapresentado.
+
 ---
 
 ## Pendências deste capítulo

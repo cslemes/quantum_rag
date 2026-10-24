@@ -100,7 +100,12 @@ profiles:
     provider_options:
       enforce_distillable_text: true
     reasoning_effort: high
-    max_tokens_headroom: 12000           # reasoning tokens share the completion budget
+    # Reasoning tokens share the completion budget. 12000 was too little at effort
+    # high on the energy family (one pilot-v1 response used 16,096 tokens, all
+    # reasoning, and had no visible text): raised to about twice the observed maximum.
+    # Part of the identity (it is in the cache key), so pilot-v1 is a different teacher
+    # configuration; truncations stay visible as truncated:finish_reason_length.
+    max_tokens_headroom: 32000
     # Sampling pinned to the vendor-recommended values (the model README: temperature
     # 1.0, top_p 1.0) and SENT, for identity rather than quality: an unsent
     # parameter means the provider's default applies, and that can change without

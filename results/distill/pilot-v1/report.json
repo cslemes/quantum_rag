@@ -85,6 +85,52 @@
     "deepseek/deepseek-v4.1-flash-1017": 80
   },
   "serving_model_matched_requested_on_all": true,
+  "acceptance_by_provider": {
+    "Wafer": {
+      "statements": 32,
+      "accepted": 31
+    },
+    "Morph": {
+      "statements": 18,
+      "accepted": 16
+    },
+    "Fireworks": {
+      "statements": 1,
+      "accepted": 1
+    },
+    "Relace": {
+      "statements": 7,
+      "accepted": 7
+    },
+    "Sail Research": {
+      "statements": 5,
+      "accepted": 5
+    },
+    "InferenceNet": {
+      "statements": 8,
+      "accepted": 7
+    },
+    "PrimeIntellect": {
+      "statements": 2,
+      "accepted": 2
+    },
+    "Decart": {
+      "statements": 3,
+      "accepted": 3
+    },
+    "Reka": {
+      "statements": 2,
+      "accepted": 2
+    },
+    "DigitalOcean": {
+      "statements": 1,
+      "accepted": 1
+    },
+    "Ionstream": {
+      "statements": 1,
+      "accepted": 1
+    }
+  },
   "providers": {
     "Wafer": 32,
     "Morph": 18,

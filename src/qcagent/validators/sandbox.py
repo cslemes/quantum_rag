@@ -11,12 +11,25 @@ Isolation (FR-025) is preserved: each worker is still a process separate
 from the orchestrator. What changes is that it's reused instead of
 recreated. A worker that hits its timeout is killed and replaced, never
 reused — it may have left a thread dangling.
+
+Workers are FRESH INTERPRETERS, started with `python -m
+qcagent.validators.sandbox_worker`, never forks of the orchestrator. Found on
+2026-10-24: once the orchestrator has used `Operator(SparsePauliOp)` or
+`SparsePauliOp.to_matrix()` (qiskit's Rust thread pool), a worker FORKED from it
+hangs on the same call in generated code until the 60 s timeout, and the cascade
+labels that timeout `SyntaxError`. A fork taken at any time after that use is
+affected, so creating the pool first only protects the workers that exist at
+that moment, not the ones replaced later (after a timeout or `recycle_after`
+uses). A fresh interpreter has no such state, whatever the orchestrator did.
 """
 
-import multiprocessing as mp
-import queue
+import base64
+import json
+import os
+import select
+import subprocess
+import sys
 import time
-from pathlib import Path
 
 from pydantic import BaseModel
 
@@ -61,73 +74,119 @@ def _check_denylist(code: str) -> str | None:
     return None
 
 
-def _worker_main(task_queue: mp.Queue, result_queue: mp.Queue) -> None:
-    """Runs in a pre-warmed subprocess for its whole lifetime. Imports
-    qiskit once here (the expensive part, D1b), then loops on tasks until
-    it receives the poison pill (`None`)."""
+def execute_generated(code: str) -> dict:
+    """Run generated code in THIS process and describe the outcome as a JSON-able
+    dict. Called only by `sandbox_worker`, in a worker's own interpreter; never by
+    the orchestrator."""
     import contextlib
     import io
     import tempfile
+    from pathlib import Path
 
-    import qiskit  # noqa: F401  # import cost paid once per worker, not per task
-    from qiskit import qpy  # noqa: F401  # exercised inside the exec'd wrapper
+    stdout, stderr = io.StringIO(), io.StringIO()
+    start = time.perf_counter()
+    ok = False
+    circuit_bytes: bytes | None = None
 
-    while True:
-        code = task_queue.get()
-        if code is None:  # poison pill — shut down
-            return
+    with tempfile.NamedTemporaryFile(suffix=".qpy", delete=False) as tmp:
+        artifact_path = tmp.name
+    wrapped = _WRAPPER.format(user_code=code, artifact=artifact_path)
+    try:
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            exec(compile(wrapped, "<generated>", "exec"), {})
+        circuit_bytes = Path(artifact_path).read_bytes()
+        ok = True
+    except Exception as exc:  # noqa: BLE001 — reported to the caller, not raised
+        stderr.write(f"{type(exc).__name__}: {exc}\n")
+    finally:
+        Path(artifact_path).unlink(missing_ok=True)
 
-        stdout, stderr = io.StringIO(), io.StringIO()
-        start = time.perf_counter()
-        ok = False
-        circuit_bytes: bytes | None = None
+    return {
+        "ok": ok,
+        "circuit_qpy": (
+            base64.b64encode(circuit_bytes).decode("ascii") if circuit_bytes is not None else None
+        ),
+        "stdout": stdout.getvalue(),
+        "stderr": stderr.getvalue(),
+        "exec_time_s": time.perf_counter() - start,
+    }
 
-        with tempfile.NamedTemporaryFile(suffix=".qpy", delete=False) as tmp:
-            artifact_path = tmp.name
-        wrapped = _WRAPPER.format(user_code=code, artifact=artifact_path)
 
-        try:
-            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-                exec(compile(wrapped, "<generated>", "exec"), {})
-            circuit_bytes = Path(artifact_path).read_bytes()
-            ok = True
-        except Exception as exc:  # noqa: BLE001 — reported to caller, not raised
-            stderr.write(f"{type(exc).__name__}: {exc}\n")
-        finally:
-            Path(artifact_path).unlink(missing_ok=True)
-
-        exec_time_s = time.perf_counter() - start
-        result_queue.put(
-            SandboxResult(
-                ok=ok,
-                circuit_qpy=circuit_bytes,
-                stdout=stdout.getvalue(),
-                stderr=stderr.getvalue(),
-                wall_time_s=exec_time_s,  # overwritten by the pool with true wall time
-                exec_time_s=exec_time_s,
-            ).model_dump()
-        )
+class WorkerDied(RuntimeError):
+    """The worker's pipe closed without an answer (it crashed or was killed)."""
 
 
 class _Worker:
+    """One fresh interpreter (`sandbox_worker`) behind a pair of pipes."""
+
     def __init__(self) -> None:
-        self.task_q: mp.Queue = mp.Queue()
-        self.result_q: mp.Queue = mp.Queue()
-        self.proc = mp.Process(target=_worker_main, args=(self.task_q, self.result_q), daemon=True)
-        self.proc.start()
+        env = dict(os.environ)
+        # The worker must import the same `qcagent` the orchestrator did.
+        env["PYTHONPATH"] = os.pathsep.join(p for p in sys.path if p)
+        self.proc = subprocess.Popen(
+            [sys.executable, "-m", "qcagent.validators.sandbox_worker"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            env=env,
+        )
         self.uses = 0
+
+    def _read_line(self, timeout: float) -> dict | None:
+        assert self.proc.stdout is not None
+        fd = self.proc.stdout.fileno()
+        deadline = time.monotonic() + timeout
+        buf = b""
+        while b"\n" not in buf:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return None
+            ready, _, _ = select.select([fd], [], [], remaining)
+            if not ready:
+                return None
+            chunk = os.read(fd, 1 << 20)
+            if not chunk:
+                raise WorkerDied("worker closed its pipe")
+            buf += chunk
+        return json.loads(buf)
+
+    def wait_ready(self, timeout: float = 120.0) -> None:
+        """Block until the worker has imported qiskit. Workers used to be forked
+        from an orchestrator that already had it imported, so they were warm on
+        creation; a fresh interpreter has to be waited for, or the first task it
+        serves is charged the import."""
+        message = self._read_line(timeout)
+        if message is None or not message.get("ready"):
+            raise WorkerDied("worker did not become ready")
+
+    def request(self, code: str, timeout: float) -> dict | None:
+        """The worker's answer, or None if it did not answer within `timeout`.
+        Raises `WorkerDied` if it exited without answering."""
+        assert self.proc.stdin is not None and self.proc.stdout is not None
+        try:
+            self.proc.stdin.write(json.dumps({"code": code}).encode() + b"\n")
+            self.proc.stdin.flush()
+        except (BrokenPipeError, OSError) as exc:
+            raise WorkerDied(str(exc)) from exc
+        return self._read_line(timeout)
 
     def stop(self) -> None:
         try:
-            self.task_q.put_nowait(None)
-        except Exception:  # noqa: BLE001 — best-effort; terminate covers it
+            if self.proc.stdin is not None:
+                self.proc.stdin.close()  # EOF: the worker's loop ends
+        except OSError:
             pass
-        self.proc.join(timeout=2)
-        if self.proc.is_alive():
+        try:
+            self.proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
             self.proc.terminate()
-            self.proc.join(timeout=2)
-        if self.proc.is_alive():
-            self.proc.kill()
+            try:
+                self.proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+                self.proc.wait()
+        if self.proc.stdout is not None:
+            self.proc.stdout.close()
 
 
 class WorkerPool:
@@ -137,7 +196,15 @@ class WorkerPool:
         self.size = size
         self.recycle_after = recycle_after
         self._workers = [_Worker() for _ in range(size)]
+        for worker in self._workers:  # started together, so they warm up in parallel
+            worker.wait_ready()
         self._next = 0
+
+    @staticmethod
+    def _fresh_worker() -> _Worker:
+        worker = _Worker()
+        worker.wait_ready()
+        return worker
 
     def submit(self, code: str, timeout: int = 60) -> SandboxResult:
         """Executes `code` on the next worker (round-robin). Recycles the
@@ -161,28 +228,38 @@ class WorkerPool:
         worker = self._workers[slot]
 
         wall_start = time.perf_counter()
-        worker.task_q.put(code)
         try:
-            raw = worker.result_q.get(timeout=timeout)
-        except queue.Empty:
+            raw = worker.request(code, timeout)
+            failure = f"timeout after {timeout}s" if raw is None else None
+        except WorkerDied as exc:
+            raw, failure = None, f"worker died: {exc}"
+        if raw is None:
             worker.stop()
-            self._workers[slot] = _Worker()
+            self._workers[slot] = self._fresh_worker()
             return SandboxResult(
                 ok=False,
                 circuit_qpy=None,
                 stdout="",
-                stderr=f"timeout after {timeout}s",
+                stderr=failure or "no answer",
                 wall_time_s=time.perf_counter() - wall_start,
                 exec_time_s=time.perf_counter() - wall_start,
             )
 
-        result = SandboxResult.model_validate(raw)
-        result.wall_time_s = time.perf_counter() - wall_start
+        result = SandboxResult(
+            ok=raw["ok"],
+            circuit_qpy=(
+                base64.b64decode(raw["circuit_qpy"]) if raw["circuit_qpy"] is not None else None
+            ),
+            stdout=raw["stdout"],
+            stderr=raw["stderr"],
+            wall_time_s=time.perf_counter() - wall_start,
+            exec_time_s=raw["exec_time_s"],
+        )
 
         worker.uses += 1
         if worker.uses >= self.recycle_after:
             worker.stop()
-            self._workers[slot] = _Worker()
+            self._workers[slot] = self._fresh_worker()
 
         return result
 

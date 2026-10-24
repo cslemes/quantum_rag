@@ -54,6 +54,15 @@ def pilot_report(out_dir: Path) -> dict[str, Any]:
         f["tokens"]["reasoning"] += reasoning
         f["tokens"]["visible"] += record["tokens"]["output"] - reasoning
         f["usd"] += record["cost"]["usd"]
+    # Acceptance BY PROVIDER: the model id is pinned, the host that served a call is
+    # not, and the oracle checks correctness only, so a host running a more aggressive
+    # quantisation yields correct-but-poor code the filter cannot see. Each call's
+    # provider is in its provenance, so one host's examples can be excluded afterwards.
+    providers: dict[str, dict[str, int]] = defaultdict(lambda: {"statements": 0, "accepted": 0})
+    for sid, record in latest.items():
+        host = paid[sid]["provenance"]["derived"]["served_provider"]
+        providers[host]["statements"] += 1
+        providers[host]["accepted"] += record["label"] == LABEL
     served = Counter(r["provenance"]["derived"]["served_model"] for r in paid.values())
     estimate = meta["first_estimate"]["usd"]
     actual = sum(r["cost"]["usd"] for r in paid.values())
@@ -79,6 +88,7 @@ def pilot_report(out_dir: Path) -> dict[str, Any]:
         "actual_over_labelled_estimate": round(actual / estimate, 3) if estimate else None,
         "serving_model_counts": dict(served),
         "serving_model_matched_requested_on_all": set(served) == {requested},
+        "acceptance_by_provider": dict(providers),
         "providers": dict(
             Counter(r["provenance"]["derived"]["served_provider"] for r in paid.values())
         ),
