@@ -172,7 +172,13 @@ def _latest_records(records: Path) -> dict[str, dict[str, Any]]:
 
 
 def _is_infrastructure_failure(record: dict[str, Any]) -> bool:
-    return str(record.get("reject_reason") or "").startswith(INFRASTRUCTURE_PREFIX)
+    """A record whose check never reached the answer. Also recognises the older
+    form (written before sandbox timeouts had their own reason code): a static
+    failure whose message is the pool's timeout."""
+    if str(record.get("reject_reason") or "").startswith(INFRASTRUCTURE_PREFIX):
+        return True
+    error = (record.get("static") or {}).get("error") or {}
+    return "timeout after" in str(error.get("message") or "")
 
 
 def _teacher_record(

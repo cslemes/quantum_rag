@@ -486,3 +486,17 @@ def test_a_sandbox_timeout_is_an_infrastructure_failure_and_is_checked_again_for
     assert retry["cost"]["source"] == "cache"
     assert retry["retry_of_infrastructure_failure"]["original_cost"]["source"] == "usage.cost"
     assert second["outcomes"] == {"verified_against_oracle": 20}
+
+
+def test_the_older_timeout_record_form_is_also_an_infrastructure_failure() -> None:
+    from qcagent.distill.pilot import _is_infrastructure_failure
+
+    legacy = {
+        "reject_reason": "static_failed:SyntaxError",
+        "static": {"error": {"message": "timeout after 60s"}},
+    }
+    genuine = {
+        "reject_reason": "static_failed:SyntaxError",
+        "static": {"error": {"message": "SyntaxError: invalid syntax"}},
+    }
+    assert _is_infrastructure_failure(legacy) and not _is_infrastructure_failure(genuine)
