@@ -6471,3 +6471,23 @@ and skipped qaoa_maxcut); the test that re-applies the rule caught it before
 anything was committed, and the file holds the computed result. Overlap with
 known outcomes, found after the rule ran: qft_3q_perturbed (1.5B, run F) and
 qaoa_maxcut_4q_perturbed (7B, runs E and G) are in the slice.
+
+## 2026-10-24 — pilot is four families; threshold registered before any training
+
+Family 2 (modular adder) cut from the pilot and recorded as the phase-2
+showcase of the double-builder discipline; not built, not resolved against the
+held-out list. Pilot = families 1, 3, 4, 5, 80 statements. The held-out list is
+unchanged. "Out-of-family" is defined as task-id family, not unseen mechanism
+(the suite is dense enough that a blind slice is adjacent to almost any
+training family; a property of the benchmark). Adjacency per training family
+published in `distill-pilot-families.md`; correction of the first reading:
+family 1 is not minimal (8 of 24: the QFT's final SWAPs plus the two other
+qubit_ordering-perturbed tasks; 3 of them are relabelling by construction).
+Family 5 cannot move the benchmark (no distribution task in the suite).
+
+Threshold, registered before training: 7B on Ollama 0.40.8 reads 4/96
+in-family and 1/24 held out in both E and G; the 1.5B (F) reads 0/96 and 1/24.
+A distilled 1.5B must reach 5/96 or more in-family on the same build to support
+"a 1.5B outperforms a 7B". Half of the 4 (vqe_h2_r055, vqe_h2_r130_perturbed)
+sit on the energy kind that family 4 targets; the other half are GHZ tasks the
+pilot does not train on. Context: C (0.35.1) read 7/96 and 0/24.
