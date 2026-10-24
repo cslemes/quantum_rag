@@ -6503,3 +6503,89 @@ when biases are close (reads above 0.99), so family 5 acceptance adds an exact
 comparison; (3) for family 4 the label order does not affect the oracle energy
 (a spectrum), only which state reaches it. All 80 statements pass the gate
 (max lexical 0.029). Nothing has been generated.
+
+## 2026-10-24 — teacher fixed: deepseek/deepseek-v4.1-flash-1017 (dated snapshot), effort high; spend; licence
+
+**Teacher.** `teacher-deepseek-v4.1-flash-1017` in `generator_profiles.yaml`:
+model `deepseek/deepseek-v4.1-flash-1017`, `provider_options.enforce_distillable_text: true`,
+`reasoning_effort: high`, `max_tokens_headroom: 12000`, no temperature sent.
+
+1. **Why a dated snapshot, never the floating id.** A floating alias can be
+   repointed while a generation is running, and the dataset would silently hold
+   two teachers; a hosted API has no server build to gate on (the Ollama
+   auto-update lesson, in a place with no gate), so the dated id is the only pin
+   available. The profile schema now REFUSES a teacher whose model is not a dated
+   snapshot (`deepseek/deepseek-v4.1-flash`, `...-latest`, `:free`, `:nitro`,
+   `auto`). The risk is not hypothetical: the listing carries a
+   `~deepseek/deepseek-v4-flash-latest` alias whose `alias_target` is V4 Flash
+   0731. The listing also maps the snapshot id to a dated `canonical_slug`
+   (`deepseek/deepseek-v4.1-flash-20261017`); both are accepted as the serving
+   name, anything else halts the run, and the dataset records the slug and
+   refuses a later run in which the same id resolves to a different one.
+2. **Reasoning effort is teacher identity.** Fixed at high (the model's listed
+   default; its listed efforts are max/high/low/none). Sent in every request,
+   in the cache key (`effort` was already an identity attribute), recorded AS SENT
+   in every example's provenance (`reasoning_sent`) and in `dataset_meta.json`.
+   `run_pilot` refuses a run whose identity differs from the dataset's:
+   changing effort or snapshot is a new dataset version in a new directory.
+3. **Pricing is time-varying.** Rates (per Mtok, input cache-miss / output):
+   off-peak 0.15 / 0.60, peak 0.30 / 1.20; peak 01:00-04:00 and 06:00-10:00 UTC on
+   weekdays. These were operator-stated; the model listing (`GET /api/v1/models`,
+   public) now CONFIRMS them: same prices, same windows, in
+   `pricing.overrides` (`utc_start`/`utc_end` as HHMM). That also resolves the
+   open item "pricing endpoint path": it is the models listing. The start-time
+   estimate is labelled with the window it was taken in; the ACTUAL is the sum of
+   `usage.cost` per call (a call without it is priced from its tokens and labelled
+   `computed`); both are reported at the end. Any difference between the listing
+   and `spend.py` is recorded in `dataset_meta.json`.
+4. **Expected spend, registered before running:** about $0.12 for the 80-statement
+   pilot; about $7 off-peak for a 5,000-statement full set at 40% acceptance. Cost
+   is dominated by reasoning output tokens, not input, so prompt caching barely
+   moves it and reasoning effort is the only real lever. The run stops and reports
+   if actual passes 3x the estimate (the record of the crossing call is written
+   first).
+5. **Upgrade path, recorded now.** V4 Pro 0813 and V4 Pro 0423 are also in the
+   distillable collection (per the operator). If acceptance collapses on the hard
+   families, the upgrade does not reopen the licensing question. Pin detail: the
+   listing id of V4 Pro 0813 is `deepseek/deepseek-v4-pro-0813`, but V4 Pro 0423's id
+   is `deepseek/deepseek-v4-pro` (no date suffix), whose canonical slug is
+   `deepseek/deepseek-v4-pro-20260423`; the dated-snapshot rule would refuse the
+   bare id, and whether the slug is accepted as a request model id is untested.
+   A teacher change is a new dataset version.
+6. **No vendor benchmark figures anywhere in the report.** Teacher capability is
+   evidenced by acceptance per family on our own tasks. (The listing carries
+   `benchmarks` blocks for some models; they are not read, stored or cited.)
+7. **Licence, retrieved once.** Hugging Face repository of the weights named by the
+   listing: `deepseek-ai/DeepSeek-V4.1-Flash-1017`. Retrieved 2026-10-24 from
+   https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/raw/main/LICENSE
+   (sha256 `f2c6c602815669d292889e5be8c802f2ed950653b77999b1584e8e6aed25d040`, MIT
+   text) and .../raw/main/README.md (sha256
+   `b72b796e4f4c739eca5d0ad360a7679b39118ca7eb64891f7151a527b292c42a`, states
+   "This repository and the model weights are licensed under the MIT License").
+   Copies in `specs/001-qcircuit-agent/licences/`. The licence text says nothing
+   specific about using outputs; OpenRouter states that its distillation data is
+   best-effort. **The human reading of the terms is still to be done and recorded
+   by the operator.** Also found in the README: recommended sampling is
+   temperature 1.0, top_p 1.0; the profile sends neither (provider default applies).
+
+**Unconfirmed fields, now seen in a real response** (call below): the serving
+provider is `data["provider"]` ("Wafer" in the first calls); `model` is the id as
+requested (not the slug); `system_fingerprint` is returned null; `usage.cost`,
+`usage.cost_details` and `completion_tokens_details.reasoning_tokens` are present.
+Still unconfirmed: the HTTP error shape when no model qualifies.
+
+### An unintended live run (disclosure)
+
+While checking that `scripts/distill_pilot.py` started, I ran it against the real
+API without having decided to. The key was in `.env` (my earlier check for it was
+wrong). It made **40 live teacher calls (statements of families 1 and 3, in
+registry order) before I stopped it**; nothing was running afterwards. Output is in
+the scratchpad directory `.../scratchpad/dry/` under dataset version `dry`, not
+under a dataset version of the pilot. Results: 40/40 responded, 40/40
+`verified_against_oracle` (permutations 20/20, graph states 20/20), served model =
+the requested id, provider Wafer, flag in every sent request, reasoning effort high
+in every sent request, **actual spend $0.0096** (usage.cost, off-peak; 9,514 input
+and 14,043 output tokens), against the $0.12 registered for 80. Families 4 (energy)
+and 5 (distribution) have NOT run live. Because the cache key is the request, a
+real pilot run re-asking those 40 statements is answered from the cache (cost 0,
+`from_cache: true`) unless the cache entries are removed.

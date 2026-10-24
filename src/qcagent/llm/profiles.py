@@ -78,6 +78,18 @@ class ProviderOptions(BaseModel):
 
 
 Role = Literal["generator", "teacher"]
+ReasoningEffort = Literal["low", "medium", "high"]
+
+# A teacher's model id must be a DATED SNAPSHOT: a trailing four- or eight-digit
+# date stamp (deepseek-v4.1-flash-1017). A floating alias (no stamp, or "latest")
+# can be repointed mid-generation and the dataset would silently hold two
+# teachers; there is no server build to gate here, so the dated id is the only pin.
+_SNAPSHOT = re.compile(r"-(\d{4}|\d{8})$")
+_FLOATING = re.compile(r"latest|:free|:nitro|:floor|auto", re.IGNORECASE)
+
+
+def is_dated_snapshot(model: str) -> bool:
+    return bool(_SNAPSHOT.search(model)) and not _FLOATING.search(model)
 
 
 class Profile(BaseModel):
@@ -104,6 +116,12 @@ class Profile(BaseModel):
     # when the client is built).
     role: Role = "generator"
     provider_options: ProviderOptions | None = None
+    # Reasoning effort sent with every request (openai_compatible only). Part of
+    # a teacher's IDENTITY: it goes into the cache key and into every example's
+    # provenance, and is never varied within a dataset version.
+    reasoning_effort: ReasoningEffort | None = None
+    # Extra completion budget for reasoning tokens, which share max_tokens.
+    max_tokens_headroom: int = Field(default=0, ge=0)
     # Shown when the backend is unreachable: what must already be up.
     setup_hint: str | None = None
 
@@ -144,6 +162,8 @@ class Profile(BaseModel):
                 raise ValueError("an openai_compatible profile needs credential_env")
         if self.provider_options is not None and self.client_type != "openai_compatible":
             raise ValueError("provider_options apply to an openai_compatible profile only")
+        if self.reasoning_effort is not None and self.client_type != "openai_compatible":
+            raise ValueError("reasoning_effort applies to an openai_compatible profile only")
         if self.role == "teacher":
             if self.client_type != "openai_compatible":
                 raise ValueError("a teacher profile must be openai_compatible (a hosted API)")
@@ -151,6 +171,17 @@ class Profile(BaseModel):
                 raise ValueError(
                     "a teacher profile must set provider_options.enforce_distillable_text: "
                     "true — without it the training data has no licensing guarantee"
+                )
+            if not is_dated_snapshot(self.model):
+                raise ValueError(
+                    f"a teacher profile must name a dated snapshot, not {self.model!r}: a "
+                    "floating alias can be repointed mid-generation and the dataset would "
+                    "hold two teachers"
+                )
+            if self.reasoning_effort is None:
+                raise ValueError(
+                    "a teacher profile must state reasoning_effort: it is part of the "
+                    "teacher's identity, not a provider default"
                 )
         return self
 
@@ -390,6 +421,8 @@ def build_client(profile: Profile, *, env_file: Path = ENV_FILE) -> BaseLLMClien
         temperature=d.temperature,
         pricing_usd_per_mtok=profile.pricing_usd_per_mtok,
         provider_options=profile.provider_options.as_body() if profile.provider_options else None,
+        reasoning_effort=profile.reasoning_effort,
+        max_tokens_headroom=profile.max_tokens_headroom,
     )
 
 

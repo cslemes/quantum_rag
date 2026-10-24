@@ -165,12 +165,15 @@ def call_teacher(
             detail={"provider_options_sent": sent if provenance else "no-provenance"},
         )
     served = provenance["derived"]["served_model"]
+    # A snapshot id resolves to a dated canonical slug and a response may name
+    # either: the client carries the set it accepts (default: the requested id).
+    accepted = getattr(client, "accepted_served_models", None) or {client.model_id}
     return TeacherOutcome(
         statement_id,
         TeacherState.RESPONDED,
         response=response,
         from_cache=client.last_call_cache_hit,
-        served_model_differs=(None if served == "unavailable" else served != client.model_id),
+        served_model_differs=(None if served == "unavailable" else served not in accepted),
     )
 
 

@@ -34,12 +34,15 @@ class OpenAICompatibleClient(OpenRouterClient):
         max_tokens_headroom: int = 0,
         timeout_s: float = 300.0,
         provider_options: dict | None = None,
+        reasoning_effort: str | None = None,
     ) -> None:
         # Deliberately does not call OpenRouterClient.__init__: it demands an
         # OpenRouter pricing entry and pins an upstream provider.
         self.model_id = model_id
         self.provider = "openai_compatible"
-        self.effort = ""
+        # "" = not sent (the endpoint's default applies). Anything else is sent in
+        # the request and is part of the cache key (`_IDENTITY_ATTRS`).
+        self.effort = reasoning_effort or ""
         self.temperature = temperature
         self.pricing = pricing_usd_per_mtok
         self.headroom = max_tokens_headroom
@@ -66,6 +69,8 @@ class OpenAICompatibleClient(OpenRouterClient):
         }
         if self.temperature is not None:
             body["temperature"] = self.temperature
+        if self.effort:
+            body["reasoning"] = {"effort": self.effort}
         if self.provider_options is not None:
             body["provider"] = json.loads(self.provider_options)
         return body

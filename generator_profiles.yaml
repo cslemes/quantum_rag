@@ -74,3 +74,33 @@ profiles:
   #   credential_env: OPENAI_API_KEY
   #   determinism: {reset_strategy: none, temperature: null, num_ctx: null}
   #   pricing_usd_per_mtok: [0.10, 0.50]  # optional; cost is 0 when omitted
+
+  # TEACHER for the distillation dataset. Never shown in the UI, never run on
+  # the suite (the loaders refuse a non-generator role). Held to a stricter
+  # schema than a generator: the distillation guarantee, a DATED SNAPSHOT as the
+  # model id, and a stated reasoning effort.
+  #
+  # Why the dated snapshot (2026-10-24): a floating alias such as
+  # deepseek-v4.1-flash, or anything named "latest", can be repointed while a
+  # generation is running and the dataset would silently hold two teachers. There
+  # is no server build to gate on a hosted API, so the dated id is the only pin
+  # available (the Ollama auto-update lesson, in a place with no gate).
+  #
+  # Why reasoning_effort is fixed here: the hosted default is thinking at "high";
+  # it is stated, not inherited, because effort is part of the teacher's identity.
+  # It goes into the cache key and into every example's provenance, and is never
+  # varied within a dataset version. Changing it starts a NEW dataset version.
+  - name: teacher-deepseek-v4.1-flash-1017
+    label: "Teacher — deepseek-v4.1-flash-1017 via OpenRouter (distillable only)"
+    client_type: openai_compatible
+    base_url: https://openrouter.ai/api/v1
+    model: deepseek/deepseek-v4.1-flash-1017
+    credential_env: OPENROUTER_API_KEY
+    role: teacher
+    provider_options:
+      enforce_distillable_text: true
+    reasoning_effort: high
+    max_tokens_headroom: 12000           # reasoning tokens share the completion budget
+    determinism: {reset_strategy: none, temperature: null, num_ctx: null}
+    # No pricing here: the price is time-varying (peak/off-peak), so cost comes
+    # from usage.cost per call; see qcagent/distill/spend.py.

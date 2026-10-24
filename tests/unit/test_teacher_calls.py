@@ -85,9 +85,10 @@ def _teacher_profile(**over) -> dict:
         label="t",
         client_type="openai_compatible",
         base_url="https://openrouter.ai/api/v1",
-        model="vendor/big-model",
+        model="vendor/big-model-1017",
         credential_env="OPENROUTER_API_KEY",
         role="teacher",
+        reasoning_effort="high",
         provider_options={"enforce_distillable_text": True},
     )
     base.update(over)

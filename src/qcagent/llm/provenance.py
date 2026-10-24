@@ -90,6 +90,9 @@ def build_provenance(
         # as SENT, from the request body; NONE_SENT when the body had no
         # `provider` object (a fact, distinct from "unavailable")
         "provider_options_sent": body.get("provider", NONE_SENT),
+        # as SENT: the reasoning block of the request (effort is part of a
+        # teacher's identity), NONE_SENT when the request carried none
+        "reasoning_sent": body.get("reasoning", NONE_SENT),
         "http_status": http_status,
         "received_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "response_metadata": _without_content(data),
