@@ -500,3 +500,33 @@ def test_the_older_timeout_record_form_is_also_an_infrastructure_failure() -> No
         "static": {"error": {"message": "SyntaxError: invalid syntax"}},
     }
     assert _is_infrastructure_failure(legacy) and not _is_infrastructure_failure(genuine)
+
+
+def test_a_response_cut_off_by_the_budget_is_coded_as_truncation(tmp_path, pool) -> None:
+    profile = get_profile(PROFILE_NAME)
+    family = QubitPermutations()
+    registry = StatementRegistry(tmp_path / "registry.jsonl")
+    registry.admit_family(family)
+
+    def handler(body: dict) -> httpx.Response:
+        data = _completion(profile.model, "")
+        data["choices"][0]["finish_reason"] = "length"
+        return httpx.Response(200, json=data)
+
+    client = _client(profile, _Server(handler), tmp_path / "cache")
+    _run(tmp_path, pool, profile, family, registry, client)
+    records = [json.loads(x) for x in (tmp_path / "out" / "records.jsonl").read_text().splitlines()]
+    assert {r["reject_reason"] for r in records} == {"truncated:finish_reason_length"}
+
+
+def test_the_report_reads_the_records_back(tmp_path, pool) -> None:
+    from qcagent.distill.report import pilot_report
+
+    profile, family, registry, server, client = _setup(tmp_path, wrong_for={3})
+    _run(tmp_path, pool, profile, family, registry, client)
+    report = pilot_report(tmp_path / "out")
+    row = report["by_family"]["qubit_permutation"]
+    assert (row["statements"], row["accepted"], row["acceptance"]) == (20, 19, 0.95)
+    assert row["rejections"] == {"rejected_by_oracle:strict_unitary": 1}
+    assert report["serving_model_matched_requested_on_all"] is True
+    assert report["actual_usd"] == pytest.approx(0.02)

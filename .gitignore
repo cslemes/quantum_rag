@@ -37,3 +37,4 @@ Thumbs.db
 # machine-specific, never a real cert in version control
 corporate-ca.crt
 
+results/distill/*/negative_control/cache/

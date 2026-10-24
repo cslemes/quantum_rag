@@ -356,6 +356,16 @@ def _score(
     pool: WorkerPool,
 ) -> None:
     assert outcome.response is not None
+    finish = (record.get("provenance") or {}).get("derived", {}).get("finish_reason")
+    if finish == "length":
+        # The reasoning (or the answer) used the whole completion budget: whatever
+        # code there is, is cut off. Not a syntax error and not a verdict on the
+        # teacher's circuit; a budget fact, coded as such.
+        record["code"] = _extract_code(outcome.response.text)
+        record["static"] = None
+        record["acceptance"] = None
+        record["reject_reason"] = "truncated:finish_reason_length"
+        return
     code = _extract_code(outcome.response.text)
     record["code"] = code
     static = check_static(code, None, pool)

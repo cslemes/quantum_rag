@@ -1,0 +1,108 @@
+{
+  "dataset_version": "pilot-v1",
+  "teacher": {
+    "profile": "teacher-deepseek-v4.1-flash-1017",
+    "model": "deepseek/deepseek-v4.1-flash-1017",
+    "canonical_slug": "deepseek/deepseek-v4.1-flash-20261017",
+    "reasoning_effort": "high",
+    "provider_options": {
+      "enforce_distillable_text": true
+    },
+    "temperature": 1.0,
+    "top_p": 1.0,
+    "system_prompt_sha256": "a82f0e46e91be6c9",
+    "seed": 1,
+    "max_tokens": 4096,
+    "max_tokens_headroom": 12000
+  },
+  "statements": 80,
+  "accepted": 76,
+  "by_family": {
+    "qubit_permutation": {
+      "statements": 20,
+      "accepted": 19,
+      "acceptance": 0.95,
+      "rejections": {
+        "static_failed:MissingImport": 1
+      },
+      "tokens": {
+        "input": 4475,
+        "output_total": 10721,
+        "reasoning": 9978,
+        "visible": 743
+      },
+      "usd": 0.00658
+    },
+    "graph_state": {
+      "statements": 20,
+      "accepted": 20,
+      "acceptance": 1.0,
+      "rejections": {},
+      "tokens": {
+        "input": 5064,
+        "output_total": 5481,
+        "reasoning": 4130,
+        "visible": 1351
+      },
+      "usd": 0.004056
+    },
+    "pauli_hamiltonian_energy": {
+      "statements": 20,
+      "accepted": 17,
+      "acceptance": 0.85,
+      "rejections": {
+        "rejected_by_oracle:check_energy": 2,
+        "static_failed:SyntaxError": 1
+      },
+      "tokens": {
+        "input": 4686,
+        "output_total": 100089,
+        "reasoning": 96223,
+        "visible": 3866
+      },
+      "usd": 0.055897
+    },
+    "independent_biased_bits": {
+      "statements": 20,
+      "accepted": 20,
+      "acceptance": 1.0,
+      "rejections": {},
+      "tokens": {
+        "input": 4525,
+        "output_total": 5098,
+        "reasoning": 3421,
+        "visible": 1677
+      },
+      "usd": 0.00376
+    }
+  },
+  "paid_calls": 80,
+  "rechecked_from_cache": 11,
+  "actual_usd": 0.070293,
+  "labelled_estimate_usd": 0.1116,
+  "actual_over_labelled_estimate": 0.63,
+  "serving_model_counts": {
+    "deepseek/deepseek-v4.1-flash-1017": 80
+  },
+  "serving_model_matched_requested_on_all": true,
+  "providers": {
+    "Wafer": 32,
+    "Morph": 18,
+    "Fireworks": 1,
+    "Relace": 7,
+    "Sail Research": 5,
+    "InferenceNet": 8,
+    "PrimeIntellect": 2,
+    "Decart": 3,
+    "Reka": 2,
+    "DigitalOcean": 1,
+    "Ionstream": 1
+  },
+  "finish_reasons": {
+    "stop": 79,
+    "length": 1
+  },
+  "price_windows": {
+    "off-peak": 80
+  }
+}

@@ -1,0 +1,133 @@
+{
+  "dataset_version": "pilot-v1",
+  "identity": {
+    "profile": "teacher-deepseek-v4.1-flash-1017",
+    "model": "deepseek/deepseek-v4.1-flash-1017",
+    "canonical_slug": "deepseek/deepseek-v4.1-flash-20261017",
+    "reasoning_effort": "high",
+    "provider_options": {
+      "enforce_distillable_text": true
+    },
+    "temperature": 1.0,
+    "top_p": 1.0,
+    "system_prompt_sha256": "a82f0e46e91be6c9",
+    "seed": 1,
+    "max_tokens": 4096,
+    "max_tokens_headroom": 12000
+  },
+  "first_estimate": {
+    "usd": 0.1116,
+    "window": "off-peak",
+    "taken_at": "2026-10-24T02:20:53+00:00",
+    "rates_usd_per_mtok": [
+      0.15,
+      0.6
+    ],
+    "rates_source": "operator-stated 2026-10-24; pricing endpoint path unconfirmed",
+    "basis": "80 calls x (900 in + 2100 out tokens) at the off-peak rates"
+  },
+  "spend_authorization": {
+    "ceiling_usd": 0.36,
+    "granted_by": "operator, via --authorize-spend 0.36"
+  },
+  "snapshot_facts": {
+    "id": "deepseek/deepseek-v4.1-flash-1017",
+    "canonical_slug": "deepseek/deepseek-v4.1-flash-20261017",
+    "hugging_face_id": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+    "supported_efforts": [
+      "max",
+      "high",
+      "low",
+      "none"
+    ],
+    "default_effort": "high",
+    "listed_pricing": {
+      "prompt": "0.00000015",
+      "completion": "0.0000006",
+      "input_cache_read": "0.000000003",
+      "overrides": [
+        {
+          "utc_days": [
+            "saturday",
+            "sunday"
+          ],
+          "prompt": "0.00000015",
+          "completion": "0.0000006",
+          "input_cache_read": "0.000000003"
+        },
+        {
+          "utc_days": [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday"
+          ],
+          "utc_start": 0,
+          "utc_end": 100,
+          "prompt": "0.00000015",
+          "completion": "0.0000006",
+          "input_cache_read": "0.000000003"
+        },
+        {
+          "utc_days": [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday"
+          ],
+          "utc_start": 100,
+          "utc_end": 400,
+          "prompt": "0.0000003",
+          "completion": "0.0000012",
+          "input_cache_read": "0.000000006"
+        },
+        {
+          "utc_days": [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday"
+          ],
+          "utc_start": 400,
+          "utc_end": 600,
+          "prompt": "0.00000015",
+          "completion": "0.0000006",
+          "input_cache_read": "0.000000003"
+        },
+        {
+          "utc_days": [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday"
+          ],
+          "utc_start": 600,
+          "utc_end": 1000,
+          "prompt": "0.0000003",
+          "completion": "0.0000012",
+          "input_cache_read": "0.000000006"
+        },
+        {
+          "utc_days": [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday"
+          ],
+          "utc_start": 1000,
+          "utc_end": 0,
+          "prompt": "0.00000015",
+          "completion": "0.0000006",
+          "input_cache_read": "0.000000003"
+        }
+      ]
+    }
+  },
+  "listing_discrepancies": [],
+  "created_at": "2026-10-24T02:20:53+00:00"
+}
