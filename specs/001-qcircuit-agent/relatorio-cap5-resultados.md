@@ -15,7 +15,9 @@ sistema em que foi medida: a build do servidor *e* o estado do código (corpus,
 correções que já tinham entrado). Nenhuma cifra de um estado anterior a uma
 correção aparece no presente: ou é rotulada como histórica, com a execução e o
 denominador, ou é re-derivada no estado vigente. A regra existe porque ela foi
-violada: ver o capítulo 6, §6.5, "Uma cifra interna de antes da correção".
+violada: ver o capítulo 6, §6.5, "Uma cifra interna de antes da correção". Durações
+têm dois nomes fixos, tempo de relógio e tempo de execução, e nunca aparecem sem
+um deles (§5.6).
 
 ---
 
@@ -177,7 +179,8 @@ O cache de respostas **não pode** ter servido as chamadas da segunda execução
 A razão por tarefa entre os tempos de parede de A2 e A tem mediana 1,00 (mínimo
 0,98, nenhuma tarefa abaixo de 0,5), e as duas execuções levaram o mesmo tempo
 de execução, 200 minutos; um replay servido por cache foi medido antes em 2 min
-24 s contra 8 min 51 s (3,7 vezes mais rápido). Os registros de projeto dizem
+24 s contra 8 min 51 s (3,7 vezes mais rápido; tempo total de um piloto de 20
+tarefas, sem separar execução de relógio). Os registros de projeto dizem
 que o diretório do cache foi limpo antes das duas execuções (isso não é
 re-verificável hoje). E um acerto dentro de uma execução não esconderia uma
 divergência entre as duas, porque a primeira ocorrência de um prompt é uma
@@ -225,9 +228,9 @@ de um formato anterior e não casam com as atuais, e os 988 arquivos de cache qu
 existiam antes de G são os de E. Para as duas tarefas de controle, o registro
 da suíte é a cópia da geração do verificador de protocolo, comparada com E do
 mesmo modo. A taxa de acerto de E **não foi gravada** (o relato por execução veio
-depois); o argumento de que E foi fria é o tempo de parede (81,7 min de relógio
-contra uma primeira E, que foi replay, de 9; razão por tarefa em relação a C
-com mediana 1,04). Uma repetição só, em uma build: não mostra que duas outras
+depois); o argumento de que E foi fria é o tempo de execução (67,2 min contra 66,1 de C
+e contra 2,4 min da primeira E, que foi replay; razão por tarefa em relação a C
+com mediana 1,04), a medida certa para "isto chamou o modelo" (§5.6). Uma repetição só, em uma build: não mostra que duas outras
 repetições coincidiriam.
 
 **(4) Entre builds do servidor, o determinismo não vale.** C e E diferem só na
@@ -319,26 +322,47 @@ diluído na média.
 
 ## 5.6 Desempenho
 
-Existem três medições de duração de suíte, sob configurações diferentes:
+**Duas medidas, dois nomes fixos, e uma só por afirmação.**
 
-| rodada | configuração | tempo |
-|---|---|---|
-| A (`99960870…`) | 360 execuções, 3 sementes, reset único, Ollama 0.34.1 | 205,8 min |
-| B (`9e19fa12…`) | 360 execuções, 3 sementes, `reset_per_run`, Ollama 0.34.4 | 260 min |
-| C (`1bf505bf…`) | 120 execuções, 1 semente, `reset_per_run`, Ollama 0.35.1 | **72 min** |
-| E (`7fd09e27…`) | 120 execuções, 1 semente, `reset_per_run`, Ollama 0.40.8 | 67,2 min de execução (81,7 de relógio) |
-| G (`f64b9464…`) | 120 execuções, 1 semente, `reset_per_run`, Ollama 0.40.8 | 68,1 min de execução (83,9 de relógio) |
+- **Tempo de relógio**: do lançamento do processo ao seu fim. Responde "quanto
+  tempo a suíte leva", e é a base do critério SC-007 (3 h para 3 sementes).
+- **Tempo de execução**: a soma de `latency_s` dos registros. Responde "quanto
+  cômputo a suíte consome", e é a medida certa para comparar uma execução real
+  com um replay de cache.
 
-**Não há um número citável único: cada tempo vale para a sua run e a sua build.**
-Para a suíte de 120 execuções com uma semente, o protocolo vigente deu 72 min em
-C (0.35.1) e 67–68 min de execução, 82–84 de relógio, em E e G (0.40.8); a
-versão anterior deste parágrafo citava os 72 minutos de C como "a suíte como
-configurada hoje", e as runs seguintes já não a confirmavam. As medidas não são
-comparáveis entre si — diferem em número de execuções, protocolo de reset e
-versão de servidor — e não constituem série temporal de desempenho. Nenhuma
-tendência é afirmada a partir delas. O executor do sandbox foi trocado depois de
-todas elas (workers como processos novos, §5.7); o efeito dessa troca no tempo
-não foi medido.
+Uma terceira quantidade, o intervalo entre o início do primeiro registro e o fim
+do último, não é uma medida citável: serve só de ponte, para dizer de onde vem a
+diferença entre as duas.
+
+| run | configuração | execução | intervalo 1º→último registro | relógio |
+|---|---|---|---|---|
+| A (`99960870…`) | 360 execuções, 3 sementes, reset único, Ollama 0.34.1 | 200,1 min | 200,1 min | 205,8 min |
+| B (`9e19fa12…`) | 360 execuções, 3 sementes, `reset_per_run`, Ollama 0.34.4 | 236,4 min | 254,5 min | 260,4 min |
+| C (`1bf505bf…`) | 120 execuções, 1 semente, `reset_per_run`, Ollama 0.35.1 | 66,1 min | 72,1 min | **não gravado** |
+| E (`7fd09e27…`) | 120 execuções, 1 semente, `reset_per_run`, Ollama 0.40.8 | 67,2 min | 73,2 min | 81,7 min |
+| F (`a6a6a63f…`, 1,5B) | 120 execuções, 1 semente, `reset_per_run`, Ollama 0.40.8 | 112,4 min | 118,4 min | 126,5 min |
+| G (`f64b9464…`) | 120 execuções, 1 semente, `reset_per_run`, Ollama 0.40.8 | 68,1 min | 74,1 min | 83,9 min |
+
+Sobre a diferença entre o relógio e a execução (cerca de 15 minutos em E e G):
+**só uma parte é o reinício do servidor.** Os registros mostram que o intervalo
+entre tarefas é exatamente 3,0 s por execução em todas as runs com
+`reset_per_run` (18,1 min em B, 6,0 min em C, E, F e G) e zero em A (um
+descarregamento único): esse é o reinício. O resto é a verificação de
+referências e o verificador de protocolo, que rodam antes da primeira execução
+(cerca de 5,7 a 9,8 min). O relógio de C não foi gravado: o "72 min" que este
+capítulo citava era o intervalo 1º→último registro (72,1), e o "81,7" de E, o
+relógio; a primeira correção deste parágrafo ainda misturou as duas.
+
+**Qual medida sustenta qual afirmação.** "Quanto tempo a suíte leva": relógio
+(E 81,7 e G 83,9 min, uma semente; A 205,8 e B 260,4 min, três sementes, que
+reprovam o SC-007). "Quanto cômputo consome": execução (66 a 68 min nas três
+runs de 7B; 112,4 min no 1,5B, que falha mais e gasta as cinco iterações com
+mais frequência). "A execução E foi real, não replay": execução (67,2 min contra
+2,4 min do replay). As medidas não são comparáveis entre as linhas — diferem em
+número de execuções, protocolo de reset e versão de servidor — e não constituem
+série temporal de desempenho. O executor do sandbox foi trocado depois de todas
+elas (workers como processos novos, §5.7); o efeito dessa troca no tempo não foi
+medido.
 
 Os tempos observados na interface não entram aqui: são réplica de cache e não
 medem geração.

@@ -44,7 +44,8 @@ sistema em que foi medida, e isso inclui o *estado do código* (corpus, correç�
 já aplicadas), não só a build do servidor. Nenhuma cifra de um estado anterior a
 uma correção é usada no presente: é rotulada como histórica, com a execução e o
 denominador, ou re-derivada no estado vigente (§6.5, "Uma cifra interna de antes
-da correção").
+da correção"). Durações têm dois nomes fixos, tempo de relógio e tempo de
+execução, nunca sem nome (capítulo 5, §5.6).
 
 ---
 
@@ -599,8 +600,9 @@ da semente.
 
 Esta é a instância central da seção. A primeira execução E (7B, Ollama 0.40.8)
 deu 7/120 sucessos, `compila@1` 20/120 e veredito semântico 57/120 — números
-plausíveis, quase iguais aos da execução C — em **9 minutos** de execução,
-contra os 72 da C. Era um replay do cache de respostas da C: o cache era
+plausíveis, quase iguais aos da execução C — em **2,4 minutos de
+execução**, contra os 66,1 da C (o intervalo do primeiro ao último registro foi de
+8,5 contra 72,1). Era um replay do cache de respostas da C: o cache era
 chaveado por `modelo|semente|system|prompt`, o *nome* do modelo não mudou, e a
 build do servidor sob esse nome sim (0.35.1 → 0.40.8). O portão de versão
 checou o servidor e passou; ele não vê o cache. **Nada na saída mostrava o
@@ -736,9 +738,12 @@ por uma varredura dos capítulos 5 e 6:
   o índice fixado das execuções B a G é o corpus 1.2 de 875 chunks, onde a mesma
   medida dá 0,9365 (59 de 63). Estava **publicada** no capítulo 5 sem estado e
   lida como o recall do sistema medido.
-- **"72 minutos, para a suíte como configurada hoje"** (§5.6): o tempo da run C
-  (0.35.1). As runs E e G (0.40.8) levaram 67–68 minutos de execução e 82–84 de
-  relógio.
+- **"72 minutos, para a suíte como configurada hoje"** (§5.6): o intervalo do
+  primeiro ao último registro da run C (0.35.1), sem dizer qual medida era. As
+  runs E e G (0.40.8) levaram 67–68 minutos de execução e 82–84 de relógio, e a
+  primeira correção misturou as duas medidas (o 72 de C com o 81,7 de E). A
+  correção que ficou é a regra de nomear a medida: tempo de relógio para "quanto
+  leva", tempo de execução para "quanto cômputo consome".
 - **"Não foi investigado"** (§5.3, o resumo do circuito serializado), texto que
   sobreviveu à investigação que o resolveu mais adiante no mesmo capítulo. Não é
   uma cifra, é a mesma falha em prosa.
@@ -872,7 +877,7 @@ alterado; mudá-lo muda o instrumento).**
    `SyntaxError` para a análise sintática. Muda a string que o modelo vê em 108
    dos 117 registros da run E: muda o *prompt*, logo as saídas, logo o
    instrumento. Custo: refazer as execuções de 120 tarefas (cerca de 70 a 84
-   minutos de relógio por 7B), restabelecer o par de repetição (duas execuções
+   minutos de relógio por 7B nas runs E e G: 81,7 e 83,9), restabelecer o par de repetição (duas execuções
    por modelo) e reapresentar o capítulo 5 sem comparabilidade com C a G. O
    ganho é de nomes, não de ação.
 
@@ -887,20 +892,28 @@ preenchido, com um valor válido, e a única pista é a mensagem que ninguém
 agregou. Vale para qualquer classificador de falhas com um caso "outros" que tem o
 nome de um caso específico.
 
-### O laço quase sempre desiste
+### O laço sempre desiste
 
-Das 335 falhas que chegaram a gerar código no baseline de 19/09 (execução
-T102, Ollama 0.34.1, anterior ao roteamento de `MissingImport`, 341 execuções
-válidas), **331 terminaram por esgotamento** das cinco iterações; as outras 4
-foram recusadas na entrada. No estado vigente a observação se mantém: todas as
-falhas que geraram código terminaram na quinta iteração, **112 de 112 na run C**
-(7B, Ollama 0.35.1), **114 de 114 na E** (7B, 0.40.8) e **118 de 118 na F** (1,5B,
-0.40.8). O laço tem essencialmente um modo de término, a desistência, e os 6
-sucessos do baseline são a cauda, não o comportamento. A leitura ingênua ("zero acertos de primeira, e
-o laço resgata 6") parece um laço que funciona pouco mas funciona. **[a]**
-(331/335.) O custo de um diagnóstico errado escala com o limite de iterações:
-cinco de um diagnóstico certo e cinco de um errado custam o mesmo em chamadas,
-tempo e energia, e só difere se alguma delas podia funcionar.
+No baseline de 19/09 (execução T102, Ollama 0.34.1, anterior ao roteamento de
+`MissingImport`, 341 execuções válidas), 335 execuções falharam e **331 delas
+esgotaram** as cinco iterações (as outras 4 foram recusadas na entrada). Nas runs
+vigentes não é "quase sempre": é **sempre**. Toda execução que gerou código e não
+terminou em sucesso chegou à quinta iteração: **113 de 113 na run C** (7B, Ollama
+0.35.1; 112 falhas mais 1 abortada por recursos, também na quinta), **115 de 115
+na E** e **115 de 115 na G** (7B, 0.40.8) e **118 de 118 na F** (1,5B, 0.40.8).
+Nenhuma parou antes. **[a]** (denominadores acima; as execuções que terminam em
+sucesso são as únicas que saem do laço.) O laço tem um único modo de término na
+falha, o teto, e os sucessos são a cauda, não o comportamento. A leitura ingênua
+("zero acertos de primeira, e o laço resgata alguns") parece um laço que funciona
+pouco mas funciona.
+
+A consequência de projeto está no capítulo 3 (§3.3): o laço tem um teto de
+iterações e **nenhuma detecção de convergência**, de modo que cada falha custa
+cinco gerações, e é o que torna o custo de um diagnóstico errado proporcional ao
+teto: cinco de um diagnóstico certo e cinco de um errado custam o mesmo em
+chamadas, tempo e energia, e só difere se alguma delas podia funcionar. A
+proposta que isso sugere, com o custo medido, está no capítulo 8 (§8.2); este
+capítulo só registra o fato.
 
 ### Retrieval não entrega conhecimento negativo
 

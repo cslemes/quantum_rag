@@ -110,6 +110,17 @@ O princípio que governa: nenhum veredito vem de julgamento de LLM.
 Classificação da causa → ação corretiva correspondente. A taxonomia fechada.
 [FONTE: `data-model.md`, tabela de `error_type`]
 
+**Fato de projeto a registrar aqui (e só aqui; o capítulo 6, §6.6, o cita):** o
+laço tem um teto de iterações (`MAX_ITER` = 5) e **nenhuma detecção de
+convergência**. Não para antes do teto e não percebe que se repete, de modo que
+**cada falha custa cinco gerações**. A única parada antecipada no código é
+estreita: duas ocorrências consecutivas da mesma asserção "não avaliável"
+(`critic.py::_is_repeated_not_evaluable`, US3), e a suíte não usa asserções. Nem a
+falha idêntica repetida nem o código idêntico são detectados. Medido: toda
+execução que gerou código e não terminou em sucesso chegou à iteração 5, **113 de
+113 em C** (7B, Ollama 0.35.1), **115 de 115 em E** e **em G** (7B, 0.40.8) e
+**118 de 118 em F** (1,5B, 0.40.8).
+
 ### 3.4 Recuperação versionada
 
 Híbrido esparso + denso, filtro por versão, material obsoleto rotulado em vez de
@@ -330,6 +341,34 @@ Um diagnóstico incorreto é pior que nenhum — ancora o modelo numa direção 
 ### 8.1 O que foi entregue
 
 ### 8.2 Trabalhos futuros
+
+- **Parar quando a falha se repete (proposta; muda o instrumento; não construída).**
+  O capítulo 3 (§3.3) registra que o laço não detecta convergência; o §6.6 e o
+  cap. 5 (§5.5) registram que o diagnóstico ancorado (T090d) *aumentou* as falhas
+  idênticas consecutivas, de 5 para 11 (R3 → R4, 30B no pod, Ollama 0.34.4, n = 16).
+  Nenhum dos dois achados diz isto sozinho: o diagnóstico mais firme produz
+  repetição, e o laço não tem mecanismo para perceber a repetição. Parar numa falha
+  idêntica repetida recuperaria, nas tarefas que travam num ponto fixo, cerca de
+  três das cinco tentativas. **Medido nos registros vigentes** (falha idêntica =
+  mesmo estágio, tipo e mensagem em tentativas consecutivas; 7B nas runs C e E/G,
+  1,5B na F):
+  - parar na **2ª** ocorrência consecutiva poupa 20,4% das tentativas em C, 19,7%
+    em E/G e 51,0% em F, **mas teria perdido 3 dos 7 sucessos de C** (ghz_5q,
+    ghz_linear5_endpoints, ghz_linear5_scattered_even: todos saíram depois de uma
+    falha idêntica), nenhum dos 5 de E, nenhum do 1 de F;
+  - parar na **3ª** poupa 8,8% em C, 8,0% em E/G e 30,5% em F, e **não perde
+    nenhum sucesso** nas três runs (o maior bloco de falhas idênticas antes de um
+    sucesso foi 2);
+  - "três de cinco" vale para o subconjunto que trava desde o início (falhas
+    idênticas nas cinco tentativas: 14 execuções em C, 17 em E, 77 em F); no
+    conjunto de todas as falhas do 7B a economia é de 8% a 20%, e é no 1,5B que ela
+    é grande.
+  A regra existe em forma estreita no código (a asserção "não avaliável"
+  repetida), de modo que a proposta é generalizá-la; o limiar é uma escolha entre
+  custo e sucessos resgatados, e as contagens acima são de n = 1 a 7 sucessos por
+  run. **Muda o instrumento** (a parada altera o que é medido: execuções mais
+  curtas, e a invariância das runs C a G deixa de valer), e por isso não foi
+  construída.
 
 - Execução em hardware real *(ou seção de resultados, se a US5 entrar)*
 - Reparo incremental — a hipótese H-inc, registrada com condições de falsificação

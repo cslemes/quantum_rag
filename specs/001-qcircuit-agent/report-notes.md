@@ -6822,3 +6822,39 @@ headroom (tests added). Consequence for the pilot: its energy acceptance of 17/2
 OLD 12,000 headroom, and one of its three rejections was the truncation, so energy acceptance at
 32,000 is unmeasured; do not carry 17/20 forward. Regenerating the 80 statements at the new
 headroom would cost about seven cents; not run (spend needs `--authorize-spend`).
+
+## 2026-10-25 — durations get two fixed names; the loop always gives up (and what a stop rule would cost)
+
+**Durations (chapter 5 section 5.6, rewritten).** Two measures, two names, one per claim: CLOCK
+time (process launch to exit; "how long the suite takes"; basis of SC-007) and EXECUTION time (sum
+of `latency_s`; "how much compute it consumes"; the right measure for "this run called the model" vs
+a replay). The interval first-record-start to last-record-end is a bridge, not a citable measure.
+Re-derived from the records for every run: A 200.1 exec / 200.1 interval / 205.8 clock; B 236.4 /
+254.5 / 260.4; C 66.1 / 72.1 / clock NOT RECORDED; E 67.2 / 73.2 / 81.7; F 112.4 / 118.4 / 126.5;
+G 68.1 / 74.1 / 83.9. The earlier "72 min" for C was the interval, the "81.7" for E the clock, and my
+last restatement mixed them (the section was wrong a third time). The replay "first E" is 2.4 min of
+execution (8.5 interval) against 66-67 for a real run.
+**Correction to the stated cause of the ~15 min gap in E and G:** only part of it is the server
+reset. Between-task time is exactly 3.0 s per run under `reset_per_run` (18.1 min in B, 6.0 min in
+C, E, F, G) and zero in A (single unload): that is the reset. The rest (5.7 to 9.8 min) is the
+start-up reference verification and the protocol canary, before the first record.
+Unresolved: the F18 pilot's "2 min 24 s against 8 min 51 s" does not say which measure it was; it
+is labelled as such in 5.3.
+
+**The loop always gives up.** Including the aborted run: every run that generated code and did not
+succeed reached iteration 5: C 113/113 (112 failures + 1 aborted for resources), E 115/115, G 115/115,
+F 118/118 (the figures in the request, 112/114/118, left out the aborted runs, which also ended at 5).
+Chapter 3 design fact (in the skeleton, 3.3): iteration cap, NO convergence detection; the one
+exception in code is two consecutive identical AssertionNotEvaluable (`critic.py::
+_is_repeated_not_evaluable`, US3), unused by the suite; so every failure costs five generations.
+
+**Proposal for chapter 8 (not built; it changes the instrument): stop on a repeated identical
+failure.** Composition: T090d's anchored diagnosis raised identical consecutive failures 5 -> 11
+(R3 -> R4, 30B, pod, 0.34.4, n=16) and the loop cannot notice. Measured on the current records
+(identical = same stage, type and message in consecutive attempts), what the rule would have done:
+stop at the 2nd identical in a row: attempts saved C 20.4%, E/G 19.7%, F 51.0%, but 3 of C's 7
+successes (all three succeeded after one identical failure) would have been lost; stop at the 3rd:
+saved C 8.8%, E/G 8.0%, F 30.5%, successes lost 0/7, 0/5, 0/1 (the longest identical block before
+any success is 2). The "three of five attempts" holds for runs that are stuck from the start
+(identical failures in all five attempts: 14 in C, 17 in E, 77 in F), not for failures in general.
+The threshold is a trade between attempts saved and rescues kept, on n of 1 to 7 successes per run.
