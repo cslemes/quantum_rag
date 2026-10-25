@@ -1,0 +1,20 @@
+{
+ "target_statements": 5000,
+ "capacity": {
+  "qubit_permutation": 5905,
+  "stabilizer_graph_states": 27470,
+  "pauli_hamiltonian_energy": 178070991347092101120,
+  "independent_biased_bits": 11668193208,
+  "simon": 320,
+  "grover": 3196068,
+  "w_dicke": 87425
+ },
+ "oracle_times": {
+  "pauli_energy_exact_diagonalisation_seconds": {
+   "8": 0.009,
+   "10": 0.098,
+   "11": 0.569,
+   "12": 18.701
+  }
+ }
+}

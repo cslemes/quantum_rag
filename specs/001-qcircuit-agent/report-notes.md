@@ -6910,3 +6910,19 @@ The threshold is a trade between attempts saved and rescues kept, on n of 1 to 7
    unmeasured. Chapter 7 (skeleton) lacked the MEASUREMENT limit; added: every one of the 120 tasks has
    a reference and `assertions: []` (checked in C, E, F, G), so the product's distinctive path is the
    least measured thing in the work.
+
+## 2026-10-25 — candidate families computed from the in-family statements (nothing generated)
+
+Report: `specs/001-qcircuit-agent/distill-family-selection.md`. Fairness boundary (Step 0): only the
+`prompt` of the 96 in-family tasks; no reference circuit and no held-out task opened (held-out files are
+skipped by name before opening; a test spies on every file opened); held-out FAMILY NAMES used only for
+filter (c). Consequence for the final claim: bounded to "trained for this benchmark's distribution".
+Histogram: `bench/skill_histogram.json` (36 skills; hadamard 68, Pauli-sum Hamiltonian 44, unitary-block
+41, diagonal phase evolution 40, restricted gate set 30, ancilla/register layout 29, ...). Result: 64 of
+the 96 statements name a skill whose only family is blocked by (c); the diagonal phase exp(-i gamma H)
+(rank 4) is out because qaoa_maxcut is its beta=0 extension. The four built families, with family 3
+extended to GHZ's class and three axes (gate set, coupling map, composition), reach the 5,000-statement
+target with zero new constructions (equal allocation 1,250 each); next unused skill: register layout (29),
+which needs Simon. The literal stop rule is degenerate (capacity never binds). Open: filter (c)'s reading,
+the 5,000 target, a per-family ceiling, whether to add Simon, GHZ leakage. Exact diagonalisation wall
+measured: 10 qubits 0.1 s, 11 qubits 0.6 s, 12 qubits 18.7 s.
