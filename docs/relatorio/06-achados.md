@@ -398,6 +398,21 @@ não se propagam" não permite.
   proteção é a recusa local (processos novos), e foi testada nas trajetórias de
   substituição, que a ordenação não cobre. *[a para o mecanismo, reproduzido; o alcance é o da varredura dos
   registros]*
+- **Uma regra de parada que parou onde foi escrita.** O projeto já decidiu que uma
+  falha idêntica repetida significa parar: `critic.py::_is_repeated_not_evaluable`
+  aborta quando a mesma asserção volta "não avaliável" em duas iterações
+  consecutivas, com a justificativa no código ("evidência de que regenerar não
+  está convergindo"). Foi implementada para esse único tipo de erro e nunca chegou
+  ao código ao lado: a falha idêntica repetida de qualquer outro tipo não é
+  detectada, e as runs C, E, F e G gastam as cinco gerações em toda falha (§6.6).
+  Além disso, o caminho onde a regra existe não é exercido pela suíte, que não usa
+  asserções: nas runs medidas ela não pôde disparar nem uma vez. *Registro exato,
+  porque não é um gêmeo perfeito de `assert_full_gpu_offload`:* aquela proteção não
+  tinha chamador nenhum; esta tem chamador (`route_action`) e testes (unitários e
+  de integração), e funciona no produto. O que ela compartilha é a forma: uma regra
+  correta, enunciada num lugar, que as medições nunca tomam. *[a]* para as
+  contagens (nenhuma parada antecipada em 461 execuções falhas ou abortadas de C, E,
+  G e F), *[b]* para a leitura do código.
 - **O estado interno do servidor entre tarefas.** O descarregamento do modelo
   era feito uma vez por execução da suíte, não por (tarefa, semente); o cache
   interno de prompt e KV do Ollama carregava estado de uma tarefa para a
@@ -914,6 +929,29 @@ teto: cinco de um diagnóstico certo e cinco de um errado custam o mesmo em
 chamadas, tempo e energia, e só difere se alguma delas podia funcionar. A
 proposta que isso sugere, com o custo medido, está no capítulo 8 (§8.2); este
 capítulo só registra o fato.
+
+### Uma repetição não é evidência de estar preso
+
+A heurística óbvia para um laço que sempre desiste é parar quando a falha se
+repete. Medida nos registros vigentes, a versão ingênua, parar na **segunda**
+falha idêntica consecutiva (mesmo estágio, tipo e mensagem), **teria perdido 3
+dos 7 sucessos da run C** (7B, Ollama 0.35.1): `ghz_5q`, `ghz_linear5_endpoints` e
+`ghz_linear5_scattered_even` saíram depois de exatamente uma repetição. Quase
+metade (43%) dos sucessos dessa run veio depois de uma única repetição. Nas runs E
+e G (7B, 0.40.8; 5 sucessos) e F (1,5B; 1 sucesso), nenhum teria sido perdido.
+Parar na **terceira** falha idêntica não perde nenhum sucesso em nenhuma das três
+runs (o maior bloco de falhas idênticas antes de um sucesso foi 2). **[a]**
+(3/7 em C, 0/5 em E, 0/1 em F; n pequeno, e o limiar de 3 é seguro *nessas* runs,
+não em geral.) Uma única repetição não distingue "preso" de "convergindo devagar";
+a heurística plausível foi refutada pela medição antes de existir, e isso vale
+mais que a proposta do §8.2.
+
+Duas ressalvas sobre a família. As três tarefas resgatadas são todas GHZ. Com n = 3
+pode ser coincidência, mas indica que o limiar interage com a família, e a
+proposta tem de dizê-lo: em E os dois sucessos GHZ (`ghz_linear5_mixed`,
+`ghz_linear5_scattered_even`) não tiveram repetição alguma, de modo que a
+interação, se existe, é família por build, e não foi mostrada. **[b]** para a
+interação (três casos, uma run).
 
 ### Retrieval não entrega conhecimento negativo
 

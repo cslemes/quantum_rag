@@ -6858,3 +6858,28 @@ saved C 8.8%, E/G 8.0%, F 30.5%, successes lost 0/7, 0/5, 0/1 (the longest ident
 any success is 2). The "three of five attempts" holds for runs that are stuck from the start
 (identical failures in all five attempts: 14 in C, 17 in E, 77 in F), not for failures in general.
 The threshold is a trade between attempts saved and rescues kept, on n of 1 to 7 successes per run.
+
+## 2026-10-25 — a single repeat is not "stuck"; prediction on repair sensitivity registered before training
+
+1. **Stop-at-2nd refuted by measurement (elevated in 6.6, "Uma repetição não é evidência de
+   estar preso", and leading the 8.2 bullet).** Parar na segunda falha idêntica consecutiva would
+   have lost 3 of C's 7 successes (ghz_5q, ghz_linear5_endpoints, ghz_linear5_scattered_even); 43%
+   of C's successes came after exactly one repeat. All three are GHZ; at n=3 it may be coincidence,
+   but the threshold interacts with family (E's two GHZ successes had no repeat: family-by-build, not
+   shown). Safe threshold in the measured runs: the 3rd identical failure (0/7, 0/5, 0/1 lost); that
+   safety is empirical, in these runs.
+2. **Prediction registered** in `distill-pilot-families.md` ("Prediction registered before any
+   training: repair sensitivity"), next to the held-out expectations: premise 77/118 (65.3%) of the
+   1.5B's failures are identical in all five attempts (56 SyntaxError-labelled, 53 of them parse
+   errors); definitions C, S, sigma, kappa; prediction kappa1 < 0.10 if sigma stays >= 50%;
+   refutation kappa1 >= 0.10 with C1 > C0 (phase 2 loses its justification); sigma < 50% leaves it
+   untested. Two things the records cannot show, stated in the registration: identical CODE (only the
+   final code is persisted) and which side is insensitive (the critic that writes the hint is the same
+   1.5B). With S0=1 the baseline conversion is fragile (Wilson 1.8-40.4%).
+3. **6.4 instance added (`_is_repeated_not_evaluable`).** Recorded with one correction to the twin
+   analogy: `assert_full_gpu_offload` had NO caller; this rule has a caller (`route_action`) and
+   unit and integration tests, and works in the product. What it shares is the form: a correct rule
+   stated in one place, on a path the measurements never take (the suite has no assertions). Zero
+   early stops in the 461 failed-or-aborted runs of C, E, G, F.
+4. **Durations:** 5.6 now says any "how long the suite takes" claim cites E or G, never C (clock
+   not recorded).

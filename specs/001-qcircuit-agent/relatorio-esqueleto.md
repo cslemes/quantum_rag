@@ -343,33 +343,31 @@ Um diagnóstico incorreto é pior que nenhum — ancora o modelo numa direção 
 ### 8.2 Trabalhos futuros
 
 - **Parar quando a falha se repete (proposta; muda o instrumento; não construída).**
-  O capítulo 3 (§3.3) registra que o laço não detecta convergência; o §6.6 e o
-  cap. 5 (§5.5) registram que o diagnóstico ancorado (T090d) *aumentou* as falhas
-  idênticas consecutivas, de 5 para 11 (R3 → R4, 30B no pod, Ollama 0.34.4, n = 16).
-  Nenhum dos dois achados diz isto sozinho: o diagnóstico mais firme produz
-  repetição, e o laço não tem mecanismo para perceber a repetição. Parar numa falha
-  idêntica repetida recuperaria, nas tarefas que travam num ponto fixo, cerca de
-  três das cinco tentativas. **Medido nos registros vigentes** (falha idêntica =
-  mesmo estágio, tipo e mensagem em tentativas consecutivas; 7B nas runs C e E/G,
-  1,5B na F):
-  - parar na **2ª** ocorrência consecutiva poupa 20,4% das tentativas em C, 19,7%
-    em E/G e 51,0% em F, **mas teria perdido 3 dos 7 sucessos de C** (ghz_5q,
-    ghz_linear5_endpoints, ghz_linear5_scattered_even: todos saíram depois de uma
-    falha idêntica), nenhum dos 5 de E, nenhum do 1 de F;
-  - parar na **3ª** poupa 8,8% em C, 8,0% em E/G e 30,5% em F, e **não perde
-    nenhum sucesso** nas três runs (o maior bloco de falhas idênticas antes de um
-    sucesso foi 2);
-  - "três de cinco" vale para o subconjunto que trava desde o início (falhas
-    idênticas nas cinco tentativas: 14 execuções em C, 17 em E, 77 em F); no
-    conjunto de todas as falhas do 7B a economia é de 8% a 20%, e é no 1,5B que ela
-    é grande.
-  A regra existe em forma estreita no código (a asserção "não avaliável"
-  repetida), de modo que a proposta é generalizá-la; o limiar é uma escolha entre
-  custo e sucessos resgatados, e as contagens acima são de n = 1 a 7 sucessos por
-  run. **Muda o instrumento** (a parada altera o que é medido: execuções mais
-  curtas, e a invariância das runs C a G deixa de valer), e por isso não foi
-  construída.
-
+  *O resultado que importa vem antes da proposta:* a heurística óbvia, parar na
+  **segunda** falha idêntica consecutiva, está **refutada por medição**. Nos
+  registros vigentes (falha idêntica = mesmo estágio, tipo e mensagem em tentativas
+  consecutivas) ela teria perdido **3 dos 7 sucessos da run C**: uma repetição
+  única não é evidência de estar preso, e 43% dos sucessos dessa run vieram
+  depois de exatamente uma. As três tarefas resgatadas são GHZ (`ghz_5q`,
+  `ghz_linear5_endpoints`, `ghz_linear5_scattered_even`); com n = 3 pode ser
+  coincidência, mas o limiar interage com a família (em E os dois sucessos GHZ não
+  tiveram repetição), e a proposta tem de dizê-lo. O limiar seguro nas três runs
+  medidas é a **terceira** falha idêntica: nenhum sucesso perdido em C (7), E/G (5)
+  ou F (1); o maior bloco de falhas idênticas antes de um sucesso foi 2. A
+  segurança do 3 é empírica, nessas runs, não geral.
+  *A proposta:* o capítulo 3 (§3.3) registra que o laço não detecta convergência e
+  o §6.6 e o cap. 5 (§5.5) que o diagnóstico ancorado (T090d) *aumentou* as falhas
+  idênticas consecutivas, de 5 para 11 (R3 → R4, 30B no pod, Ollama 0.34.4,
+  n = 16). Nenhum dos dois achados diz isto sozinho: o diagnóstico mais firme
+  produz repetição, e o laço não tem mecanismo para percebê-la. A regra existe, para
+  um único tipo de erro, em `critic.py::_is_repeated_not_evaluable` (§6.4), e
+  generalizá-la para a **terceira** falha idêntica economiza, nas runs medidas, 8,8%
+  das tentativas em C, 8,0% em E/G e 30,5% em F (a 2ª economizaria 20,4%, 19,7% e
+  51,0%, ao custo acima). "Três de cinco tentativas" só vale para as execuções
+  travadas desde o início (falhas idênticas nas cinco tentativas: 14 em C, 17 em E,
+  77 em F); no conjunto das falhas do 7B a economia é de 8% a 20%. **Muda o
+  instrumento** (execuções mais curtas, e a invariância de C a G deixa de valer),
+  por isso não foi construída.
 - Execução em hardware real *(ou seção de resultados, se a US5 entrar)*
 - Reparo incremental — a hipótese H-inc, registrada com condições de falsificação
 - Verificar circuito escrito pelo próprio usuário (`/api/check` já é 80% disso)

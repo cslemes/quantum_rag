@@ -353,7 +353,8 @@ referências e o verificador de protocolo, que rodam antes da primeira execuçã
 capítulo citava era o intervalo 1º→último registro (72,1), e o "81,7" de E, o
 relógio; a primeira correção deste parágrafo ainda misturou as duas.
 
-**Qual medida sustenta qual afirmação.** "Quanto tempo a suíte leva": relógio
+**Qual medida sustenta qual afirmação.** "Quanto tempo a suíte leva": relógio,
+citando só E ou G, **nunca C, cujo relógio não foi gravado**
 (E 81,7 e G 83,9 min, uma semente; A 205,8 e B 260,4 min, três sementes, que
 reprovam o SC-007). "Quanto cômputo consome": execução (66 a 68 min nas três
 runs de 7B; 112,4 min no 1,5B, que falha mais e gasta as cinco iterações com

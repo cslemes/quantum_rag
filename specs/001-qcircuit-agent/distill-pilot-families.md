@@ -170,6 +170,47 @@ Same-slice successes of the baselines the distilled 1.5B will be compared with
   same before and after (the baselines are 1/24 for the 7B and for the 1.5B,
   not 0/24), and a null there bounds the claim rather than failing it.
 
+## Prediction registered before any training: repair sensitivity (2026-10-25)
+
+**The premise, from the records of run F** (1.5B base, Ollama 0.40.8, one seed):
+of the 118 failures that generated code, **77 (65.3%) carry the identical error
+(stage, type and message) in all five attempts**. By label: 56 `SyntaxError` (53 of
+them genuine parse errors, 3 runtime exceptions), 11 `UnknownSymbol`, 6
+`HallucinatedSymbol`, 4 `WrongGateDecomposition`. For two-thirds of its failures
+the loop returns the same error five times. The measured pathology is not "does
+not know circuits" but "does not change its answer when told it is wrong", which is
+a property of repair-prompt sensitivity rather than Qiskit knowledge.
+
+*What the records cannot show:* that the CODE is identical (only the final code is
+persisted; the trace has no per-attempt code), and which side is insensitive. The
+critic that writes the hint is the same 1.5B, so "repair sensitivity" here is the
+generator-plus-critic pair, not the generator alone (the hints do vary across
+attempts, 2 to 3 distinct per stuck run, and the error does not).
+
+**Definitions** (all on the same suite, the same build, one seed): `C` = `compila@1`
+(count of 120), `S` = end-to-end success (count of 120), `sigma` = stuck fraction =
+failures identical in all five attempts / failures that generated code, `kappa` =
+`S / C`. **Baseline F:** `C0` = 10, `S0` = 1, `sigma0` = 65.3%, `kappa0` = 0.10. (In
+none of C, E, F did a success come from `compila@1`: all 6 of C's 7 that compiled
+only after repair, E's 5 and F's 1 as well, so the link `C -> S` is itself part of
+what is being tested.)
+
+**Prediction.** Phase 1 (first-attempt quality, as decided and unchanged) raises
+`C`. If it does not improve repair sensitivity (`sigma` stays at 50% or above),
+end-to-end success rises LESS than `compila@1` does: `S1/S0 < C1/C0`, which with
+`S0 = 1` is `kappa1 < 0.10`, i.e. `S1 < 0.1 * C1`. A better first attempt still
+enters a loop that does not recover, which is why phase 1 may not move the
+end-to-end number much. **Refutation:** if both rise in the same proportion
+(`kappa1 >= 0.10` with `C1 > C0`) the premise is wrong and phase 2 (training for
+repair) loses its justification. **Not tested:** if `sigma` falls below 50%, the
+antecedent is false (repair sensitivity improved) and the prediction says nothing.
+
+**Caveats, stated now.** `S0 = 1` makes `kappa0` fragile (1 of 10, Wilson 95%
+1.8% to 40.4%): only a large change discriminates, so the counts are reported next
+to every ratio. The result is reported on the 96-task in-family slice and on the
+24-task held-out slice separately, as registered above; the held-out slice will
+probably read the same before and after.
+
 ## Held-out slice (`bench/heldout.yaml`, rule heldout-v1)
 
 Seven families, 24 tasks, produced by the rule in that file (strata by oracle
