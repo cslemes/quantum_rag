@@ -190,10 +190,10 @@ attempts, 2 to 3 distinct per stuck run, and the error does not).
 **Definitions** (all on the same suite, the same build, one seed): `C` = `compila@1`
 (count of 120), `S` = end-to-end success (count of 120), `sigma` = stuck fraction =
 failures identical in all five attempts / failures that generated code, `kappa` =
-`S / C`. **Baseline F:** `C0` = 10, `S0` = 1, `sigma0` = 65.3%, `kappa0` = 0.10. (In
-none of C, E, F did a success come from `compila@1`: all 6 of C's 7 that compiled
-only after repair, E's 5 and F's 1 as well, so the link `C -> S` is itself part of
-what is being tested.)
+`S / C`. **Baseline F:** `C0` = 10, `S0` = 1, `sigma0` = 65.3%, `kappa0` = 0.10. (Of the
+successes, the number that also had `compila@1` was 1 of 7 in C, 0 of 5 in E and 0
+of 1 in F; the rest compiled only after repair, and none succeeded on the first
+attempt, so the link `C -> S` is itself part of what is being tested.)
 
 **Prediction.** Phase 1 (first-attempt quality, as decided and unchanged) raises
 `C`. If it does not improve repair sensitivity (`sigma` stays at 50% or above),
