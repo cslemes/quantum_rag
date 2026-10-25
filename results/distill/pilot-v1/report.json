@@ -15,6 +15,7 @@
     "max_tokens": 4096,
     "max_tokens_headroom": 12000
   },
+  "scope": "acceptance holds for this teacher identity only (incl. max_tokens_headroom)",
   "statements": 80,
   "accepted": 76,
   "by_family": {

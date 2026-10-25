@@ -50,6 +50,13 @@ estimate; 113,752 of 121,389 output tokens were reasoning; 11 serving providers.
 `records.jsonl` also holds the responses and the executed code, so the examples can
 be re-judged by anyone.
 
+**Acceptance rates are scoped to this teacher identity.** The energy family's 17/20
+holds at `max_tokens_headroom` 12,000 only, and one of its three rejections was the
+truncation (`finish_reason: length`). At the current 32,000 that rejection may not
+recur, so energy acceptance at the new headroom is **unmeasured**; 17/20 must not be
+carried forward as the energy rate. Headroom is an identity field like the snapshot
+and the effort: a dataset refuses a run at another headroom.
+
 **Not covered by the filter.** The oracle checks correctness only. A provider running
 a more aggressive quantisation would produce correct but poor code, and every
 example carries its serving provider (`provenance.derived.served_provider`) so one

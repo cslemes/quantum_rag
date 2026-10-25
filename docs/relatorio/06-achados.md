@@ -39,6 +39,13 @@ ilustração e nunca como efeito medido; **[c]** afirmado nas notas sem nenhum
 dos dois. Toda verificação neste trabalho é determinística; o modelo gera e
 propõe, e nada neste capítulo atribui a ele um veredito.
 
+**Regra de redação.** Toda cifra em prosa nomeia a execução ou o estado do
+sistema em que foi medida, e isso inclui o *estado do código* (corpus, correções
+já aplicadas), não só a build do servidor. Nenhuma cifra de um estado anterior a
+uma correção é usada no presente: é rotulada como histórica, com a execução e o
+denominador, ou re-derivada no estado vigente (§6.5, "Uma cifra interna de antes
+da correção").
+
 ---
 
 ## 6.1 Critérios de correção que falham em silêncio
@@ -307,7 +314,8 @@ declarado, sem rastro nos registros.
 
 Duas instâncias vieram depois, no mesmo molde. O campo
 `library_version="1.2.4"` estava em todos os 1.019 chunks do corpus de
-recuperação, e o conteúdo não era da 1.2.4: o corpus foi raspado da
+recuperação de então (o corpus 2.x, depois substituído pelo corpus 1.2 de 875
+chunks, o das execuções B a G), e o conteúdo não era da 1.2.4: o corpus foi raspado da
 documentação sem versão, que serve a versão mais recente (2.x), e a constante
 foi carimbada em cada chunk. 24 classes indexadas não existem no runtime 1.2.4.
 E o painel de saúde da interface mostrava o tamanho do índice de recuperação
@@ -328,23 +336,6 @@ quem lê o registro conclui que aquilo foi conferido. Vale para qualquer sistema
 com metadados de proveniência, de versão ou de ambiente: o metadado sem
 consumidor que falha é o mesmo defeito que um relatório que afirma "verificado"
 sem que ninguém tenha verificado.
-
-### Um rótulo que não discrimina: a resposta vazia que virou erro de sintaxe
-
-Na primeira execução real do piloto de destilação, uma resposta do professor
-terminou com `finish_reason: length`, 16.096 tokens, **todos de raciocínio**, e
-nenhum texto visível. O registro saiu como `static_failed:SyntaxError`. Não houve
-erro de sintaxe, porque não houve código: o veredito não correspondia ao que
-aconteceu. A causa é o fechamento do classificador: o classificador de falhas do sandbox
-termina em `SyntaxError` como rótulo de fechamento (a convenção do contrato), e
-tudo que não é reconhecido cai nele. Um *timeout* do sandbox de 60 s (no piloto e
-na execução A), um `CircuitError` de contagem de qubits (o código da execução A,
-reexecutado num *worker* limpo) e uma resposta vazia aterrissam no mesmo rótulo, e
-nenhum leitor do registro distingue um do outro. O piloto passou a codificar a truncagem como
-`truncated:finish_reason_length` e o *timeout* como
-`infrastructure_failed:sandbox_timeout`, para que as taxas fiquem visíveis. **[a]**
-Três causas distintas observadas num único rótulo; o classificador do cascata não
-foi alterado (o conjunto de regressão está fechado).
 
 ---
 
@@ -400,7 +391,11 @@ não se propagam" não permite.
   energia) *antes* de criar o pool. O dano medido nas execuções A, A2, B, C, E, F
   e G foi de **um registro em A e o mesmo em A2** (§5.7). A correção estrutural é
   os *workers* serem interpretadores novos, não *forks*: a ordem deixa de
-  importar. *[a para o mecanismo, reproduzido; o alcance é o da varredura dos
+  importar. A reordenação de `main()` (criar o pool antes de `verify_references`)
+  **não** foi aplicada, e a razão é o próprio padrão desta seção: ela protegeria
+  por ordem, à distância, e deixaria a aparência de duas proteções onde há uma. A
+  proteção é a recusa local (processos novos), e foi testada nas trajetórias de
+  substituição, que a ordenação não cobre. *[a para o mecanismo, reproduzido; o alcance é o da varredura dos
   registros]*
 - **O estado interno do servidor entre tarefas.** O descarregamento do modelo
   era feito uma vez por execução da suíte, não por (tarefa, semente); o cache
@@ -548,7 +543,8 @@ Cinco testes isolados do gerador (mesmo prompt quatro vezes; prompt longo;
 `num_predict` 256 e 4096; prompt-alvo intercalado com outros; prompt-alvo
 depois de A, de B, de A e B) passaram todos. O piloto de 20 tarefas rodado duas
 vezes, cache frio, dois processos, ordem real, divergiu em **15% das sequências
-de erro e em 5 de 20 códigos gerados**. **[a]** O regime importa tanto quanto o
+de erro e em 5 de 20 códigos gerados** (estado de F15/F17, anterior ao reset por
+execução; a build do servidor não foi registrada nesse ensaio). **[a]** O regime importa tanto quanto o
 ambiente: o "piso de ruído zero", **0 em 360**, foi medido em produção e em
 escala (execuções A e A2, Ollama 0.34.1), mas sob uma sequência de chamadas
 fixa e um único descarregamento do modelo. Mediu determinismo de *replay* —
@@ -720,17 +716,51 @@ contaminação; a composição do denominador mudou (chegar ao semântico foi de
 113/341 para 74/120 e 88/120); e a queda B → C está confundida com a versão do
 servidor.
 
+### Uma cifra interna de antes da correção, citada no presente
+
+É uma categoria à parte, e não uma subespécie da premissa não verificada. Uma
+premissa errada produz uma *investigação* errada, que os registros ainda podem
+pegar. Uma cifra velha, escrita no presente, produz um **número errado
+publicado**. A fonte é a história do próprio projeto: uma medição que era
+verdadeira quando feita, num estado do código que uma correção depois moveu, e
+que continua circulando sem o estado em que valia. Quatro instâncias, achadas
+por uma varredura dos capítulos 5 e 6:
+
+- **"O import faltando é a causa dominante de falha do 7B, 39%."** A cifra
+  (112 dos 287 `failed_static`) é do baseline de 19/09 (T102, Ollama 0.34.1),
+  anterior ao roteamento de `MissingImport`. Nas execuções C e E (0.35.1 e 0.40.8)
+  ele é 3,3% a 4,2% dos erros registrados e 3,3% a 3,6% dos `failed_static`
+  finais. Foi proposta na revisão deste capítulo e **corrigida contra os
+  registros antes de ser publicada** (§6.6).
+- **`recall@8 = 0,9524` no §5.4.** Medida sobre o corpus 2.x de 1.020 chunks;
+  o índice fixado das execuções B a G é o corpus 1.2 de 875 chunks, onde a mesma
+  medida dá 0,9365 (59 de 63). Estava **publicada** no capítulo 5 sem estado e
+  lida como o recall do sistema medido.
+- **"72 minutos, para a suíte como configurada hoje"** (§5.6): o tempo da run C
+  (0.35.1). As runs E e G (0.40.8) levaram 67–68 minutos de execução e 82–84 de
+  relógio.
+- **"Não foi investigado"** (§5.3, o resumo do circuito serializado), texto que
+  sobreviveu à investigação que o resolveu mais adiante no mesmo capítulo. Não é
+  uma cifra, é a mesma falha em prosa.
+
+O remédio é a regra de redação das convenções (cada cifra nomeia a execução e o
+estado do código, e nenhuma cifra pré-correção vai para o presente) e a varredura
+dos dois capítulos contra ela. **[a]** Quatro instâncias, uma delas capturada
+antes da publicação; as outras três estavam no texto.
+
 ### O instrumento fraco esconde o defeito do texto
 
-Cinquenta e dois dos 120 enunciados da suíte, todos variantes perturbadas,
-citam a tarefa-base pelo `task_id` ("the standard circuit as in the
+Na suíte de B e anteriores (antes de T116 reescrevê-los), cinquenta e dois dos
+120 enunciados, todos variantes perturbadas, citavam a tarefa-base pelo
+`task_id` ("the standard circuit as in the
 ising_field_coupling_4q task"), um identificador interno vazando para o que
 devia ser uma descrição autossuficiente. Ninguém viu antes, porque o gerador
 local raramente chegava a algo que dependesse de interpretar o enunciado com
 cuidado. Só um modelo capaz o bastante para ler com rigor, sem raciocínio para
 contornar a ambiguidade (o braço sem raciocínio), recusou quatro tarefas no
-planner, três pelo mesmo motivo. **[a]** (52/120 verificado na suíte; 4
-recusas num braço.) É o mesmo mecanismo do teste fora do regime, do lado do
+planner, três pelo mesmo motivo. **[a]** (52/120 verificado na suíte anterior a T116; 4
+recusas num braço. A suíte vigente, de C em diante, não tem esses
+enunciados.) É o mesmo mecanismo do teste fora do regime, do lado do
 instrumento: o defeito estava no texto o tempo todo, e o gerador usado para
 medir era fraco demais para tropeçar nele.
 
@@ -778,13 +808,95 @@ cujo código não importava `QuantumCircuit`) num professor de classe de frontei
 1 em 80 no piloto. **[b]** n = 1 do lado do professor: o que o achado sustenta é
 que o modo de falha não é só de modelo pequeno, não que as taxas sejam comparáveis.
 
+### Uma taxonomia fechada com um padrão que vaza: o `SyntaxError` que absorve tudo
+
+O classificador de falhas do sandbox termina num rótulo de fechamento: tudo o
+que ele não reconhece vira `SyntaxError` (a convenção do contrato, cujo exemplo
+canônico é o código que nunca define `qc`, um `RuntimeError`). O rótulo não
+diz o que o nome diz. Nos registros de erro de estágio estático:
+
+| execução (build) | registros `SyntaxError` | erro de análise sintática de fato | exceção em tempo de execução |
+|---|---|---|---|
+| A (0.34.1) | 304 | 65 (21,4%) | 239 |
+| B (0.34.4) | 366 | 93 (25,4%) | 273 |
+| C (0.35.1) | 126 | 11 (8,7%) | 115 |
+| E e G (0.40.8, idênticas) | 117 | 9 (7,7%) | 108 (`TypeError` 37, `CircuitError` 28, `QiskitError` 27, `ValueError` 16) |
+| F, 1,5B (0.40.8) | 346 | 269 (77,7%) | 77 |
+
+Na run E, **92%** dos registros `SyntaxError` não são erros de sintaxe. Além
+das exceções comuns, o mesmo rótulo absorveu: o *timeout* de 60 s do sandbox (1
+registro nas runs A e A2, e as onze declarações do piloto de destilação que o
+defeito de `fork` perdeu), a resposta vazia de um professor que gastou todo o orçamento em
+raciocínio (`finish_reason: length`, 16.096 tokens, nenhum código, registrada como
+erro de sintaxe: não houve erro de sintaxe, porque não houve código), e, pelo desenho
+anterior do executor, o *worker* morto, que só aparecia como o mesmo *timeout*
+(não observado). **[a]** (contagens por registro de erro,
+não por execução.)
+
+**O que o rótulo faz com o reparo, dito sem exagero.** A taxonomia é o que
+roteia o laço: `SyntaxError` está no conjunto que vai para `retry_generation`, o
+mesmo de outros treze tipos, e a string `error_type=SyntaxError` é inserida
+tanto no *prompt* de repetição do gerador quanto no *prompt* de dica do crítico.
+Isso faz do vazamento um defeito de natureza diferente do irmão
+`MissingImport`, que mandava a *ação* errada (`retry_retrieval` para um símbolo
+que existe): aqui, para as exceções de tempo de execução e para a resposta vazia,
+a ação (regenerar) é a certa e o que está errado é o **nome** mostrado ao modelo
+e ao leitor, e as contagens por tipo. A ação só está errada para as condições de
+infraestrutura (o *timeout* e o *worker* morto): regenera um código que não
+estava errado, gasta uma das cinco iterações com ele, e diz ao gerador que o
+código tem erro de sintaxe. Uma taxonomia fechada com um padrão que vaza
+transforma o roteamento em sorteio para o que cai no padrão só quando a ação
+depende da natureza da falha; quando não depende, o dano é a precisão do
+registro, que é o que sustenta qualquer análise por tipo de erro. **[b]** para
+os efeitos no laço (leitura do código de roteamento e um caso); **[a]** para as
+contagens.
+
+**O padrão pode ser estreitado? Opções e custo (o classificador não foi
+alterado; mudá-lo muda o instrumento).**
+
+1. *Manter e revelar* (custo nulo para as medições). Reclassificar na análise,
+   pela mensagem, sem tocar o instrumento. Corrige as contagens e deixa o
+   roteamento como está. É o que este capítulo faz.
+2. *Tipos próprios para infraestrutura e para "nenhum circuito"*
+   (`SandboxTimeout`/`WorkerFalhou`, `NenhumCircuito`). Mexe em quatro lugares: a
+   taxonomia (`ERROR_TAXONOMY`), os conjuntos de roteamento do crítico, o
+   contrato (`data-model.md`) e o teste que os mantém coerentes
+   (`test_taxonomy_closed`), mais o classificador. Só altera execuções em que a
+   condição ocorre: nos 479 códigos finais de C, E, F e G não ocorre nenhuma (0
+   *timeouts*), então as medições existentes seguem comparáveis, e isso se
+   verifica reexecutando o veredito estático, como foi feito para o executor. O
+   ganho real de roteamento exige ainda uma ação nova (reexecutar o mesmo código
+   sem gastar uma iteração); sem ela é só renomear.
+3. *Separar as exceções de tempo de execução por família* (`TypeError`/`ValueError`
+   de argumento, `CircuitError` de construção, `QiskitError`), deixando
+   `SyntaxError` para a análise sintática. Muda a string que o modelo vê em 108
+   dos 117 registros da run E: muda o *prompt*, logo as saídas, logo o
+   instrumento. Custo: refazer as execuções de 120 tarefas (cerca de 70 a 84
+   minutos de relógio por 7B), restabelecer o par de repetição (duas execuções
+   por modelo) e reapresentar o capítulo 5 sem comparabilidade com C a G. O
+   ganho é de nomes, não de ação.
+
+Minha recomendação, a decidir: 1 agora; 2 quando as duas execuções de 1,5B
+anteriores à destilação forem refeitas de qualquer forma, declarando a versão do
+instrumento; 3 só se a análise por tipo de erro passar a ser um resultado do
+trabalho.
+
+**Generalização.** Uma taxonomia fechada serve ao roteamento e à análise ao mesmo
+tempo, e um padrão que vaza serve mal aos dois sem avisar: o campo continua
+preenchido, com um valor válido, e a única pista é a mensagem que ninguém
+agregou. Vale para qualquer classificador de falhas com um caso "outros" que tem o
+nome de um caso específico.
+
 ### O laço quase sempre desiste
 
 Das 335 falhas que chegaram a gerar código no baseline de 19/09 (execução
-T102, Ollama 0.34.1, 341 execuções válidas), **331 terminaram por
-esgotamento** das cinco iterações; as outras 4 foram recusadas na entrada. O
-laço tem essencialmente um modo de término, a desistência, e os 6 sucessos são
-a cauda, não o comportamento. A leitura ingênua ("zero acertos de primeira, e
+T102, Ollama 0.34.1, anterior ao roteamento de `MissingImport`, 341 execuções
+válidas), **331 terminaram por esgotamento** das cinco iterações; as outras 4
+foram recusadas na entrada. No estado vigente a observação se mantém: todas as
+falhas que geraram código terminaram na quinta iteração, **112 de 112 na run C**
+(7B, Ollama 0.35.1), **114 de 114 na E** (7B, 0.40.8) e **118 de 118 na F** (1,5B,
+0.40.8). O laço tem essencialmente um modo de término, a desistência, e os 6
+sucessos do baseline são a cauda, não o comportamento. A leitura ingênua ("zero acertos de primeira, e
 o laço resgata 6") parece um laço que funciona pouco mas funciona. **[a]**
 (331/335.) O custo de um diagnóstico errado escala com o limite de iterações:
 cinco de um diagnóstico certo e cinco de um errado custam o mesmo em chamadas,
@@ -792,7 +904,9 @@ tempo e energia, e só difere se alguma delas podia funcionar.
 
 ### Retrieval não entrega conhecimento negativo
 
-Das 112 execuções cuja última tentativa foi um `ImportError`, **104 (92,9%)**
+No baseline de 19/09 (T102, Ollama 0.34.1, corpus 2.x, anterior à derivação de
+correções de símbolo F25), das 112 execuções cuja última tentativa foi um
+`ImportError`, **104 (92,9%)**
 foram sobre símbolos que nunca existiram em versão alguma do Qiskit (`H` 26,
 `RZ` 24, `CNOTGate` 20, `CNOT` 12, `RY` 7, `Hadamard` 7); 5 (4,5%) foram
 ensinados pelo corpus; 2 eram módulo ou natureza errados; 1 era um símbolo
@@ -812,8 +926,8 @@ no corpus).
 
 ### O trace descartado era o que o diagnóstico precisava
 
-O trace de cada execução (consulta enviada, número de chunks, decisões do
-crítico) era acumulado e descartado ao fim: o registro persistia 24 campos,
+Até as runs anteriores a C, o trace de cada execução (consulta enviada, número
+de chunks, decisões do crítico) era acumulado e descartado ao fim: o registro persistia 24 campos,
 nenhum deles o trace. O diagnóstico post-hoc do comportamento de recuperação
 era **impossível** em qualquer execução já feita (2.160 execuções em seis
 execuções completas). O próprio código enunciava a regra sobre o histórico de

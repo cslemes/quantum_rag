@@ -6760,3 +6760,65 @@ training data, annotated in `results/distill/pilot-v1/DATASET_CARD.md`, not clea
 follows the FAMILY MIX, not the example count: the three non-energy families averaged about 355
 output tokens per call, energy about 5,000 (14x); at $0.0703 per 80 (0.59x the estimate), about
 $4 per 5,000 at a 20% energy mix. Choose the mix of the full set on the usefulness of the data.
+
+## 2026-10-25 — sweep of chapters 5 and 6 for stale figures; the SyntaxError catch-all; headroom is identity
+
+**Writing rule (both chapters, stated in each).** Every figure in prose names the run or system
+state it was measured in, including the state of the CODE (corpus, fixes already applied), not
+only the server build; no figure from a state before a fix is used in the present tense.
+
+**Violations found and fixed** (four, all published or about to be):
+1. Chapter 5 section 5.4: `recall@8 = 0,9524` stood alone. It was measured on the old 2.x corpus
+   (1,020 chunks, labelled 1.2.4); the index pinned for runs B, C, E, F, G is the 1.2 corpus of
+   875 chunks, where the same 63 queries give 0,9365 (59/63), MRR 0,7152. Now stated with both
+   and the corpus. The same stale figure remains in `MIGRATION.md` (line 32) and
+   `estado-e-aprendizados.md` (line 115), which are not chapters and were not edited; the
+   skeleton was.
+2. Chapter 5 section 5.6: "72 minutes, for the suite as configured today" was run C (0.35.1);
+   runs E and G (0.40.8) took 67-68 min of execution, 82-84 of clock. Table and text restated.
+3. Chapter 5 section 5.3: "not investigated" for the serialised-circuit hash, a sentence that
+   survived the investigation that resolved it later in the same section.
+4. The "39%" MissingImport figure, from the pre-fix baseline (T102, 0.34.1), offered for the
+   present tense; current runs C and E give 3.3-4.2% of errors and 3.3-3.6% of final
+   `failed_static`. Caught against the records before publication; the paragraph in 6.6 is dated.
+
+**Qualified (no value changed):** chapter 5 table header "current run" -> run C; the 84%
+(287/341) now says "before the MissingImport routing and the trace"; the 5.5 table columns carry
+pod and build; chapter 6: the 20-task pilot (pre-F28 state, server build not recorded), the 52
+enunciados citing task ids (suite of B and earlier, before T116), the ImportError census
+(T102, corpus 2.x, before F25), the discarded trace (runs before C), the corpus note in 6.3.
+"The loop almost always gives up" re-derived on the current state: every failure that generated
+code ended at iteration 5: C 112/112, E 114/114, F 118/118.
+
+**Not resolved by me (state not recoverable from the chapter):** the frontier-arm column of the
+5.5 table (15-16/16, `compila@1` 16/16, engagement 0-2/16): the chapter does not name the runs or
+the code state of the three frontier arms; the cost line of section 5.5 likewise.
+
+**New 6.5 category** "A stale internal figure": differs from an unverified premise because it
+produces a published wrong number, not a wrong investigation.
+
+**The SyntaxError catch-all (6.6).** Measured on error records (not runs): of the `SyntaxError`
+records at the static stage, only 7.7% (E, G, 0.40.8) are parse-time errors; 92% are runtime
+exceptions (TypeError 37, CircuitError 28, QiskitError 27, ValueError 16 of 117). Table for A, B, C,
+E/G, F in 6.6. Routing, stated without exaggeration: `SyntaxError` routes to `retry_generation`,
+the same as 13 other types, and the string `error_type=...` is inserted in both the generator's
+retry prompt and the critic's hint prompt (`generator.py:115`, `critic.py:302`). The sibling
+`MissingImport` defect sent the WRONG ACTION; here the action is right for runtime exceptions and
+for an empty response, and wrong only for infrastructure conditions (timeout, dead worker), which
+regenerate code that was not wrong and spend an iteration. The damage for the rest is the name shown
+to the model and the reader, and the counts. Options and costs are in 6.6 (reclassify in analysis:
+free; new types for infrastructure/no-circuit: four places, only fires where the condition occurs,
+0 times in the 479 final codes of C, E, F, G; split runtime exceptions: changes the model-visible
+string in 108 of 117 records of E, so a full re-run and loss of comparability with C-G). The
+classifier was NOT changed.
+
+**main() was not reordered.** The reason recorded: pool-first protects by ordering, at a distance,
+and would create the appearance of two protections where there is one (the section 6.4 pattern,
+inside the section that documents it). The local refusal is the fresh-interpreter workers.
+
+**Headroom is an identity field**, alongside snapshot and effort: in the cache key (`headroom`),
+in `TeacherIdentity.max_tokens_headroom`, so `lock_dataset_identity` refuses a run at another
+headroom (tests added). Consequence for the pilot: its energy acceptance of 17/20 is scoped to the
+OLD 12,000 headroom, and one of its three rejections was the truncation, so energy acceptance at
+32,000 is unmeasured; do not carry 17/20 forward. Regenerating the 80 statements at the new
+headroom would cost about seven cents; not run (spend needs `--authorize-spend`).

@@ -222,8 +222,9 @@ aceito por ele (segunda emenda a SC-007). Redação anterior desta seção
 
 ### 5.3 Recuperação
 
-`recall@8` = 0,9524, com a ressalva de que parte da queda aparente em corpus
-maior era subestimação da medida.
+`recall@8` = 0,9365 (59/63) no corpus 1.2 de 875 chunks usado nas execuções B a G
+(0,9524 era do corpus anterior, 2.x de 1.020 chunks, já substituído), com a
+ressalva de que parte da queda aparente em corpus maior era subestimação da medida.
 
 ### 5.4 Desempenho
 

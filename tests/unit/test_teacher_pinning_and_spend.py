@@ -530,3 +530,28 @@ def test_the_report_reads_the_records_back(tmp_path, pool) -> None:
     assert row["rejections"] == {"rejected_by_oracle:strict_unitary": 1}
     assert report["serving_model_matched_requested_on_all"] is True
     assert report["actual_usd"] == pytest.approx(0.02)
+
+
+# -- headroom is identity ---------------------------------------------------------
+
+
+def test_a_dataset_refuses_a_different_headroom(tmp_path: Path) -> None:
+    profile = get_profile(PROFILE_NAME)
+    estimate = estimate_from_tokens(80, 900, 2100, now=datetime(2026, 10, 24, 12, tzinfo=UTC))
+    lock_dataset_identity(tmp_path, identity_of(profile, FACTS), estimate, "v", FACTS, [])
+    raised = profile.model_copy(update={"max_tokens_headroom": profile.max_tokens_headroom * 2})
+    with pytest.raises(DatasetVersionMismatch, match="new dataset version"):
+        lock_dataset_identity(tmp_path, identity_of(raised, FACTS), estimate, "v", FACTS, [])
+    assert identity_of(profile, FACTS).max_tokens_headroom == 32000
+
+
+def test_headroom_changes_the_request_and_the_cache_key(tmp_path: Path) -> None:
+    profile = get_profile(PROFILE_NAME)
+    server = _Server(lambda b: httpx.Response(200, json=_completion(profile.model)))
+    small = _client(profile, server, tmp_path)
+    small.headroom = 12000
+    small.generate(system="s", prompt="p", seed=1, max_tokens=100)
+    large = _client(profile, server, tmp_path)  # the profile's 32,000
+    large.generate(system="s", prompt="p", seed=1, max_tokens=100)
+    assert [b["max_tokens"] for b in server.bodies] == [12100, 32100]
+    assert not large.last_call_cache_hit  # another headroom is another teacher: a miss

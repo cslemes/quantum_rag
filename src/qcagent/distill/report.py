@@ -69,6 +69,10 @@ def pilot_report(out_dir: Path) -> dict[str, Any]:
     return {
         "dataset_version": meta["dataset_version"],
         "teacher": meta["identity"],
+        # Every acceptance figure below holds for the teacher identity above,
+        # INCLUDING max_tokens_headroom: a rate measured at one headroom is not the
+        # rate at another (a truncated response is a rejection at a small one).
+        "scope": "acceptance holds for this teacher identity only (incl. max_tokens_headroom)",
         "statements": len(latest),
         "accepted": sum(1 for r in latest.values() if r["label"] == LABEL),
         "by_family": {

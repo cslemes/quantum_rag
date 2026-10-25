@@ -10,6 +10,13 @@ ser observados funcionando.
 Nenhum número neste capítulo vem de julgamento de modelo de linguagem. Todo
 veredito de sucesso é produto da cascata determinística descrita no capítulo 3.
 
+**Regra de redação.** Toda cifra em prosa nomeia a execução ou o estado do
+sistema em que foi medida: a build do servidor *e* o estado do código (corpus,
+correções que já tinham entrado). Nenhuma cifra de um estado anterior a uma
+correção aparece no presente: ou é rotulada como histórica, com a execução e o
+denominador, ou é re-derivada no estado vigente. A regra existe porque ela foi
+violada: ver o capítulo 6, §6.5, "Uma cifra interna de antes da correção".
+
 ---
 
 ## 5.1 Protocolo e definições
@@ -42,7 +49,7 @@ modo que "mesmo hardware" entre rodadas é declaração, não verificação.
 
 Gerador: `qwen2.5-coder:7b`. Suíte completa, uma semente.
 
-| | 2026-09-26 (run B, Ollama 0.34.4) | rodada atual (run C, Ollama 0.35.1) |
+| | 2026-09-26 (run B, Ollama 0.34.4) | run C (Ollama 0.35.1) |
 |---|---|---|
 | sucesso | 1/120 | **7/120** (5,8%; IC 95% 2,9–11,6%) |
 | `compila@1` | 20/120 | 20/120 |
@@ -66,7 +73,8 @@ O que mudou está depois dela:
 - nenhuma tarefa acertou na primeira tentativa, nas duas rodadas;
 - **seis dos sete sucessos só compilaram após reparo estático**;
 - a fração de execuções que TERMINAM em falha estática caiu de 84% (287/341,
-  baseline de 19/09, Ollama 0.34.1) para 51% (61/120, run C, Ollama 0.35.1).
+  baseline de 19/09, Ollama 0.34.1, anterior ao roteamento de `MissingImport` e ao
+  *trace*) para 51% (61/120, run C, Ollama 0.35.1).
 
 Ou seja: o contador de sucesso do braço local é integralmente atribuível ao
 loop de reparo. Não há componente de "o gerador ficou melhor" nele.
@@ -162,7 +170,8 @@ vetor de resultado por tarefa, 0/120. Iterações e contagens de tokens também
 coincidem em 360/360. Uma exceção fora das métricas: o resumo (hash) do
 circuito serializado (`qpy_sha256_16`) no *payload* de um erro de serialização difere em
 3 registros (`ising_weighted_maxcut_4q`, sementes 1 a 3), com código final
-idêntico; não foi investigado.
+idêntico. Investigado depois (ver (3)): o resumo é instável por construção para
+circuitos de biblioteca (§6.4), não uma divergência do gerador.
 
 O cache de respostas **não pode** ter servido as chamadas da segunda execução.
 A razão por tarefa entre os tempos de parede de A2 e A tem mediana 1,00 (mínimo
@@ -242,7 +251,13 @@ C, 5 só em E). Nenhuma conclusão por tarefa passa de uma build para a outra, e
 
 ## 5.4 Recuperação versionada
 
-`recall@8` = **0,9524**.
+`recall@8` = **0,9365** (59 de 63 alvos; MRR 0,7152) no corpus **1.2.x de 875
+chunks**, o índice fixado e usado nas execuções B, C, E, F e G. A cifra de
+0,9524 (60/63; MRR 0,7196) que este parágrafo trazia foi medida sobre o corpus
+anterior (documentação 2.x rotulada 1.2.4, 1.020 chunks), que o corpus atual
+substituiu; ela vale como história do corpus, não como o recall do sistema
+medido neste capítulo. As 63 consultas e os gabaritos são os mesmos nas duas
+medidas.
 
 Duas ressalvas, ambas no sentido de não superestimar o componente. Parte da
 queda aparente de desempenho em corpus maior, observada antes, era
@@ -262,7 +277,7 @@ afirmação estatística, e nenhuma é apresentada como tal. O que o subconjunto
 responde é qualitativo e suficiente: a arquitetura funciona quando o gerador
 alcança o regime em que ela opera.
 
-| | local 7B (n=120, Ollama 0.35.1) | 30B R0 (Ollama 0.34.4, pod) | 30B R2 ⚠ | 30B R3 | 30B R4 | fronteira |
+| | local 7B (run C, n=120, Ollama 0.35.1) | 30B R0 (pod, Ollama 0.34.4) | 30B R2 ⚠ (pod, 0.34.4) | 30B R3 (pod, 0.34.4) | 30B R4 (pod, 0.34.4) | fronteira (API; sem build de servidor) |
 |---|---|---|---|---|---|---|
 | sucesso | 7/120 | 4/16 | 9/16 | 6/16 | 10/16 | 15–16/16 |
 | `compila@1` | 20/120 | 11–12/16 | | | | 16/16 |
@@ -288,9 +303,9 @@ vezes que antes. Um diagnóstico mais firme reduz oscilação e aumenta fixaçã
 O valor líquido é de quatro tarefas em n=16.
 
 **A relação inversa entre capacidade e engajamento do loop é o achado central
-desta seção.** No gerador local o loop engaja em todas as execuções e resgata
-seis de sete sucessos. No modelo de fronteira engaja em zero a duas de
-dezesseis, porque quase nada precisa de resgate. O loop é instrumento de
+desta seção.** No gerador local (7B, run C, Ollama 0.35.1) o loop engaja em todas as
+execuções do subconjunto e resgata seis de sete sucessos. Nos braços de
+fronteira (API, n = 16) engaja em zero a duas de dezesseis, porque quase nada precisa de resgate. O loop é instrumento de
 recuperação: seu valor cresce à medida que o gerador piora, e a arquitetura não
 é o gargalo em nenhum dos dois regimes.
 
@@ -311,11 +326,19 @@ Existem três medições de duração de suíte, sob configurações diferentes:
 | A (`99960870…`) | 360 execuções, 3 sementes, reset único, Ollama 0.34.1 | 205,8 min |
 | B (`9e19fa12…`) | 360 execuções, 3 sementes, `reset_per_run`, Ollama 0.34.4 | 260 min |
 | C (`1bf505bf…`) | 120 execuções, 1 semente, `reset_per_run`, Ollama 0.35.1 | **72 min** |
+| E (`7fd09e27…`) | 120 execuções, 1 semente, `reset_per_run`, Ollama 0.40.8 | 67,2 min de execução (81,7 de relógio) |
+| G (`f64b9464…`) | 120 execuções, 1 semente, `reset_per_run`, Ollama 0.40.8 | 68,1 min de execução (83,9 de relógio) |
 
-**O número citável é 72 minutos, para a suíte como configurada hoje.** As três
-medidas não são comparáveis entre si — diferem em número de execuções,
-protocolo de reset e versão de servidor — e não constituem série temporal de
-desempenho. Nenhuma tendência é afirmada a partir delas.
+**Não há um número citável único: cada tempo vale para a sua run e a sua build.**
+Para a suíte de 120 execuções com uma semente, o protocolo vigente deu 72 min em
+C (0.35.1) e 67–68 min de execução, 82–84 de relógio, em E e G (0.40.8); a
+versão anterior deste parágrafo citava os 72 minutos de C como "a suíte como
+configurada hoje", e as runs seguintes já não a confirmavam. As medidas não são
+comparáveis entre si — diferem em número de execuções, protocolo de reset e
+versão de servidor — e não constituem série temporal de desempenho. Nenhuma
+tendência é afirmada a partir delas. O executor do sandbox foi trocado depois de
+todas elas (workers como processos novos, §5.7); o efeito dessa troca no tempo
+não foi medido.
 
 Os tempos observados na interface não entram aqui: são réplica de cache e não
 medem geração.
@@ -387,21 +410,29 @@ independentes: citar só como histórico, com run e denominador, nunca ao lado
 dos números de 120 execuções sem esse rótulo. Ver `report-notes.md`,
 "Reconciliação das figuras".
 
-**Timeouts do sandbox: verificados, sem efeito nos números deste capítulo.** Um
-defeito do executor (um *worker* criado por `fork` depois que o orquestrador usou o
-pool Rust do Qiskit trava em `SparsePauliOp.to_matrix()`; ver capítulo 6, §6.4)
-podia transformar código correto em `timeout after 60s`, rotulado `SyntaxError`. Os
-registros foram varridos em busca desse texto, na lista de erros e no resultado
-estático. Contagem: **0 em B, C, E, F e G**; **1 registro em A e o mesmo em A2**
-(`ising_field_coupling_5q`, semente 2, iteração 5 de 5), que termina
-`failed_static` com ou sem o defeito: o mesmo código, num *worker* limpo, levanta
-`CircuitError` (3 qubits do gate contra 5 do circuito), rotulado também
-`SyntaxError`, de modo que o `status`, o tipo de erro e a contagem de falhas
-não mudam; só a mensagem. A comparação A × A2 (0/360) não é afetada: os dois
-registros são idênticos entre si. Além disso, os 479 códigos finais de C, E, F e G
-foram reexecutados no executor corrigido (*workers* novos) e o veredito estático
-(`parsed`, `executed`, `transpiled`, tipo de erro) coincide em **todos**. Nenhum
-número do capítulo é reapresentado.
+**Timeouts do sandbox: o defeito era real, e o que preservou as medições foi
+sorte, não robustez.** Um defeito do executor — um *worker* criado por `fork`
+depois que o orquestrador usou o pool Rust do Qiskit trava em
+`SparsePauliOp.to_matrix()` (capítulo 6, §6.4) — podia transformar código
+correto em `timeout after 60s`, rotulado `SyntaxError` e contado como falha do
+gerador. `verify_references` roda em `main()` antes de o pool existir, de modo
+que **todos** os *workers* de todas as execuções estavam expostos, e não só os
+substituídos; nada no desenho os protegia. O que protegeu os números foi que
+nenhum código gerado em B, C, E, F e G chamou o gatilho. Os registros foram
+varridos em busca de `timeout after`, na lista de erros e no resultado estático:
+**0 em B, C, E, F e G**; **1 registro em A e o mesmo em A2**
+(`ising_field_coupling_5q`, semente 2, iteração 5 de 5). Esse caso também não
+mudou nada, mas por outra sorte: o código era inválido de qualquer modo (num
+*worker* limpo levanta `CircuitError`, 3 qubits do gate contra 5 do circuito,
+rotulado também `SyntaxError`) e era a última iteração, de modo que `status`,
+tipo de erro e contagem de falhas são os mesmos; só a mensagem difere. Um código
+válido que chamasse `to_matrix()` teria dado *timeout*, sido contado como falha
+do modelo, e deixado como único sinal a mensagem. A comparação A × A2 (0/360)
+não é afetada: os dois registros são idênticos entre si. Os 479 códigos finais
+de C, E, F e G foram reexecutados no executor corrigido (*workers* novos) e o
+veredito estático (`parsed`, `executed`, `transpiled`, tipo de erro) coincide em
+todos. Nenhum número deste capítulo é reapresentado, e nenhum foi medido
+sabendo-se isto.
 
 ---
 
