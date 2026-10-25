@@ -4,6 +4,7 @@ the last 2 errors go in context, not the full history — otherwise the
 prompt grows linearly with iterations and cost explodes in condition C5).
 """
 
+import hashlib
 import re
 from collections.abc import Callable
 
@@ -141,11 +142,28 @@ def _render_previous_code(code: str, last_errors: list[ErrorRecord]) -> str:
     return f"## Code of the previous attempt\n{instruction}\n```python\n{code}\n```"
 
 
+_FENCED_BLOCK = re.compile(r"```(?:python)?\s*\n(.*?)```", re.DOTALL)
+
+
 def _extract_code(text: str) -> str:
     """Pulls the content of a fenced code block. Falls back to the raw text
     if the model didn't fence it, since some prompts still leak bare code."""
-    match = re.search(r"```(?:python)?\s*\n(.*?)```", text, re.DOTALL)
+    match = _FENCED_BLOCK.search(text)
     return match.group(1).strip() if match is not None else text.strip()
+
+
+def _attempt_descriptors(text: str, code: str, output_tokens: int) -> dict:
+    """What the trace records about ONE generation, additively (no behaviour
+    depends on it). A hash tells identical code from different code, which the
+    closed error taxonomy cannot: different code collapses into the same error
+    record. `code_extraction` and `output_tokens` separate a response whose
+    fence never closed (cut off at the token cap, so the raw text starting with
+    its opening fence is what got executed) from an ordinary one."""
+    return {
+        "code_sha256_16": hashlib.sha256(code.encode()).hexdigest()[:16],
+        "code_extraction": "fenced" if _FENCED_BLOCK.search(text) else "raw_fallback",
+        "output_tokens": output_tokens,
+    }
 
 
 def _render_assertions(assertions: list[Assertion]) -> str:
@@ -254,7 +272,13 @@ def make_generator_node(llm: BaseLLMClient, *, seed: int = 42) -> Callable[[Agen
             # failed to execute, next to status="failed_static".
             "assertion_results": None,
             "requirement_results": None,
-            "trace": [{"node": "generator", "iteration": iteration}],
+            "trace": [
+                {
+                    "node": "generator",
+                    "iteration": iteration,
+                    **_attempt_descriptors(response.text, code, response.output_tokens),
+                }
+            ],
         }
 
     return generator

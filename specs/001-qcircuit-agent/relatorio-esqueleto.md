@@ -316,6 +316,16 @@ Um diagnóstico incorreto é pior que nenhum — ancora o modelo numa direção 
 
 - Verificação sem referência cobre executabilidade e restrições declaradas; não
   cobre corretude na ausência de asserção
+- **Limite de medição (mais forte que o de capacidade acima):** a suíte sempre tem
+  referência. As 120 tarefas são verificadas contra um oráculo construído
+  independentemente e nenhuma declara asserções (`assertions: []` nos relatórios de
+  garantia das runs C, E, F e G). O caminho **distintivo do produto** — um usuário
+  sem referência, declarando asserções — é, portanto, a coisa **menos medida** do
+  trabalho: a gramática de asserção, a parada por asserção não avaliável repetida, o
+  relatório sem referência e o mecanismo de rascunho foram validados por testes
+  (inclusive ponta a ponta) e por demonstrações, nunca por uma execução de suíte. A
+  suíte exercita um subconjunto dos caminhos do produto, e o que só dispara nos
+  caminhos não exercitados não está medido, por mais bem que funcione.
 - A gramática de asserção é fraca onde o conteúdo da tarefa é derivação numérica,
   e cega para transformação geral sem `INPUT`
 - Caminho de verificação por composição é probabilístico acima de 12 qubits

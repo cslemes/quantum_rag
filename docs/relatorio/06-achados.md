@@ -410,7 +410,12 @@ não se propagam" não permite.
   porque não é um gêmeo perfeito de `assert_full_gpu_offload`:* aquela proteção não
   tinha chamador nenhum; esta tem chamador (`route_action`) e testes (unitários e
   de integração), e funciona no produto. O que ela compartilha é a forma: uma regra
-  correta, enunciada num lugar, que as medições nunca tomam. *[a]* para as
+  correta, enunciada num lugar, que as medições nunca tomam. A generalização que
+  sai do detalhe: a regra não pôde disparar uma única vez em 461 execuções porque a
+  suíte não tem asserções, de modo que ela está **viva no produto e morta nas
+  medições**. A suíte exercita um subconjunto dos caminhos do produto, e uma
+  funcionalidade que só dispara nos caminhos não exercitados **não está medida**,
+  por mais bem que funcione. *[a]* para as
   contagens (nenhuma parada antecipada em 461 execuções falhas ou abortadas de C, E,
   G e F), *[b]* para a leitura do código.
 - **O estado interno do servidor entre tarefas.** O descarregamento do modelo
@@ -952,6 +957,25 @@ proposta tem de dizê-lo: em E os dois sucessos GHZ (`ghz_linear5_mixed`,
 `ghz_linear5_scattered_even`) não tiveram repetição alguma, de modo que a
 interação, se existe, é família por build, e não foi mostrada. **[b]** para a
 interação (três casos, uma run).
+
+### Dois terços das falhas "travadas" do 1,5B são uma truncagem, rotulada como erro de sintaxe
+
+Das 77 falhas do 1,5B (run F, Ollama 0.40.8) com o mesmo erro nas cinco tentativas,
+**51** são um só modo: o código final é o texto bruto que começa com uma cerca de
+código aberta e termina no meio de uma frase, num laço de repetição ("Apply the
+phase oracle one last time ..."), e o erro é `invalid syntax (<unknown>, line 1)`.
+Essas execuções gastaram em média 21.055 tokens de saída (cinco tentativas no teto de
+4.096), contra 2.239 nas demais da F. A geração degenera em repetição até o teto, a
+cerca de fechamento nunca é escrita, e a extração cai no texto bruto. É uma
+**truncagem**, que o rótulo de fechamento chama de `SyntaxError`. O mesmo texto de erro
+é o erro da tentativa 1 em 51 das 120 execuções da F e 259 de 346 dos seus registros
+`SyntaxError` estáticos (verificado como cerca aberta só nas 51 travadas); nas runs E
+e C é 9 de 117 e 11 de 126. **[a]** para as contagens, **[b]** para o mecanismo (a
+cerca não fechada é verificada nas 51; a cadeia causal da repetição não). Dois efeitos:
+o código truncado é devolvido ao gerador como "tentativa anterior"; e o que parecia
+"o laço não muda a resposta" é, em dois terços, o mesmo modo de degeneração sob teto.
+Isto é outra instância do padrão do parágrafo anterior: o rótulo de fechamento
+absorve uma condição (truncagem) que o nome não descreve.
 
 ### Retrieval não entrega conhecimento negativo
 

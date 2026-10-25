@@ -170,46 +170,89 @@ Same-slice successes of the baselines the distilled 1.5B will be compared with
   same before and after (the baselines are 1/24 for the 7B and for the 1.5B,
   not 0/24), and a null there bounds the claim rather than failing it.
 
-## Prediction registered before any training: repair sensitivity (2026-10-25)
+## Prediction registered before any training: repair sensitivity (2026-10-25, criterion restated the same day)
 
-**The premise, from the records of run F** (1.5B base, Ollama 0.40.8, one seed):
-of the 118 failures that generated code, **77 (65.3%) carry the identical error
-(stage, type and message) in all five attempts**. By label: 56 `SyntaxError` (53 of
-them genuine parse errors, 3 runtime exceptions), 11 `UnknownSymbol`, 6
-`HallucinatedSymbol`, 4 `WrongGateDecomposition`. For two-thirds of its failures
-the loop returns the same error five times. The measured pathology is not "does
-not know circuits" but "does not change its answer when told it is wrong", which is
-a property of repair-prompt sensitivity rather than Qiskit knowledge.
+**Headline: the prompt changes and the outcome does not.** In run F (1.5B base,
+Ollama 0.40.8, one seed), 77 of the 118 failures that generated code (65.3%) carry
+the identical error (stage, type and message) in all five attempts, and in 71 of
+those 77 the critic's hint took 2 or 3 distinct values across the attempts (62 with
+two, 9 with three; 6 with one). The input to the next attempt varied; the error did
+not. This is stronger than "the system repeats itself": the critic's prompt is task,
+error, error message and the generated CODE, a different hint means a different
+prompt (a repeated prompt is answered identically, and in a run the response cache
+returns the stored text), and so in these runs the generator did change its code,
+while the error stayed constant. (F's own cache hit rate was not recorded, so this
+inference rests on the design of the cache and on determinism, not on a count.)
 
-*What the records cannot show:* that the CODE is identical (only the final code is
-persisted; the trace has no per-attempt code), and which side is insensitive. The
-critic that writes the hint is the same 1.5B, so "repair sensitivity" here is the
-generator-plus-critic pair, not the generator alone (the hints do vary across
-attempts, 2 to 3 distinct per stuck run, and the error does not).
+**`sigma` is an UPPER BOUND, and why.** The records hold identical ERRORS, not
+identical code. The error taxonomy is closed, hence lossy by construction: different
+code collapses into the same error record. That is the property that invalidated the
+token-count test (chapter 6, section 6.5), and the hint observation above already
+shows it at work. Until the code hash below exists, every `sigma` computed from
+records is `sigma_error >= sigma_code`.
 
-**Definitions** (all on the same suite, the same build, one seed): `C` = `compila@1`
-(count of 120), `S` = end-to-end success (count of 120), `sigma` = stuck fraction =
-failures identical in all five attempts / failures that generated code, `kappa` =
-`S / C`. **Baseline F:** `C0` = 10, `S0` = 1, `sigma0` = 65.3%, `kappa0` = 0.10. (Of the
-successes, the number that also had `compila@1` was 1 of 7 in C, 0 of 5 in E and 0
-of 1 in F; the rest compiled only after repair, and none succeeded on the first
-attempt, so the link `C -> S` is itself part of what is being tested.)
+**Making it exact, before the two 1.5B runs.** The trace now persists, per
+generation, a hash of the extracted code (`code_sha256_16`), how it was extracted
+(`code_extraction`: `fenced` or `raw_fallback`) and the output tokens. Additive: no
+behaviour changes, the extracted code is byte-for-byte what it was, and comparability
+with C to G is kept (any trace equality across the change must ignore the three new
+keys). `sigma_code` = failures whose five attempts have the same code hash / failures
+that generated code. By construction `sigma_code <= sigma_error`.
 
-**Prediction.** Phase 1 (first-attempt quality, as decided and unchanged) raises
-`C`. If it does not improve repair sensitivity (`sigma` stays at 50% or above),
-end-to-end success rises LESS than `compila@1` does: `S1/S0 < C1/C0`, which with
-`S0 = 1` is `kappa1 < 0.10`, i.e. `S1 < 0.1 * C1`. A better first attempt still
-enters a loop that does not recover, which is why phase 1 may not move the
-end-to-end number much. **Refutation:** if both rise in the same proportion
-(`kappa1 >= 0.10` with `C1 > C0`) the premise is wrong and phase 2 (training for
-repair) loses its justification. **Not tested:** if `sigma` falls below 50%, the
-antecedent is false (repair sensitivity improved) and the prediction says nothing.
+**Definitions** (same suite, same build, one seed): `C` = `compila@1` (count of 120),
+`S` = success (count of 120), `sigma` = the stuck fraction, `kappa` = `S / C`.
+**Baseline F:** `C0` = 10, `S0` = 1, `sigma_error0` = 65.3% (77/118). `sigma_code0`
+will be measured in the two 1.5B base re-runs that precede training.
 
-**Caveats, stated now.** `S0 = 1` makes `kappa0` fragile (1 of 10, Wilson 95%
-1.8% to 40.4%): only a large change discriminates, so the counts are reported next
-to every ratio. The result is reported on the 96-task in-family slice and on the
-24-task held-out slice separately, as registered above; the held-out slice will
-probably read the same before and after.
+**Prediction, built on `sigma`, the only one of the measures with a sample (118
+failures in the denominator; `S` has one success in its numerator).** "C rises"
+means `C1 >= 20` (a doubling of `C0`; my operationalisation, to be confirmed before
+training).
+- **Predicted:** `C` rises and `sigma` stays at or above 50%. Phase 1 improves first
+  attempts without improving repair, so a better first attempt still enters a loop
+  that does not recover; that is why phase 1 may not move the end-to-end number much.
+- **Refuted:** `C` rises and `sigma` falls to 40% or below. Repair improved without
+  repair data, so phase 2's premise is wrong.
+- **Ambiguous:** `sigma` between 40% and 50%.
+- **Which `sigma`.** `sigma_code` of the phase-1 run decides, when available.
+  Because `sigma_error` is an upper bound, `sigma_error <= 40%` is a conclusive
+  refutation on its own; `sigma_error >= 50%` is only necessary for "predicted".
+  If `sigma_error >= 50%` but `sigma_code < 50%`, the outcome is ambiguous (the bound
+  was too loose to decide).
+- **`kappa` and all raw counts are reported alongside as description, never as a
+  criterion.** The first version of this registration used `kappa < 0.10` and it was
+  wrong: `C` from 10 to 40 with `S` from 1 to 3 gives `kappa` = 0.075, which would
+  "confirm" a tripling of success. (The first version also read a fall of `sigma` as
+  "untested", which is backwards: `sigma` falling IS the prediction failing.)
+
+**FINDING that bears on the criterion, found while restating it (decision needed
+before training).** Of the 77 stuck failures in F, **51 are one mode**: the final
+code is the raw text starting with an unclosed opening fence, ends mid-sentence in a
+repetition loop ("Apply the phase oracle one last time ...") and the error is
+`invalid syntax (<unknown>, line 1)`. These runs spent a mean of 21,055 output tokens
+(5 attempts at about the 4,096-token cap), against 2,239 for the other F runs. The
+generation degenerates into repetition until the cap, the closing fence is never
+written, and `_extract_code` falls back to the raw text. It is a truncation, labelled
+`SyntaxError` by the catch-all (chapter 6, section 6.6), not a circuit error and not
+evidently a repair-prompt insensitivity; it also feeds the truncated code back as the
+"previous attempt". The same error text is the attempt-1 error of 51 of the 120 F runs
+and of 259 of F's 346 static `SyntaxError` records (verified as unclosed-fence
+truncation for the 51 stuck runs only). Consequences: (1) `sigma` is mostly one mode,
+and phase 1 (short, fence-closing teacher outputs) can make it fall as a side effect,
+which would read as "refuted" under the criterion above without any repair
+improvement; (2) among failures that are NOT this truncation, the stuck fraction at
+baseline is 26 of 67 = 38.8%, already below the 40% line. So the criterion cannot be
+applied to `sigma_all` with these thresholds without deciding whether it measures
+repair or truncation. Proposed, not applied: report `sigma` split into `sigma_trunc`
+(unclosed-fence, readable from `code_extraction` and `output_tokens`) and `sigma_real`,
+and re-base the thresholds on `sigma_real`.
+
+**Two limits, stated now.** The critic that writes the hint is the same 1.5B, so
+"repair sensitivity" is the generator-plus-critic pair, not the generator alone. The
+conversion `kappa0` (1 of 10) is fragile (Wilson 95% 1.8% to 40.4%); this is a further
+reason `kappa` is description only. The result is reported on the 96-task in-family
+slice and on the 24-task held-out slice separately; the held-out slice will probably
+read the same before and after.
 
 ## Held-out slice (`bench/heldout.yaml`, rule heldout-v1)
 

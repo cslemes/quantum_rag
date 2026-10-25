@@ -6883,3 +6883,30 @@ The threshold is a trade between attempts saved and rescues kept, on n of 1 to 7
    early stops in the 461 failed-or-aborted runs of C, E, G, F.
 4. **Durations:** 5.6 now says any "how long the suite takes" claim cites E or G, never C (clock
    not recorded).
+
+## 2026-10-25 — prediction criterion restated on sigma; the stuck failures are mostly a truncation
+
+1. **Criterion restated** (`distill-pilot-families.md`): predicted = C rises (>= 20, doubling; my
+   operationalisation, unconfirmed) and sigma >= 50%; refuted = C rises and sigma <= 40%; ambiguous
+   40-50%; kappa and counts are description only (kappa = 0.075 for C 10->40, S 1->3 "confirms" a
+   tripling). `sigma_code` decides when available; `sigma_error <= 40%` alone refutes (it is an upper
+   bound); `sigma_error >= 50%` with `sigma_code < 50%` is ambiguous.
+2. **sigma is an upper bound** (identical ERRORS, not code; the closed taxonomy is lossy, same
+   property as the token-count test in 6.5). **Trace now persists `code_sha256_16`, `code_extraction`
+   (`fenced`|`raw_fallback`) and `output_tokens` per generation** (`nodes/generator.py`,
+   `_attempt_descriptors`; test `tests/unit/test_generator_trace_descriptors.py`). Additive; extracted
+   code unchanged; trace equality across the change must ignore the three keys. The two extra fields
+   go beyond the hash that was asked for, because of the finding below.
+3. **Headline:** hints vary (2-3 distinct in 71 of 77 stuck runs) while the error is constant; since
+   the critic prompt includes the code, different hints mean different code.
+4. **FINDING (needs your decision):** 51 of the 77 stuck failures are one mode, generation degenerating
+   into repetition to the 4,096-token cap, fence never closed, `_extract_code` falls back to raw text,
+   `invalid syntax (<unknown>, line 1)`; mean 21,055 output tokens vs 2,239. Same error is attempt 1 of
+   51 of F's 120 runs. Among failures that are not this truncation, the stuck fraction is 26/67 = 38.8%,
+   below the 40% line, so the criterion cannot be applied to sigma_all without deciding what it
+   measures. Proposed: split sigma into sigma_trunc / sigma_real and re-base on sigma_real. Not applied.
+5. **Generalization and chapter 7:** 6.4 now says the stop rule is live in the product and dead in the
+   measurements; the suite exercises a subset of the product's paths and what only fires on the rest is
+   unmeasured. Chapter 7 (skeleton) lacked the MEASUREMENT limit; added: every one of the 120 tasks has
+   a reference and `assertions: []` (checked in C, E, F, G), so the product's distinctive path is the
+   least measured thing in the work.
