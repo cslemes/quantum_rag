@@ -248,6 +248,7 @@ ERROR_TAXONOMY = frozenset(
         "MissingImport",
         "UnknownSymbol",
         "SyntaxError",
+        "GenerationTruncated",
         "TranspilationFailure",
         "CircuitSerializationFailure",
         "QubitIndexError",
@@ -343,6 +344,11 @@ class AgentState(TypedDict, total=False):
     chunks: list[Chunk]
     code: str
     iteration: int
+    # True when the generator's response reached the token cap WITHOUT closing the
+    # code fence: the code is cut off, not malformed. static_check then reports
+    # `GenerationTruncated` instead of executing the cut-off text, which would have
+    # been labelled a syntax error.
+    generation_truncated: bool
 
     # current attempt's results
     static: StaticResult | None

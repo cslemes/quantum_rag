@@ -526,3 +526,77 @@ def test_index_status_classifies_missing_empty_unreachable_ok_and_mismatch() -> 
     assert index_status(Q(boom=True), pin, "qdocs").state == "unreachable"
     assert not index_status(Q(points=1019), pin, "qdocs").usable
     assert index_status(Q(points=5), IndexPin(None, None), "qdocs").state == "not_pinned"
+
+
+# -- F-prime: the repetition penalty is part of the model's identity -------------------
+
+
+def test_the_f_prime_profile_differs_from_f_only_in_the_repetition_settings() -> None:
+    from qcagent.llm.profiles import get_profile
+
+    f, fp = get_profile("local-1.5b"), get_profile("local-1.5b-rp")
+    assert f.determinism.repeat_penalty is None  # F inherits the server default: no penalty
+    assert (fp.determinism.repeat_penalty, fp.determinism.repeat_last_n) == (1.1, 64)
+    same = {"client_type", "model", "expected_server_version", "base_url", "role"}
+    assert all(getattr(f, k) == getattr(fp, k) for k in same)
+    assert (f.determinism.temperature, f.determinism.num_ctx, f.determinism.reset_strategy) == (
+        fp.determinism.temperature,
+        fp.determinism.num_ctx,
+        fp.determinism.reset_strategy,
+    )
+
+
+def test_the_repetition_penalty_is_sent_and_is_in_the_cache_key(tmp_path) -> None:
+    import json
+
+    import httpx
+
+    from qcagent.llm.ollama_client import OllamaClient
+
+    bodies: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/chat":
+            bodies.append(json.loads(request.content))
+            return httpx.Response(200, json={"message": {"content": "x"}, "eval_count": 1})
+        if request.url.path == "/api/version":
+            return httpx.Response(200, json={"version": "0.40.8"})
+        return httpx.Response(200, json={"models": [{"name": "m", "digest": "d"}]})
+
+    def client(**kw) -> OllamaClient:
+        c = OllamaClient("http://x", "m", 16384, 0.0, **kw)
+        c._client = httpx.Client(base_url="http://x", transport=httpx.MockTransport(handler))
+        c.cache_dir = tmp_path
+        return c
+
+    plain, penalised = client(), client(repeat_penalty=1.1, repeat_last_n=64)
+    plain.generate(system="s", prompt="p", seed=1, max_tokens=10)
+    penalised.generate(system="s", prompt="p", seed=1, max_tokens=10)
+    assert "repeat_penalty" not in bodies[0]["options"]  # F: nothing sent
+    assert bodies[1]["options"]["repeat_penalty"] == 1.1
+    assert bodies[1]["options"]["repeat_last_n"] == 64
+    assert len(bodies) == 2 and not penalised.last_call_cache_hit  # another identity: a miss
+
+
+def test_repeat_settings_are_refused_on_a_hosted_profile() -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    from qcagent.llm.profiles import Profile
+
+    with pytest.raises(ValidationError, match="ollama profile only"):
+        Profile.model_validate(
+            {
+                "name": "x",
+                "label": "x",
+                "client_type": "openai_compatible",
+                "base_url": "https://example.com/v1",
+                "model": "m",
+                "credential_env": "KEY",
+                "determinism": {
+                    "reset_strategy": "none",
+                    "temperature": 0.0,
+                    "repeat_penalty": 1.1,
+                },
+            }
+        )

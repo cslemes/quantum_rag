@@ -65,6 +65,11 @@ class Determinism(BaseModel):
     # without notice.
     top_p: float | None = Field(default=None, gt=0.0, le=1.0)
     num_ctx: int | None = None
+    # Ollama only. A repetition penalty is part of the model's identity (a new
+    # profile, a new cache key). None = not sent: the server default applies,
+    # which on Ollama 0.40.8 is no penalty (equivalent to 1.0).
+    repeat_penalty: float | None = Field(default=None, gt=0.0, le=2.0)
+    repeat_last_n: int | None = Field(default=None, ge=0)
 
 
 class ProviderOptions(BaseModel):
@@ -166,6 +171,11 @@ class Profile(BaseModel):
                 raise ValueError("an openai_compatible profile needs credential_env")
         if self.provider_options is not None and self.client_type != "openai_compatible":
             raise ValueError("provider_options apply to an openai_compatible profile only")
+        if self.client_type != "ollama" and (
+            self.determinism.repeat_penalty is not None
+            or self.determinism.repeat_last_n is not None
+        ):
+            raise ValueError("repeat_penalty / repeat_last_n apply to an ollama profile only")
         if self.reasoning_effort is not None and self.client_type != "openai_compatible":
             raise ValueError("reasoning_effort applies to an openai_compatible profile only")
         if self.role == "teacher":
@@ -415,7 +425,14 @@ def build_client(profile: Profile, *, env_file: Path = ENV_FILE) -> BaseLLMClien
         from qcagent.llm.ollama_client import OllamaClient
 
         assert d.num_ctx is not None and d.temperature is not None  # pinned by the schema
-        return OllamaClient(url, profile.model, d.num_ctx, d.temperature)
+        return OllamaClient(
+            url,
+            profile.model,
+            d.num_ctx,
+            d.temperature,
+            repeat_penalty=d.repeat_penalty,
+            repeat_last_n=d.repeat_last_n,
+        )
     from qcagent.llm.openai_compatible_client import OpenAICompatibleClient
 
     secret = _resolve_credential(profile, env_file)
@@ -449,7 +466,13 @@ def reset_server_state(profile: Profile, *, env_file: Path = ENV_FILE) -> None:
 
 def determinism_stamps(profile: Profile) -> dict[str, str]:
     d = profile.determinism
+    extra: dict[str, str] = {}
+    if d.repeat_penalty is not None:
+        extra["determinism_repeat_penalty"] = str(d.repeat_penalty)
+    if d.repeat_last_n is not None:
+        extra["determinism_repeat_last_n"] = str(d.repeat_last_n)
     return {
+        **extra,
         "determinism_reset": d.reset_strategy,
         "determinism_temperature": "not sent" if d.temperature is None else str(d.temperature),
         "determinism_num_ctx": "not applicable" if d.num_ctx is None else str(d.num_ctx),

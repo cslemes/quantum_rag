@@ -1,3 +1,15 @@
+# SUPERSEDED 2026-10-27 (decision 2). This list is retired, not deleted.
+#   * It was chosen by a blind rule (hash ordering, no reference to any outcome) BEFORE its
+#     consequence was known. Applied as a family-level holdout it blocked training families for
+#     64 of the 96 in-family statements and would yield a probably-null result on both slices.
+#   * The 24 tasks are back in the test set; evaluation is on all 120. A heldout-v2 chosen now,
+#     with that consequence in view, would not be blind, so there is no v2.
+#   * What holds the test set out now is the statement and answer level: the lexical
+#     near-duplicate gate against every test statement and strict circuit equivalence
+#     against all 120 references (src/qcagent/distill/gate.py).
+#   * Nothing reads this file to exclude tasks any more except the v1 reproduction of the skill
+#     histogram (src/qcagent/distill/skills.py::in_family_statements) and the test that
+#     re-derives the rule. See specs/001-qcircuit-agent/distill-family-selection-v2.md.
 # The out-of-family slice of the 120-task suite: families that NO training
 # statement may belong to. Fixed 2026-10-24, before any training data is drawn.
 # Re-derived from the rule below by tests/unit/test_heldout_slice.py; editing
@@ -20,6 +32,7 @@
 #           both present. The rule is reported as it came out: a failed check
 #           would be reported, not repaired by swapping a family.
 heldout:
+  status: superseded-2026-10-27
   rule: heldout-v1
   salt: "heldout-v1:"
   quotas: {unitary: 2, energy: 1, statevector: 4}

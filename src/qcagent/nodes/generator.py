@@ -142,6 +142,9 @@ def _render_previous_code(code: str, last_errors: list[ErrorRecord]) -> str:
     return f"## Code of the previous attempt\n{instruction}\n```python\n{code}\n```"
 
 
+#: the generator's completion cap (Ollama `num_predict`)
+GENERATION_MAX_TOKENS = 4096
+
 _FENCED_BLOCK = re.compile(r"```(?:python)?\s*\n(.*?)```", re.DOTALL)
 
 
@@ -150,6 +153,15 @@ def _extract_code(text: str) -> str:
     if the model didn't fence it, since some prompts still leak bare code."""
     match = _FENCED_BLOCK.search(text)
     return match.group(1).strip() if match is not None else text.strip()
+
+
+def is_truncated(text: str, output_tokens: int) -> bool:
+    """The response ran into the token cap and never closed its code fence. The
+    model did not write a malformed program; it did not finish writing one, and
+    `_extract_code` falling back to the raw text would turn the one into the
+    other. BOTH conditions are required: a bare, unfenced answer that ended
+    normally is still extracted as before."""
+    return output_tokens >= GENERATION_MAX_TOKENS and not _FENCED_BLOCK.search(text)
 
 
 def _attempt_descriptors(text: str, code: str, output_tokens: int) -> dict:
@@ -163,6 +175,7 @@ def _attempt_descriptors(text: str, code: str, output_tokens: int) -> dict:
         "code_sha256_16": hashlib.sha256(code.encode()).hexdigest()[:16],
         "code_extraction": "fenced" if _FENCED_BLOCK.search(text) else "raw_fallback",
         "output_tokens": output_tokens,
+        "generation_truncated": is_truncated(text, output_tokens),
     }
 
 
@@ -235,7 +248,10 @@ def make_generator_node(llm: BaseLLMClient, *, seed: int = 42) -> Callable[[Agen
         prompt = _build_prompt(requirements, state, last_errors)
         try:
             response = llm.generate(
-                system=GENERATOR_SYSTEM_PROMPT, prompt=prompt, seed=seed, max_tokens=4096
+                system=GENERATOR_SYSTEM_PROMPT,
+                prompt=prompt,
+                seed=seed,
+                max_tokens=GENERATION_MAX_TOKENS,
             )
         except InfrastructureError as exc:
             # Same rule as planner.py: never route this through the critic —
@@ -252,6 +268,7 @@ def make_generator_node(llm: BaseLLMClient, *, seed: int = 42) -> Callable[[Agen
         return {
             "code": code,
             "iteration": iteration,
+            "generation_truncated": is_truncated(response.text, response.output_tokens),
             # data-model.md: static/semantic/resource/decision hold ONLY the
             # current attempt, never accumulate. New code invalidates every
             # prior verdict, so a fresh attempt must start with all four

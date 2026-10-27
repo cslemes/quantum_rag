@@ -37,7 +37,7 @@ from qcagent.nodes.routing import (
     route_after_semantic,
     route_after_static,
 )
-from qcagent.state import AgentState, ErrorRecord, SemanticResult
+from qcagent.state import AgentState, ErrorRecord, SemanticResult, StaticResult
 from qcagent.validators.artifact import describe_circuit
 from qcagent.validators.assertions import evaluate_assertions, render_assertion
 from qcagent.validators.requirements import check_requirements
@@ -108,7 +108,25 @@ def _load_generated_circuit(state: AgentState) -> QuantumCircuit:
 def make_static_check_node(pool: WorkerPool) -> Callable[[AgentState], dict]:
     def static_check(state: AgentState) -> dict:
         coupling_map = COUPLING_MAPS[state.get("coupling_map_name") or "all_to_all"]
-        result = check_static(state["code"], coupling_map, pool)
+        if state.get("generation_truncated"):
+            # Nothing is executed: the text is a prefix, and running it would only
+            # report an artefact of where it was cut ("invalid syntax, line 1").
+            result = StaticResult(
+                parsed=False,
+                executed=False,
+                transpiled=False,
+                error=ErrorRecord(
+                    iteration=0,
+                    stage="static",
+                    error_type="GenerationTruncated",
+                    message=(
+                        "the response reached the generation token limit without closing "
+                        "its code block: the code is cut off, not malformed"
+                    ),
+                ),
+            )
+        else:
+            result = check_static(state["code"], coupling_map, pool)
 
         error_history: list[ErrorRecord] = []
         if result.error is not None:

@@ -54,6 +54,10 @@ Action = Literal["retry_retrieval", "retry_generation", "optimize", "abort", "do
 _RETRY_RETRIEVAL_ERRORS = {"DeprecatedAPI", "HallucinatedSymbol"}
 _RETRY_GENERATION_ERRORS = {
     "SyntaxError",
+    # The response hit the token cap before closing its code block. Regenerating is
+    # the repair; the label exists so that "never finished" is not recorded, shown to
+    # the model and counted as "wrote a syntax error".
+    "GenerationTruncated",
     # The symbol EXISTS and was simply not imported, so retrieval cannot help
     # — no quantity of documentation adds an `import` line. Separating this
     # from HallucinatedSymbol is the whole point of the split (F14, F3): in

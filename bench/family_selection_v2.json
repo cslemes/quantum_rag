@@ -1,0 +1,248 @@
+{
+ "capacity_v2": {
+  "qubit_permutation": 5905,
+  "stabilizer_graph_states": 27470,
+  "pauli_hamiltonian_energy": 178070991347092101120,
+  "independent_biased_bits": 11668193208,
+  "simon": 320,
+  "grover": 3196068,
+  "w_dicke": 87425,
+  "diagonal_phase_ising": 6135264802115760416,
+  "qft": 502512,
+  "qpe": 501,
+  "kickback_bv_dj": 2035,
+  "reversible_logic": 631074,
+  "qaoa_p1": 2747400,
+  "two_qubit_ansatz_energy": 262144
+ },
+ "coverage_v2": {
+  "principal_skills": [
+   "bell_state",
+   "bernstein_vazirani",
+   "deutsch_jozsa",
+   "diagonal_phase_evolution",
+   "full_adder_majority",
+   "ghz_state",
+   "grover",
+   "maxcut_graph",
+   "multi_body_z_string",
+   "pauli_ground_energy",
+   "phase_estimation",
+   "qaoa_p1",
+   "qft",
+   "qubit_order_reversal",
+   "qubits_remain_zero",
+   "qubo_to_ising",
+   "reversible_boolean_logic",
+   "simon",
+   "swap_layer",
+   "vqe_fixed_ansatz",
+   "w_state",
+   "z_hamiltonian_pauli_sum"
+  ],
+  "statements": 120,
+  "greedy": [
+   {
+    "added": "the four built families",
+    "new_constructions": 0,
+    "fully_reached": 18,
+    "partly_reached": 55
+   },
+   {
+    "added": "diagonal_phase_ising",
+    "new_constructions": 1,
+    "marginal_fully_reached": 37,
+    "fully_reached": 55,
+    "partly_reached": 90,
+    "capacity": 6135264802115760416,
+    "teaches_primary": [
+     "diagonal_phase_evolution",
+     "multi_body_z_string",
+     "qubo_to_ising",
+     "z_hamiltonian_pauli_sum"
+    ]
+   },
+   {
+    "added": "kickback_bv_dj",
+    "new_constructions": 2,
+    "marginal_fully_reached": 12,
+    "fully_reached": 67,
+    "partly_reached": 99,
+    "capacity": 2035,
+    "teaches_primary": [
+     "bernstein_vazirani",
+     "deutsch_jozsa"
+    ]
+   },
+   {
+    "added": "qaoa_p1",
+    "new_constructions": 3,
+    "marginal_fully_reached": 11,
+    "fully_reached": 78,
+    "partly_reached": 101,
+    "capacity": 2747400,
+    "teaches_primary": [
+     "maxcut_graph",
+     "qaoa_p1"
+    ]
+   },
+   {
+    "added": "qft",
+    "new_constructions": 4,
+    "marginal_fully_reached": 12,
+    "fully_reached": 90,
+    "partly_reached": 101,
+    "capacity": 502512,
+    "teaches_primary": [
+     "qft"
+    ]
+   },
+   {
+    "added": "w_dicke",
+    "new_constructions": 5,
+    "marginal_fully_reached": 6,
+    "fully_reached": 96,
+    "partly_reached": 106,
+    "capacity": 87425,
+    "teaches_primary": [
+     "w_state"
+    ]
+   },
+   {
+    "added": "simon",
+    "new_constructions": 6,
+    "marginal_fully_reached": 6,
+    "fully_reached": 102,
+    "partly_reached": 111,
+    "capacity": 320,
+    "teaches_primary": [
+     "simon"
+    ]
+   },
+   {
+    "added": "reversible_logic",
+    "new_constructions": 7,
+    "marginal_fully_reached": 6,
+    "fully_reached": 108,
+    "partly_reached": 116,
+    "capacity": 631074,
+    "teaches_primary": [
+     "full_adder_majority",
+     "reversible_boolean_logic"
+    ]
+   },
+   {
+    "added": "grover",
+    "new_constructions": 8,
+    "marginal_fully_reached": 6,
+    "fully_reached": 114,
+    "partly_reached": 120,
+    "capacity": 3196068,
+    "teaches_primary": [
+     "grover"
+    ]
+   },
+   {
+    "added": "qpe",
+    "new_constructions": 9,
+    "marginal_fully_reached": 6,
+    "fully_reached": 120,
+    "partly_reached": 120,
+    "capacity": 501,
+    "teaches_primary": [
+     "phase_estimation"
+    ]
+   }
+  ],
+  "not_fully_reached_by_the_unchosen": [],
+  "statements_needing_no_principal_skill": [],
+  "generous_reach_per_family": {
+   "qubit_permutation": 33,
+   "stabilizer_graph_states": 26,
+   "pauli_hamiltonian_energy": 6,
+   "independent_biased_bits": 38,
+   "diagonal_phase_ising": 49,
+   "qft": 22,
+   "kickback_bv_dj": 43,
+   "qpe": 31,
+   "simon": 34,
+   "grover": 24,
+   "w_dicke": 6,
+   "reversible_logic": 29,
+   "qaoa_p1": 12,
+   "two_qubit_ansatz_energy": 6
+  }
+ },
+ "equal_allocation_ceiling": [
+  {
+   "families": 4,
+   "last_added": "independent_biased_bits",
+   "smallest_capacity": 5905,
+   "limiting_family": "qubit_permutation",
+   "max_target": 23620
+  },
+  {
+   "families": 5,
+   "last_added": "diagonal_phase_ising",
+   "smallest_capacity": 5905,
+   "limiting_family": "qubit_permutation",
+   "max_target": 29525
+  },
+  {
+   "families": 6,
+   "last_added": "kickback_bv_dj",
+   "smallest_capacity": 2035,
+   "limiting_family": "kickback_bv_dj",
+   "max_target": 12210
+  },
+  {
+   "families": 7,
+   "last_added": "qaoa_p1",
+   "smallest_capacity": 2035,
+   "limiting_family": "kickback_bv_dj",
+   "max_target": 14245
+  },
+  {
+   "families": 8,
+   "last_added": "qft",
+   "smallest_capacity": 2035,
+   "limiting_family": "kickback_bv_dj",
+   "max_target": 16280
+  },
+  {
+   "families": 9,
+   "last_added": "w_dicke",
+   "smallest_capacity": 2035,
+   "limiting_family": "kickback_bv_dj",
+   "max_target": 18315
+  },
+  {
+   "families": 10,
+   "last_added": "simon",
+   "smallest_capacity": 320,
+   "limiting_family": "simon",
+   "max_target": 3200
+  },
+  {
+   "families": 11,
+   "last_added": "reversible_logic",
+   "smallest_capacity": 320,
+   "limiting_family": "simon",
+   "max_target": 3520
+  },
+  {
+   "families": 12,
+   "last_added": "grover",
+   "smallest_capacity": 320,
+   "limiting_family": "simon",
+   "max_target": 3840
+  },
+  {
+   "families": 13,
+   "last_added": "qpe",
+   "smallest_capacity": 320,
+   "limiting_family": "simon",
+   "max_target": 4160
+  }
+ ]
+}

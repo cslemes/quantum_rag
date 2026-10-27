@@ -199,6 +199,8 @@ class OllamaClient(BaseLLMClient):
         num_ctx: int = 16384,
         temperature: float = 0.0,
         keep_alive: str = "60m",
+        repeat_penalty: float | None = None,
+        repeat_last_n: int | None = None,
     ) -> None:
         self.model_id = model_id
         self.base_url = base_url.rstrip("/")
@@ -207,7 +209,35 @@ class OllamaClient(BaseLLMClient):
         self.num_ctx = num_ctx
         self.temperature = temperature
         self.keep_alive = keep_alive
+        # Sampling parameters that are part of the model's IDENTITY (they are in
+        # the cache key through `_IDENTITY_ATTRS`). None = not sent, and the
+        # server's own default applies: on Ollama 0.40.8 an unsent repeat_penalty
+        # is equivalent to 1.0 (measured: identical output to an explicit 1.0, and
+        # different from an explicit 1.1), i.e. NO repetition penalty. A
+        # repetition penalty is a deterministic transform of the logits from the
+        # generated prefix, so temperature 0 stays reproducible with it.
+        self.repeat_penalty = repeat_penalty
+        self.repeat_last_n = repeat_last_n
         self._client = httpx.Client(base_url=self.base_url, timeout=300.0)
+
+    def _options(self, seed: int, max_tokens: int) -> dict:
+        """The request's options. Every sampling parameter that alters the
+        measurement is sent explicitly, never inherited (D10b, F15). A seed ALONE
+        does not make Ollama deterministic: the same prompt and seed gave two
+        distinct outputs in four calls, and `temperature=0` gave four identical;
+        across the first two suite runs the unpinned temperature changed the
+        attempt-1 output for 26.1% of (task, seed) pairs (F15)."""
+        options: dict = {
+            "num_ctx": self.num_ctx,
+            "seed": seed,
+            "num_predict": max_tokens,
+            "temperature": self.temperature,
+        }
+        if self.repeat_penalty is not None:
+            options["repeat_penalty"] = self.repeat_penalty
+        if self.repeat_last_n is not None:
+            options["repeat_last_n"] = self.repeat_last_n
+        return options
 
     def response_identity(self) -> dict[str, str] | None:
         """The base identity plus what the SERVER is: its build and the resolved
@@ -276,27 +306,7 @@ class OllamaClient(BaseLLMClient):
                     # `num_ctx` and `temperature` are: an inherited default
                     # that alters the measurement must never be inherited.
                     "keep_alive": self.keep_alive,
-                    "options": {
-                        "num_ctx": self.num_ctx,
-                        "seed": seed,
-                        "num_predict": max_tokens,
-                        # Pinned for the same reason D10b pins `num_ctx`:
-                        # never inherit a sampling parameter from the server
-                        # or the model's Modelfile, because the default is
-                        # invisible and changes the measurement.
-                        #
-                        # A seed ALONE does not make Ollama deterministic.
-                        # Measured directly: same prompt, same seed, four
-                        # calls -> two distinct outputs; adding
-                        # temperature=0 -> four identical. Across the first
-                        # two full suite runs this produced DIFFERENT
-                        # attempt-1 output for 26.1% of (task, seed) pairs,
-                        # which made a before/after comparison impossible:
-                        # `compila@1` moved 10.9% -> 15.6% between two runs
-                        # whose difference cannot affect attempt 1 at all.
-                        # See F15.
-                        "temperature": self.temperature,
-                    },
+                    "options": self._options(seed, max_tokens),
                 },
             )
             if response.status_code in _TRANSIENT_STATUS_CODES:

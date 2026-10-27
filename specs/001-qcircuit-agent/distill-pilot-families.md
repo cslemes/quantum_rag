@@ -101,6 +101,14 @@ physical model.
   (`P(1)` would read 0.5625). A loader path for the distribution kind also has
   to be added; the suite has none.
 
+> **SUPERSEDED 2026-10-27 (decision 2): the sections "What out-of-family means", "Adjacency of each
+> training family to the 24 held-out tasks", "Registered before any training: baselines and the headline
+> threshold" (its slice split and its 4/96 threshold) and "Held-out slice" describe the family-held-out
+> slice `heldout-v1`, which was dropped. The 24 tasks return to the test set and evaluation is on all 120.
+> They are kept as the record. The decision, its reason and what replaces them are in
+> `distill-family-selection-v2.md`. The headline threshold becomes 5 of 120 for the 7B on Ollama 0.40.8
+> (runs E and G): a distilled 1.5B needs 6 of 120 or more on the same build, to be confirmed.**
+
 ## What "out-of-family" means
 
 **Task-id family, not unseen mechanism.** A held-out family is one whose
@@ -225,8 +233,16 @@ training).
   "confirm" a tripling of success. (The first version also read a fall of `sigma` as
   "untested", which is backwards: `sigma` falling IS the prediction failing.)
 
-**FINDING that bears on the criterion, found while restating it (decision needed
-before training).** Of the 77 stuck failures in F, **51 are one mode**: the final
+**DECISION 2026-10-27 on the finding below.** The sigma thresholds are NOT re-based on
+`sigma_real`: that treats the symptom. The fix is to re-measure on a sane configuration (F-prime,
+registered below) and let `sigma` mean what it was meant to mean. The split `sigma_trunc` /
+`sigma_real` stays as a REPORTING dimension, being the diagnostic that found this. The 50% / 40% lines were
+registered against F's `sigma_error` of 65.3%; they are to be re-registered against F-prime's measured
+baseline BEFORE any training, and never after seeing the trained model. The generator now also labels a
+truncated generation `GenerationTruncated` instead of a syntax error (chapter 6, section 6.3), so
+`sigma_error` of the runs from F-prime on no longer counts a truncation as a repeated syntax error.
+
+**FINDING that bears on the criterion, found while restating it (superseded by the decision above).** Of the 77 stuck failures in F, **51 are one mode**: the final
 code is the raw text starting with an unclosed opening fence, ends mid-sentence in a
 repetition loop ("Apply the phase oracle one last time ...") and the error is
 `invalid syntax (<unknown>, line 1)`. These runs spent a mean of 21,055 output tokens
@@ -243,18 +259,53 @@ which would read as "refuted" under the criterion above without any repair
 improvement; (2) among failures that are NOT this truncation, the stuck fraction at
 baseline is 26 of 67 = 38.8%, already below the 40% line. So the criterion cannot be
 applied to `sigma_all` with these thresholds without deciding whether it measures
-repair or truncation. Proposed, not applied: report `sigma` split into `sigma_trunc`
-(unclosed-fence, readable from `code_extraction` and `output_tokens`) and `sigma_real`,
-and re-base the thresholds on `sigma_real`.
+repair or truncation. (The proposal made at the time, to re-base the thresholds on `sigma_real`, was
+declined: see the decision above.)
 
 **Two limits, stated now.** The critic that writes the hint is the same 1.5B, so
 "repair sensitivity" is the generator-plus-critic pair, not the generator alone. The
 conversion `kappa0` (1 of 10) is fragile (Wilson 95% 1.8% to 40.4%); this is a further
-reason `kappa` is description only. The result is reported on the 96-task in-family
-slice and on the 24-task held-out slice separately; the held-out slice will probably
-read the same before and after.
+reason `kappa` is description only. (Superseded 2026-10-27: the result is reported on all 120 tasks; there is no
+held-out slice.)
 
-## Held-out slice (`bench/heldout.yaml`, rule heldout-v1)
+## Prediction registered before running F-prime (2026-10-27)
+
+**F-prime** is the 1.5B with a repetition penalty (profile `local-1.5b-rp`, config
+`config.local-1.5b-rp.yaml`), run on the same suite, build (Ollama 0.40.8), protocol and seed as F. **F stays
+as it is**: it is the config-matched comparison against E, and the scale claim in chapter 5 rests on it. F-prime
+is the distillation baseline. Each comparison uses the arm that matches it.
+
+*What differs between F and F-prime, stated so that nothing is hidden:* (1) `repeat_penalty` 1.1 and
+`repeat_last_n` 64, sent explicitly (F sent neither; an unsent `repeat_penalty` on this build is equivalent to
+1.0, measured); a repetition penalty is a deterministic transform of the logits from the generated prefix, so
+`temperature` 0 stays reproducible, and it is part of the model's identity (a new profile, a new cache key).
+(2) The generator's code change of the same day: a response that reaches the 4,096-token cap WITHOUT closing
+its code fence is labelled `GenerationTruncated` and not executed, instead of being executed and labelled a
+syntax error. The two changes are made together because the second records what the first removes; their
+separate contributions to F-prime are not separable in a single run (the label only matters for the attempts
+that still truncate), and the trace records every truncated attempt (`generation_truncated`,
+`output_tokens`, `code_sha256_16`).
+
+*Why 1.1.* Chosen on a validation set that is not the test set: the 80 pilot statements through the bare
+generator prompt, by a rule fixed before the 1.2 and 1.3 results were seen (the smallest penalty that maximises
+the number of executed programs). Measured: penalty 1.0 gave 15 of 80 generations at the token cap, 5 of 80
+programs executed; 1.1: 2 and 56; 1.2: 1 and 30; 1.3: 2 and 10. (Oracle-accepted: 0, 0, 1, 0 of 80, so the
+validation set does not discriminate on correctness; the 1.5B does not solve these statements at any penalty.)
+That probe used the bare prompt (no retrieval context, no planner), so it does not predict the pipeline.
+
+**Prediction (the operator's, registered before the run):** the degeneration mode largely disappears, so most
+of F's 51 truncation failures become ordinary failures; `sigma_error` falls toward the 38.8% measured for
+non-truncation failures; and success rises modestly, **2 to 5 of 120**. **If success exceeds 10 of 120, the
+1.5B baseline was dominated by decoding rather than capability, and the whole 1.5B narrative in chapter 5
+(the scale claim, the `compila@1` of 10 of 120, the 1 of 120) needs rewriting.**
+
+*Added by me, same registration:* the validation probe moved executability from 5 of 80 to 56 of 80, so a large
+rise in `compila@1` (F: 10 of 120) is expected, and the branch "success above 10 of 120" is less remote than
+the 2-to-5 point estimate suggests. Reported with it: `compila@1`, `sigma_error`, `sigma_trunc` and `sigma_real`
+(`sigma_real` as the share of failures that are stuck and not truncations), the count of
+`GenerationTruncated` attempts, and success on all 120.
+
+## Held-out slice (`bench/heldout.yaml`, rule heldout-v1) — SUPERSEDED 2026-10-27
 
 Seven families, 24 tasks, produced by the rule in that file (strata by oracle
 kind, ascending sha256 of a fixed salt plus the family name, no reference to

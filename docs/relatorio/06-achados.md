@@ -338,6 +338,28 @@ com metadados de proveniência, de versão ou de ambiente: o metadado sem
 consumidor que falha é o mesmo defeito que um relatório que afirma "verificado"
 sem que ninguém tenha verificado.
 
+### O código cortado que virou erro de sintaxe: o mecanismo
+
+Na run F (1,5B, Ollama 0.40.8), 77 das 118 falhas repetiram o mesmo erro nas cinco tentativas, e **51** delas eram
+um só modo: a geração degenerava em repetição até o teto de 4.096 tokens e nunca fechava a cerca do bloco de
+código (média de 21.055 tokens de saída por execução, contra 2.239 nas demais). O mecanismo da rotulagem errada
+tem três passos. (1) `_extract_code` procura um bloco com cerca de abertura **e** de fechamento; sem a de
+fechamento ele cai no texto bruto, que começa pela cerca de abertura. (2) O sandbox executa esse texto, e o erro
+é `invalid syntax (<unknown>, line 1)`. (3) O classificador de fechamento (§6.6) chama isso de `SyntaxError`.
+"O modelo não terminou" virou "o modelo escreveu sintaxe errada", no registro, na string `error_type=SyntaxError`
+mostrada ao gerador na repetição, e na contagem. A causa a montante é de decodificação: o Ollama 0.40.8 **não
+envia penalidade de repetição por padrão** (um `repeat_penalty` não enviado deu saída idêntica à de 1.0 e diferente
+da de 1.1), um parâmetro de amostragem herdado e nunca fixado, a mesma classe de F15. **[a]** (51 de 77; o texto
+final das 51 começa por cerca aberta e termina no meio de uma frase; a equivalência "não enviado = 1.0" medida na
+build.)
+
+Duas correções, nenhuma reescreve F. O gerador agora rotula `GenerationTruncated` quando a resposta atinge o teto
+**e** não fecha a cerca (nada é executado), do mesmo modo que o professor de destilação já tinha seu código
+`truncated:finish_reason_length`. E o 1,5B ganha uma segunda configuração, **F-prime**, com penalidade de repetição
+1.1, medida numa nova execução, porque a penalidade é parte da identidade do modelo; F continua sendo a comparação
+de configuração idêntica contra E, e a afirmação de escala do capítulo 5 repousa nela. A previsão para F-prime foi
+registrada antes de rodar (`distill-pilot-families.md`).
+
 ---
 
 ## 6.4 Regras que não se propagam
@@ -737,6 +759,28 @@ ressalvas continuam valendo: os estados diferem em protocolo, corpus e
 contaminação; a composição do denominador mudou (chegar ao semântico foi de
 113/341 para 74/120 e 88/120); e a queda B → C está confundida com a versão do
 servidor.
+
+### Holdout por família e treino útil estão em conflito direto
+
+Um achado sobre o desenho do benchmark, não uma desculpa. Para destilar um modelo pequeno e ainda medir
+generalização, escolheu-se uma fatia de **famílias retidas** (7 famílias, 24 das 120 tarefas), por uma regra cega
+(ordenação por hash, sem olhar nenhum resultado), fixada antes de qualquer dado de treino. A regra de exclusão que
+acompanhava a fatia, "nenhuma família de treino pode compartilhar mecanismo com uma família retida", foi aplicada
+aos enunciados das 96 tarefas restantes: **64 das 96 nomeavam uma habilidade cuja única família de treino
+compartilhava mecanismo com uma retida.** A habilidade real mais frequente (a fase diagonal exp(-iγH), 40
+enunciados) saía porque o QAOA retido é esse circuito mais um misturador; saíam também as fases de Z-strings, QUBO
+para Ising, fases controladas, a QFT e a QPE, Bernstein-Vazirani e Deutsch-Jozsa, a lógica reversível e Bell. Em
+um domínio cujo espaço de algoritmos canônicos é pequeno e coberto densamente pela suíte, **uma fatia retida por
+família e um treino útil estão em conflito direto**; aplicada com rigor, a fatia produz um resultado provavelmente
+nulo nas duas partes. Não é um parâmetro a ajustar: é o desenho. A fatia (`heldout-v1`) foi **substituída, não
+descartada em silêncio**: escolhida por regra cega antes de a consequência ser conhecida, e uma v2 escolhida agora,
+com a consequência à vista, deixaria de ser cega; as 24 tarefas voltam ao conjunto de teste, a avaliação é sobre as
+120, e a expectativa registrada de que a fatia fora da família leria 0 contra 0 fica superada. O que segura o
+conjunto de teste de fora passa a ser o nível do enunciado e da resposta: a quase-duplicata lexical contra todo
+enunciado de teste e a equivalência estrita do circuito contra as 120 referências. A afirmação final fica limitada
+a: dados sintéticos verificados por oráculo, da mesma distribuição, melhoram um modelo pequeno em enunciados que ele
+nunca viu; não é generalização fora da família. **[a]** (64 de 96, da varredura dos enunciados; a regra de
+identidade de mecanismo é uma leitura operacional, descrita em `distill-family-selection.md`.)
 
 ### Uma cifra interna de antes da correção, citada no presente
 

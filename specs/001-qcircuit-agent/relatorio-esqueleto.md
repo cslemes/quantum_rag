@@ -316,6 +316,14 @@ Um diagnóstico incorreto é pior que nenhum — ancora o modelo numa direção 
 
 - Verificação sem referência cobre executabilidade e restrições declaradas; não
   cobre corretude na ausência de asserção
+- **A afirmação final é limitada ao nível do enunciado e da resposta.** A fatia de
+  famílias retidas (`heldout-v1`) foi retirada (decisão de 2026-10-27, com a razão no
+  capítulo 6, §6.5): não há resultado de generalização fora da família. O que se afirma é
+  que dados sintéticos verificados por oráculo, da mesma distribuição, melhoram um modelo
+  pequeno em enunciados que ele nunca viu (nenhum enunciado e nenhuma resposta compartilhados
+  com as 120 tarefas, por quase-duplicata lexical e equivalência estrita de circuito). O
+  resultado é limitado a "treinado para a distribuição deste benchmark", não a melhoria geral
+  de Qiskit.
 - **Limite de medição (mais forte que o de capacidade acima):** a suíte sempre tem
   referência. As 120 tarefas são verificadas contra um oráculo construído
   independentemente e nenhuma declara asserções (`assertions: []` nos relatórios de

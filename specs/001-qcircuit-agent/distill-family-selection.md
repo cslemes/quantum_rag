@@ -1,5 +1,9 @@
 # Distillation: which families, computed from the data
 
+> **SUPERSEDED 2026-10-27** by `distill-family-selection-v2.md`. This is v1: it applied filter (c), no
+> mechanism identity with a held-out family, against the family-held-out slice `heldout-v1`, which was dropped
+> (decision 2). Kept as the record of what was concluded under the slice, including the 64-of-96 finding.
+
 Status 2026-10-25. Computed, committed, nothing generated. Code: `src/qcagent/distill/skills.py`
 (histogram), `selection.py` (capacities, timings); outputs `bench/skill_histogram.json`,
 `bench/family_selection_capacity.json`; tests `test_distill_skills.py`, `test_distill_selection.py`.

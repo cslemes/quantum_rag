@@ -44,7 +44,10 @@ def _opened_during(fn) -> set[str]:
     return opened
 
 
-def test_exactly_the_96_in_family_statements_are_used() -> None:
+# -- v1 (96 statements, superseded): kept reproducible ---------------------------------
+
+
+def test_v1_exactly_the_96_in_family_statements_are_used() -> None:
     held_out = set(
         yaml.safe_load((ROOT / "bench" / "heldout.yaml").read_text())["heldout"]["tasks"]
     )
@@ -52,21 +55,38 @@ def test_exactly_the_96_in_family_statements_are_used() -> None:
     assert len(statements) == 96 and not (set(statements) & held_out)
 
 
-def test_no_held_out_task_and_no_reference_circuit_is_opened() -> None:
+def test_v1_no_held_out_task_and_no_reference_circuit_is_opened() -> None:
     held_out = set(
         yaml.safe_load((ROOT / "bench" / "heldout.yaml").read_text())["heldout"]["tasks"]
     )
-    opened = _opened_during(lambda: skills.histogram())
+    opened = _opened_during(
+        lambda: skills.histogram(skills.in_family_statements(), skills.LEXICON_V1)
+    )
     assert not [p for p in opened if "oracles" in p.replace("\\", "/")]
     assert not [p for p in opened if Path(p).stem in held_out]
     assert any(p.endswith("heldout.yaml") for p in opened)  # it needed the NAMES, only
 
 
-def test_the_histogram_on_file_is_what_the_statements_give() -> None:
-    on_file = json.loads((ROOT / "bench" / "skill_histogram.json").read_text())
+def test_v1_histogram_on_file_is_what_the_96_statements_give() -> None:
+    on_file = json.loads((ROOT / "bench" / "skill_histogram.v1-96-superseded.json").read_text())
     assert on_file["statements"] == 96
-    assert on_file["skills"] == skills.histogram()
+    assert on_file["skills"] == skills.histogram(skills.in_family_statements(), skills.LEXICON_V1)
+
+
+# -- v2 (all 120 statements): statements only, never a reference circuit --------------
+
+
+def test_v2_uses_all_120_statements_and_opens_no_reference_circuit() -> None:
+    opened = _opened_during(lambda: skills.histogram(skills.all_statements()))
+    assert len(skills.all_statements()) == 120
+    assert not [p for p in opened if "oracles" in p.replace("\\", "/")]
+
+
+def test_v2_histogram_on_file_is_what_the_statements_give() -> None:
+    on_file = json.loads((ROOT / "bench" / "skill_histogram.json").read_text())
+    assert on_file["statements"] == 120
+    assert on_file["skills"] == skills.histogram(skills.all_statements())
 
 
 def test_every_skill_is_named_by_at_least_one_statement() -> None:
-    assert all(row["count"] >= 1 for row in skills.histogram())
+    assert all(row["count"] >= 1 for row in skills.histogram(skills.all_statements()))

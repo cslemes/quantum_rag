@@ -6926,3 +6926,45 @@ target with zero new constructions (equal allocation 1,250 each); next unused sk
 which needs Simon. The literal stop rule is degenerate (capacity never binds). Open: filter (c)'s reading,
 the 5,000 target, a per-family ceiling, whether to add Simon, GHZ leakage. Exact diagonalisation wall
 measured: 10 qubits 0.1 s, 11 qubits 0.6 s, 12 qubits 18.7 s.
+
+## 2026-10-27 — two structural decisions: the 1.5B baseline is confounded by decoding; the family-held-out slice is dropped
+
+**Decision 1: F-prime.**
+- *Discovery.* Ollama 0.40.8 sends no repetition penalty by default: an unsent `repeat_penalty` produced
+  output identical to an explicit 1.0 and different from an explicit 1.1 (1.5B, same prompt). So run F
+  (and E, C) inherited "no penalty", an unpinned sampling parameter (the F15 class). 51 of F's 77 stuck
+  failures were a degeneration into repetition to the 4,096-token cap with the fence never closed.
+- *Done.* `OllamaClient` takes `repeat_penalty` / `repeat_last_n` (sent only when set; in the cache key);
+  `Determinism` fields (ollama only; stamps only when set); profile `local-1.5b-rp` (1.1 / 64), config
+  `config.local-1.5b-rp.yaml`. Value chosen on a validation set that is not the test set (80 pilot statements,
+  bare generator prompt) by a rule fixed before the last two settings were seen (smallest penalty maximising
+  executed programs): 1.0: cap 15/80, executed 5/80; 1.1: 2, 56; 1.2: 1, 30; 1.3: 2, 10.
+- *Generator label.* `GenerationTruncated` (cap reached AND no closing fence; nothing executed): new
+  error type, routed to `retry_generation`, `generation_truncated` in state and trace; `_extract_code`
+  unchanged. Chapter 6, 6.3 records the mechanism by which 51 runs were mislabelled. It is an instrument
+  change, made together with the penalty; their separate contributions to F-prime are not separable.
+- *F kept as it is.* F-prime is the distillation baseline; each comparison uses the arm that matches it.
+- *Prediction registered before the run* (`distill-pilot-families.md`): degeneration mostly disappears,
+  sigma_error falls toward 38.8%, success 2 to 5 of 120; if success exceeds 10 of 120 the 1.5B baseline was
+  dominated by decoding and the chapter 5 1.5B narrative is rewritten. My addition: the probe makes the
+  >10 branch less remote.
+- *Not done, on purpose:* the sigma thresholds are NOT re-based on sigma_real; they are to be re-registered
+  against F-prime's measured baseline before training. sigma_trunc / sigma_real stay as a reporting dimension.
+
+**Decision 2: the family-held-out slice is dropped.** Reading (i) restored: no shared statement and no
+shared answer; same-family training allowed. `heldout-v1` is superseded, not silently dropped: chosen by a
+blind rule before the consequence was known; a v2 chosen now would not be blind. The 24 tasks return to the
+test set; evaluation on all 120. The registered expectation that the out-of-family slice would read 0 versus
+0 is superseded. The gates stay (lexical near-duplicate against every test statement; strict circuit
+equivalence against all 120 references). The threshold on all 120: 5 of 120 for the 7B on 0.40.8 (E, G);
+the distilled 1.5B needs 6 or more (to be confirmed). The final claim is bounded to oracle-verified synthetic
+data from the same distribution improving a small model on statements it has never seen; not out-of-family
+generalisation. The 64-of-96 is written up as a finding (6.5): family-level holdout and useful training are in
+direct conflict in a domain with a small canonical algorithm space.
+
+**Family list recomputed under decision 2** (`distill-family-selection-v2.md`, `bench/skill_histogram.json`
+on all 120 statements, `bench/family_selection_v2.json`; v1 kept, bannered superseded). Without filter (c)
+every principal skill has a family passing (a), (b), (d). The four built families FULLY reach 18 of 120
+statements (partly 55); adding diagonal-phase Ising circuits +37, BV/DJ +12, QAOA +11, QFT +12, W +6, Simon
++6, reversible logic +6, Grover +6, QPE +6 reaches all 120 (9 new constructions). Equal-allocation ceiling
+binds at BV/DJ (2,035) and Simon (320). Target, ceiling, which to build: left for the operator.

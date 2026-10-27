@@ -90,6 +90,8 @@ class BaseLLMClient(ABC):
         "headroom",
         "thinking_headroom",
         "num_ctx",
+        "repeat_penalty",
+        "repeat_last_n",
         "provider_options",
         "_base_url",
     )

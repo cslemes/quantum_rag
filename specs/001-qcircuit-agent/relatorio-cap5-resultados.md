@@ -465,6 +465,11 @@ sabendo-se isto.
 
 Não fazem parte do texto final; remover quando resolvidas.
 
+0. **F-prime (1,5B com penalidade de repetição 1.1), a medir.** F permanece como medida (comparação
+   de configuração idêntica contra E). Se o sucesso de F-prime passar de 10 em 120, o 1,5B de F era
+   dominado pela decodificação e toda a narrativa do 1,5B neste capítulo (a escala, o `compila@1` de
+   10 em 120, o 1 em 120) tem de ser reescrita; previsão e condição em `distill-pilot-families.md`.
+
 1. ~~Confirmar os números de regressão.~~ Resolvido: 40/74 → 29/88, apurado do
    *trace*.
 2. ~~Diagnóstico das duas tarefas com orçamento suspeito.~~ Resolvido: nada a

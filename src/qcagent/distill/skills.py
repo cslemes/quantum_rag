@@ -1,6 +1,13 @@
-"""STEP 0-1 of the family selection: the skill histogram of the 96 in-family statements.
+"""STEP 0-1 of the family selection: the skill histogram of the benchmark's statements.
 
-FAIRNESS BOUNDARY (recorded first). This module reads the `prompt` field of the 96
+TWO VERSIONS. v1 (superseded 2026-10-27): the 96 in-family statements, with the 24
+held-out tasks excluded and never opened (`in_family_statements`). v2: all 120
+statements (`all_statements`), after the family-held-out slice was dropped (see
+`distill-family-selection-v2.md`). v2 keeps the boundary that matters and drops the one
+that does not: STATEMENTS ONLY, never a reference circuit; the held-out names no longer
+exclude anything. The v1 docstring follows, kept as the record of what v1 did.
+
+FAIRNESS BOUNDARY, v1 (recorded first). This module reads the `prompt` field of the 96
 in-family tasks and nothing else. It never opens a reference circuit (`oracle_path`),
 and it never reads any of the 24 held-out tasks (`bench/heldout.yaml`): reference
 circuits are benchmark-only, and the project's rule is that what a real user would have
@@ -198,6 +205,20 @@ LEXICON: list[tuple[str, str, str, str]] = [
         "construct",
         r"ground-state energy|parity-reduced",
     ),
+    # Added for v2, after the 24 statements that v1 never read were read:
+    (
+        "qaoa_p1",
+        "a p=1 QAOA circuit (cost layer + RX mixer, fixed angles)",
+        "algorithm",
+        r"qaoa|mixer",
+    ),
+    ("maxcut_graph", "a MaxCut graph given by its edges", "construct", r"maxcut|max-cut|\bedge"),
+    (
+        "full_adder_majority",
+        "a full / half adder with sum and carry",
+        "construct",
+        r"full-adder|full adder|majority|half-adder|half adder",
+    ),
 ]
 
 
@@ -216,10 +237,27 @@ def in_family_statements() -> dict[str, str]:
     return out
 
 
-def histogram(statements: dict[str, str] | None = None) -> list[dict]:
-    statements = statements or in_family_statements()
+def all_statements() -> dict[str, str]:
+    """v2: the `prompt` of all 120 tasks, and nothing else of them. No reference circuit
+    is opened (a test spies on every file the code opens)."""
+    out: dict[str, str] = {}
+    for path in sorted(TASKS.glob("*/*.json")):
+        task = json.loads(path.read_text())
+        out[task["task_id"]] = task["prompt"]
+    return out
+
+
+#: the lexicon v1 used (the first 36 entries); v2 adds three after reading the 24 statements
+LEXICON_V1 = LEXICON[:-3]
+
+
+def histogram(
+    statements: dict[str, str] | None = None,
+    lexicon: list[tuple[str, str, str, str]] | None = None,
+) -> list[dict]:
+    statements = statements or all_statements()
     rows = []
-    for skill_id, description, kind, pattern in LEXICON:
+    for skill_id, description, kind, pattern in lexicon or LEXICON:
         rx = re.compile(pattern)
         hits = sorted(t for t, text in statements.items() if rx.search(text.lower()))
         rows.append(
