@@ -758,6 +758,17 @@ estavam no enunciado antes de qualquer código rodar.
    atualização entre a leitura e o lançamento. **A sexta foi cometida enquanto a
    seção que documenta o padrão estava sendo escrita.**
 
+**Uma sétima, e a terceira falha de revisão, de mecanismo diferente.** Na pergunta que originou a previsão de
+F-prime, "de 2 a 3 dicas distintas por execução presa" foi registrada como a manchete do registro ("o prompt varia e a
+resposta não"), sem perguntar quais eram os valores distintos: eram quatro dicas idênticas mais a dica vazia da última
+tentativa (nenhum crítico roda depois do teto). A contagem veio de uma análise feita pelo agente de código que acompanha o trabalho, sem inspeção dos valores,
+e a revisão a promoveu sem perguntar também. O hash do código na traça mostrou depois o fato: o mesmo código cinco
+vezes, em 71 de 119 falhas. As duas falhas de revisão anteriores (`GATES_SUBSET_OF` e a gêmea não perturbada) eram
+**familiaridade**: a alegação casava com um padrão estabelecido. Esta é **atratividade retórica**: a alegação rendia uma
+frase melhor ("o prompt varia e a resposta não" é mais forte que "a resposta não varia"), e uma alegação que faz uma
+frase melhor recebe menos escrutínio. É um motor de falha distinto, e a força da formulação substituiu a verificação.
+**[a]** (um caso, rastreado nos registros e no hash.)
+
 O remédio comum às seis é barato quando os registros existem: checar a premissa
 contra eles *antes* de construir o teste em cima dela.
 

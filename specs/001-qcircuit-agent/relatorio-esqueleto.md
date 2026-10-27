@@ -387,8 +387,12 @@ Um diagnóstico incorreto é pior que nenhum — ancora o modelo numa direção 
   código na traça (a partir de F-prime), a regra pode ser dita sobre o código e não sobre o erro:** parar quando o gerador
   devolve o mesmo código (mesmo hash) três vezes seguidas. Em F-prime, depois de três códigos iguais o quarto é igual em
   167 de 172 casos (97,1%), e parar aí encerraria 109 execuções e pouparia 175 das 595 tentativas (29%); F-prime não tem
-  sucessos que a regra pudesse custar. A regra não é exata (5 dos 172 casos mudam), de modo que a perda de um resgate
-  raro continua possível e não medida. **Muda o instrumento** (execuções mais curtas, e a invariância de C a G deixa
+  sucessos que a regra pudesse custar. **Evidência convergente:** duas medidas diferentes apontam no mesmo sentido, parar na terceira falha idêntica de *erro*
+  não perdeu nenhum sucesso em C, E e F, e parar no terceiro *código* idêntico não perderia nenhum em F-prime. A regra
+  não é exata (5 dos 172 casos mudam), de modo que não é uma prova e a perda de um resgate raro continua possível e não
+  medida. **Não será construída para a execução ajustada:** a linha de base F-prime foi medida sem a regra, então
+  aplicá-la só ao modelo ajustado seria um confundimento, e aplicá-la aos dois exigiria refazer F-prime; o ganho é de
+  tempo de relógio, não de informação. **Muda o instrumento** (execuções mais curtas, e a invariância de C a G deixa
   de valer), por isso não foi construída.
 - Execução em hardware real *(ou seção de resultados, se a US5 entrar)*
 - Reparo incremental — a hipótese H-inc, registrada com condições de falsificação

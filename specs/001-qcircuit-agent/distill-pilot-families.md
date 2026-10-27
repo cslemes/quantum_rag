@@ -401,7 +401,7 @@ The base is F-prime: `S0` = 0 of 120, 95% CI 0 to 3.1%. On all 120 tasks, Ollama
 
 - **4 of 120 is the minimum that clears the base's interval** (3.1% of 120 is 3.7; 4 is the first count outside).
 - **Anything at 1 to 3 is inside the base's noise and must not be reported as an improvement.**
-- **The headline claim rests on beating the 7B's bar.** Against the 7B's 5 of 120 (runs E and G, no penalty) that is
+- **SUPERSEDED 2026-10-27 (see "The headline claim, reframed" below): the headline claim no longer rests on beating the 7B's bar.** The text that follows is kept as the record. ~~The headline claim rests on beating the 7B's bar.~~ Against the 7B's 5 of 120 (runs E and G, no penalty) that is
   **6 of 120**. Because the distilled model is decoded with a repetition penalty, the bar is the 7B under the SAME
   configuration; it is being measured (next section), and the headline threshold is then **that result plus 1, and
   never below 4**. 6 of 120 stands only if the 7B with the penalty reads 5.
@@ -425,6 +425,67 @@ for the penalty to remove. *Context I add:* E and G read 5 of 120 and C read 7 o
 difference of one or two tasks is inside the run-to-run and build-to-build spread already measured (C against E: 3
 shared successes out of 5 and 7). If the result falls outside 3 to 8, the bar moves with it, and the headline
 threshold above moves by the same rule.
+
+
+## The headline claim, reframed: base versus tuned on the same model (2026-10-27)
+
+This supersedes "the 7B under the same decoding plus 1, never below 4" as the HEADLINE (that remains a reporting
+line). At n = 120 with single-digit rates, almost nothing is distinguishable from anything: 5 of 120 and 6 of 120
+have almost entirely overlapping intervals, and one task in 120 is not a difference. **The headline claim is the
+comparison the experiment controls: the base 1.5B (F-prime, 0 of 120, 95% CI 0 to 3.1%) against the SAME model
+tuned, same suite, same build, same decoding configuration. One model, one variable.** 0 against 8 is
+distinguishable from zero; 5 against 6 is not distinguishable from 5.
+
+*What a tuned count means against the base* (computed; Wilson 95% intervals, Fisher's exact test two-sided against 0
+of 120):
+
+| tuned success | 95% CI | Fisher p vs 0/120 | reading |
+|---|---|---|---|
+| 0 to 3 | up to 0.9-7.1% | 1.0 to 0.25 | inside the base's noise: NOT an improvement |
+| 4 | 1.3 to 8.3% | 0.12 | the minimum that clears the base's interval at the point estimate, not yet distinguishable |
+| 5 | 1.8 to 9.4% | 0.060 | borderline |
+| 6 to 7 | 2.3-11.6% | 0.029, 0.014 | distinguishable by the test; the intervals still overlap the base's |
+| **8 or more** | 3.4% and up | 0.007 | **the interval clears the base's upper bound (3.1%)** |
+
+*Proposed for confirmation, not decided by me:* the headline "the tuning improved the model" requires the tuned
+count's interval to clear the base's (**8 of 120 or more**); 6 to 7 is reported as "distinguishable by the test, with
+overlapping intervals"; 4 to 5 and below as not distinguishable. The reporting threshold of 4 of 120 and the rule that
+1 to 3 is never reported as an improvement stand.
+
+**The 7B is context, never the thesis.** It is reported alongside the base-versus-tuned result, with the interval
+overlap stated out loud. Runs E and G (no penalty) stay the config-matched scale comparison against F; the 7B under
+the same penalty (`local-7b-rp`, in progress) is the bar for the tuned 1.5B. *What it would take to clear it, stated
+in advance (computed for a 7B-rp result m of 2 to 10 of 120):* the tuned 1.5B needs, to have a non-overlapping 95%
+interval / to pass Fisher's test at p < 0.05, respectively:
+
+| 7B-rp reads | its 95% CI | tuned needs (non-overlap) | tuned needs (Fisher p < 0.05) |
+|---|---|---|---|
+| 3 | 0.9 to 7.1% | 15 of 120 | 12 of 120 |
+| 5 | 1.8 to 9.4% | **18 of 120** | **15 of 120** |
+| 8 | 3.4 to 12.6% | 23 of 120 | 19 of 120 |
+
+Beating the 7B in a statistically supportable way would take a 1.5B going from 0 of 120 to 15 or more. That is out of
+reach for this experiment; saying so now is better than discovering it later. The claim the experiment can carry is
+base versus tuned.
+
+## Check: `repeat_last_n` is the same in F-prime and the 7B-rp (2026-10-27)
+
+Confirmed, not assumed: `local-1.5b-rp` and `local-7b-rp` both set `repeat_penalty` 1.1 and `repeat_last_n` 64
+explicitly; both are built by the same `build_client`, and the options of the request they send are identical
+(`num_ctx` 16384, `temperature` 0.0, `repeat_penalty` 1.1, `repeat_last_n` 64, plus seed and `num_predict`); both
+stamps read `determinism_repeat_penalty` 1.1 and `determinism_repeat_last_n` 64. F-prime's run config names
+`local-1.5b-rp`. So the penalty-enabled scale comparison (F-prime against 7B-rp) carries no second
+sampling-parameter difference. (E, G and F send neither; there the unsent default applies, equivalent to a penalty of
+1.0 on this build.)
+
+## A retraction, with its mechanism (2026-10-27)
+
+The registered "headline" (the prompt varies and the answer does not) was wrong, and the error has two authors. The
+count of "2 to 3 distinct hints" came from my analysis, reported without inspecting what the distinct values were;
+the reviewer then asked for it to be the registration's headline without asking either. The values were four
+identical hints plus the last attempt's empty one. The claim was kept because the sentence was stronger than the
+true one ("the answer does not vary"): the strength of the phrasing stood in for verification. This is the THIRD
+reviewer failure on record, and its mechanism differs from the first two (chapter 6, section 6.5).
 
 ## Held-out slice (`bench/heldout.yaml`, rule heldout-v1) — SUPERSEDED 2026-10-27
 

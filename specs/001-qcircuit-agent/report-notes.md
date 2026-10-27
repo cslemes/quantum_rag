@@ -7006,3 +7006,23 @@ sigma_error0=67.2%. The 50/40% sigma lines need no re-basing (67.2% is on the sa
 5. **Not done, with the reason:** no stop sequence on the closing fence for the 18 remaining truncation-stuck runs
    (15.1% of F-prime's failures): freed runs became ordinary-stuck, not successes, so it would raise sigma and change
    nothing else.
+
+## 2026-10-27 (later still) — the retraction named; the headline reframed; repeat_last_n checked
+
+1. **Retraction, two authors, third reviewer failure.** The "2 to 3 distinct hints" count came from my analysis,
+   reported without inspecting the values (four identical hints plus the last attempt's empty one); the reviewer
+   promoted it to the registration's headline without asking. Mechanism: rhetorical attractiveness ("the prompt
+   varies and the answer does not" is a better sentence than "the answer does not vary"), distinct from the first two
+   reviewer failures (GATES_SUBSET_OF; the unperturbed twin), which were familiarity. Own line in 6.5.
+2. **Carried statement:** byte-identical code in all five attempts in 71 of 119 failures, sigma_code = 59.7%
+   (CI 50.7-68.0%), now the criterion's baseline; counts 81 / 63 of 101 / 34 freed -> 37 stuck.
+3. **Headline reframed (supersedes "7B-rp + 1"):** base versus tuned on the same model (F-prime 0/120 against the
+   tuned 1.5B). Table of what a tuned count means (4: not yet distinguishable, p=0.12; 6-7: distinguishable by Fisher,
+   intervals overlap; 8+: interval clears the base's 3.1%). Proposed, for confirmation: headline needs >= 8 of 120.
+   The 7B is context with the interval overlap stated; to clear a 7B-rp of 5 the tuned 1.5B would need 18 of 120
+   (non-overlap) or 15 (Fisher): out of reach, said in advance.
+4. **Stop rule:** convergent evidence (third identical error lost no success in C, E, F; third identical code would
+   lose none in F-prime), 5 of 172 still change; NOT built, because F-prime was measured without it (applying it to
+   the tuned run only is a confound; both means re-running F-prime; the saving is wall-clock, not information). In 8.2.
+5. **repeat_last_n:** F-prime and 7B-rp both 64, explicit, identical request options, same build_client; checked, not
+   assumed. No second sampling-parameter difference in F-prime against 7B-rp.
