@@ -180,17 +180,32 @@ Same-slice successes of the baselines the distilled 1.5B will be compared with
 
 ## Prediction registered before any training: repair sensitivity (2026-10-25, criterion restated the same day)
 
-**Headline: the prompt changes and the outcome does not.** In run F (1.5B base,
-Ollama 0.40.8, one seed), 77 of the 118 failures that generated code (65.3%) carry
-the identical error (stage, type and message) in all five attempts, and in 71 of
-those 77 the critic's hint took 2 or 3 distinct values across the attempts (62 with
-two, 9 with three; 6 with one). The input to the next attempt varied; the error did
-not. This is stronger than "the system repeats itself": the critic's prompt is task,
-error, error message and the generated CODE, a different hint means a different
-prompt (a repeated prompt is answered identically, and in a run the response cache
-returns the stored text), and so in these runs the generator did change its code,
-while the error stayed constant. (F's own cache hit rate was not recorded, so this
-inference rests on the design of the cache and on determinism, not on a count.)
+**Headline — RETRACTED 2026-10-27 (kept below as the record of the error).** The claim was that the prompt
+changes while the outcome does not, inferred from "the critic's hint took 2 or 3 distinct values across the
+attempts". That inference was wrong, for a reason visible once the code hash existed: the "2 distinct values" were
+the four identical hints plus the EMPTY hint of the last attempt (no critic is called after the cap), so a run with
+five identical codes and four identical hints counted as "two distinct hints". The measured fact, from the code
+hash in F-prime's trace: **the generator emits the SAME code in all five attempts in 71 of 119 failures
+(`sigma_code` = 59.7%, 95% CI 50.7 to 68.0%), and in 71 of the 81 runs whose five errors are identical.** The
+failure is not "the prompt varies and the answer does not"; it is "the answer does not vary", and at
+`temperature` 0 with an unchanged retry prompt that is a fixed point of a deterministic loop: after the code
+repeats, the next prompt is the same prompt (same previous code, same last two errors, same hint). Empirically
+the fixed point holds, but is not absolute: after three equal codes in a row the fourth is equal in 167 of 172
+cases (97.1%), after two in 276 of 287 (96.2%); the exceptions are server-state effects, not a rule.
+
+> Original text, retained:
+>
+> **Headline: the prompt changes and the outcome does not.** In run F (1.5B base,
+> Ollama 0.40.8, one seed), 77 of the 118 failures that generated code (65.3%) carry
+> the identical error (stage, type and message) in all five attempts, and in 71 of
+> those 77 the critic's hint took 2 or 3 distinct values across the attempts (62 with
+> two, 9 with three; 6 with one). The input to the next attempt varied; the error did
+> not. This is stronger than "the system repeats itself": the critic's prompt is task,
+> error, error message and the generated CODE, a different hint means a different
+> prompt (a repeated prompt is answered identically, and in a run the response cache
+> returns the stored text), and so in these runs the generator did change its code,
+> while the error stayed constant. (F's own cache hit rate was not recorded, so this
+> inference rests on the design of the cache and on determinism, not on a count.)
 
 **`sigma` is an UPPER BOUND, and why.** The records hold identical ERRORS, not
 identical code. The error taxonomy is closed, hence lossy by construction: different
@@ -215,7 +230,7 @@ will be measured in the two 1.5B base re-runs that precede training.
 **Prediction, built on `sigma`, the only one of the measures with a sample (118
 failures in the denominator; `S` has one success in its numerator).** "C rises"
 means `C1 >= 20` (a doubling of `C0`; my operationalisation, to be confirmed before
-training).
+training). **SUPERSEDED 2026-10-27: `C1 >= 29` against F-prime's baseline (see "Thresholds registered for the distilled model").**
 - **Predicted:** `C` rises and `sigma` stays at or above 50%. Phase 1 improves first
   attempts without improving repair, so a better first attempt still enters a loop
   that does not recover; that is why phase 1 may not move the end-to-end number much.
@@ -319,15 +334,15 @@ clock (launch to exit). Figures below are F-prime against F (`a6a6a63fb3611cb6`,
 | `compila@1` | 10 of 120 (8.3%) | 19 of 120 (15.8%; 10.4 to 23.4%) | expected to rise |
 | semantic check reached in some attempt | 16 | 22 | |
 | failures that generated code | 118 | 119 | |
-| runs whose five attempts carry an identical error | 77 (65.3%) | 80 (67.2%; 58.4 to 75.0%) | `sigma_error` falls toward 38.8% |
+| runs whose five attempts carry an identical error | 77 (65.3%) | 81 (68.1%; 59.2 to 75.8%) | `sigma_error` falls toward 38.8% |
 | ...of which truncation (the unclosed-fence mode) | 51 | 18 (`GenerationTruncated`, 90 attempts) | largely disappears |
-| ...of which not truncation (`sigma_real`: stuck / failures that are not truncation) | 26 of 67 (38.8%) | **62 of 101 (61.4%)** | |
+| ...of which not truncation (`sigma_real`: stuck / failures that are not truncation) | 26 of 67 (38.8%) | **63 of 101 (62.4%)** | |
 | output tokens | 1,228,283 | 514,977 | |
 
 **Read against the prediction.** (1) *The degeneration mode largely disappeared*: 51 runs to 18 (and 90
 truncated attempts, against 259 `line 1` syntax errors in F): confirmed, not eliminated. (2) *`sigma_error` falls
-toward 38.8%*: FALSE. It rose, 65.3% to 67.2%, because the stuck failures that are not truncation grew from 26
-to 62: with the program now executing, the 1.5B repeats ordinary errors five times (`UnknownSymbol` for
+toward 38.8%*: FALSE. It rose, 65.3% to 68.1%, because the stuck failures that are not truncation grew from 26
+to 63: with the program now executing, the 1.5B repeats ordinary errors five times (`UnknownSymbol` for
 `CXGate` and `ParameterVector` imports 22 runs, `WrongGateDecomposition` 8, `HallucinatedSymbol` 6). (3)
 *Success 2 to 5*: FALSE, 0 of 120 (one less than F: `qft_3q_perturbed` is lost, within noise). (4) *Success above
 10, the branch that would rewrite chapter 5*: not triggered. The decoding confound was real and large for
@@ -336,12 +351,80 @@ narrative rests on: it still essentially never finishes a task, and it still doe
 it is wrong. **The chapter 5 1.5B narrative stands**; F-prime is added to it as a row.
 
 **What it does to the distillation criterion.** F-prime is the distillation baseline: `C0` = 19, `S0` = 0,
-`sigma_error0` = 67.2% (`sigma_code` will be exact in the two base re-runs, which now carry the code hash). The
-50% / 40% lines were registered against F's 65.3% and are NOT disturbed by F-prime's 67.2%: no re-basing is needed.
-Two things change and are for the operator to confirm: "C rises" (a doubling of `C0`, my operationalisation) is now
-`C1 >= 38`; and `S0` = 0 makes any ratio of success undefined, which is one more reason `kappa` is description only.
+`sigma_error0` = 68.1% and, EXACT because F-prime's trace carries the code hash, `sigma_code0` = 71 of 119 = 59.7%
+(50.7 to 68.0%). The 50% / 40% lines were registered against F's 65.3% and are NOT disturbed by F-prime's 68.1%
+(or by `sigma_code0` of 59.7%, which is the quantity that decides): no re-basing is needed.
+Two things change: "C rises" is now `C1 >= 29` (see "Thresholds registered for the distilled model"), and `S0` = 0
+makes any ratio of success undefined, which is one more reason `kappa` is description only.
 The criterion stands as registered: the quantity that will decide is `sigma`, on a baseline that is no longer
 confounded by decoding.
+
+
+## What the failed prediction showed (2026-10-27), side by side
+
+| | the prediction (mine, registered before the run) | what F-prime measured |
+|---|---|---|
+| truncation | the degeneration mode largely disappears | 51 runs to 18 (largely; 15.1% of F-prime's failures, 18 of 119, remain truncation-stuck) |
+| `sigma_error` | falls toward the 38.8% measured for non-truncation failures | **rose**, 65.3% to 68.1% |
+| non-truncation stuck | (implied: stays near 26 of 67, 38.8%) | **26 of 67 (38.8%) to 63 of 101 (62.4%)** |
+| success | 2 to 5 of 120; above 10 would mean the baseline was dominated by decoding | **0 of 120** (CI 0 to 3.1%); the ">10" branch did not trigger |
+
+**The failure is the finding.** Truncation was MASKING the stuck behaviour, not causing it. Removing it freed 34 more
+non-truncation failures (67 to 101) and brought 37 more stuck ones (26 to 63): more than the number freed, which means
+essentially EVERY run freed from truncation became stuck in the ordinary way instead of recovering, plus a few that
+had not been stuck before.
+
+**This STRENGTHENS the phase-2 premise rather than weakening it.** Repair insensitivity is now measured over **101
+failures at 62.4%** (CI 52.6 to 71.2%) instead of over 67 at 38.8%, on a baseline that is no longer confounded by a
+decoding artefact; and the exact figure, `sigma_code0` = 59.7%, says the program really is the same program, five
+times. My prediction and its refutation stay in the record side by side: the prediction was wrong, and what the
+refutation showed is that the premise it was testing was understated, not overstated.
+
+**Counts corrected on the way.** The identical-error count first reported for F-prime was 80 (67.2%; non-truncation
+62 of 101, 61.4%). One run (`qaoa_maxcut_5q`) carries an extra planner error record and was dropped by a rule
+that required exactly five error records; ignoring planner records the count is 81 (68.1%; 63 of 101, 62.4%). F's 77
+and E's and C's counts do not change under the corrected rule (the 15 for E that appeared in a working output was the
+uncorrected count; the registered 17 for E and 14 for C are the corrected ones).
+
+## Not chasing the remaining truncation: the reason (2026-10-27)
+
+18 of F-prime's 119 failures (15.1%) are still truncation-stuck, and a stop sequence on the closing fence, or any
+other way of ending those generations cleanly, was considered and is NOT done. This run's own evidence says what it
+would do: every run freed from truncation by the penalty became ordinary-stuck, not a success (above), so freeing the
+other 18 would raise `sigma` and change nothing else. It would also be one more instrument change aimed at a
+symptom. The 15% is recorded as what it is: a residue of the degeneration mode under a penalty of 1.1, and a
+property of the 1.5B at this decoding configuration.
+
+## Thresholds registered for the distilled model (before training; 2026-10-27)
+
+The base is F-prime: `S0` = 0 of 120, 95% CI 0 to 3.1%. On all 120 tasks, Ollama 0.40.8:
+
+- **4 of 120 is the minimum that clears the base's interval** (3.1% of 120 is 3.7; 4 is the first count outside).
+- **Anything at 1 to 3 is inside the base's noise and must not be reported as an improvement.**
+- **The headline claim rests on beating the 7B's bar.** Against the 7B's 5 of 120 (runs E and G, no penalty) that is
+  **6 of 120**. Because the distilled model is decoded with a repetition penalty, the bar is the 7B under the SAME
+  configuration; it is being measured (next section), and the headline threshold is then **that result plus 1, and
+  never below 4**. 6 of 120 stands only if the 7B with the penalty reads 5.
+- **`compila@1`: "C rises" means `C1 >= 29`**, replacing `C1 >= 38` (a doubling, and before that `C1 >= 20`). It is
+  derived from the base's interval, not from a doubling: `C0` = 19 of 120 has a 95% CI of 10.4 to 23.4%, and 29 of 120
+  (24.2%) is the first count outside it. A doubling would leave a real 50% rise classified as untested.
+- The `sigma` lines (50% / 40%) stand as registered and are read on `sigma_code` of the distilled run against
+  `sigma_code0` = 59.7%; `kappa` and raw counts are description only.
+
+## Prediction registered before running the 7B under the penalty (2026-10-27)
+
+**Why.** Runs E and G ran without a repetition penalty, so comparing a penalty-enabled distilled 1.5B with a
+penalty-free 7B would put a sampling-parameter difference inside the main claim. The bar is therefore measured under
+the same configuration, before training: **the 7B on 120 tasks, Ollama 0.40.8, `repeat_penalty` 1.1 and
+`repeat_last_n` 64, everything else matching E and G** (profile `local-7b-rp`, config `config.local-7b-rp.yaml`).
+**E and G stay untouched**: they are the config-matched scale comparison against F.
+
+**Prediction (the operator's, registered before the run): 3 to 8 of 120.** Reason: the 7B does not degenerate, and
+its `SyntaxError` records are 92% runtime exceptions with only 9 real parse errors, so there is little degeneration
+for the penalty to remove. *Context I add:* E and G read 5 of 120 and C read 7 of 120 (0.35.1); one seed, so a
+difference of one or two tasks is inside the run-to-run and build-to-build spread already measured (C against E: 3
+shared successes out of 5 and 7). If the result falls outside 3 to 8, the bar moves with it, and the headline
+threshold above moves by the same rule.
 
 ## Held-out slice (`bench/heldout.yaml`, rule heldout-v1) — SUPERSEDED 2026-10-27
 

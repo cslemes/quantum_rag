@@ -383,9 +383,13 @@ Um diagnóstico incorreto é pior que nenhum — ancora o modelo numa direção 
   das tentativas em C, 8,0% em E/G e 30,5% em F (a 2ª economizaria 20,4%, 19,7% e
   51,0%, ao custo acima). "Três de cinco tentativas" só vale para as execuções
   travadas desde o início (falhas idênticas nas cinco tentativas: 14 em C, 17 em E,
-  77 em F); no conjunto das falhas do 7B a economia é de 8% a 20%. **Muda o
-  instrumento** (execuções mais curtas, e a invariância de C a G deixa de valer),
-  por isso não foi construída.
+  77 em F); no conjunto das falhas do 7B a economia é de 8% a 20%. **Com o hash do
+  código na traça (a partir de F-prime), a regra pode ser dita sobre o código e não sobre o erro:** parar quando o gerador
+  devolve o mesmo código (mesmo hash) três vezes seguidas. Em F-prime, depois de três códigos iguais o quarto é igual em
+  167 de 172 casos (97,1%), e parar aí encerraria 109 execuções e pouparia 175 das 595 tentativas (29%); F-prime não tem
+  sucessos que a regra pudesse custar. A regra não é exata (5 dos 172 casos mudam), de modo que a perda de um resgate
+  raro continua possível e não medida. **Muda o instrumento** (execuções mais curtas, e a invariância de C a G deixa
+  de valer), por isso não foi construída.
 - Execução em hardware real *(ou seção de resultados, se a US5 entrar)*
 - Reparo incremental — a hipótese H-inc, registrada com condições de falsificação
 - Verificar circuito escrito pelo próprio usuário (`/api/check` já é 80% disso)

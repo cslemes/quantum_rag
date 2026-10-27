@@ -360,12 +360,21 @@ Duas correções, nenhuma reescreve F. O gerador agora rotula `GenerationTruncat
 de configuração idêntica contra E, e a afirmação de escala do capítulo 5 repousa nela. A previsão para F-prime foi
 registrada antes de rodar (`distill-pilot-families.md`), e **falhou na quantidade que importava**: a degeneração
 diminuiu (51 execuções para 18), mas a fração de falhas presas não caiu para perto dos 38,8% medidos nas que não eram
-truncagem; subiu (65,3% para 67,2%), porque as falhas presas que não são truncagem passaram de 26 para 62 assim que o
+truncagem; subiu (65,3% para 68,1%), porque as falhas presas que não são truncagem passaram de 26 para 63 assim que o
 programa passou a executar. O sucesso foi 0 de 120, abaixo da faixa prevista de 2 a 5, e longe do limiar de 10 que
 reescreveria a narrativa do 1,5B. A confusão de decodificação era real (a executabilidade dobrou), mas não era o que
 a narrativa sustenta. **[a]** (F-prime `cf4ba161…`, uma execução, 120 tarefas.) Uma previsão registrada que falha é o
 resultado útil: a hipótese "o laço trava por culpa da decodificação" foi testada e refutada, e a premissa da
 sensibilidade ao reparo ficou de pé, agora numa linha de base que não está confundida.
+**A truncagem mascarava o comportamento travado, não o causava:** liberar as execuções da truncagem (34 falhas a mais
+que não são truncagem) trouxe 37 falhas presas a mais, isto é, essencialmente toda execução liberada passou a travar do
+modo comum. Isso **reforça** a premissa da fase 2: a insensibilidade ao reparo passa a ser medida em 101 falhas, a
+62,4%, em vez de 67, a 38,8%. E o hash do código na traça mostra que é o mesmo programa cinco vezes (`sigma_code` =
+71 de 119, 59,7%), não "um erro igual com código diferente": a hipótese de que o prompt de repetição variava e a saída
+não, inferida de dicas "diferentes", era um artefato de contagem (a última tentativa não tem dica). **Não** se
+perseguiu o resíduo de 18 execuções (15% das falhas) ainda presas em truncagem com uma sequência de parada na cerca
+de fechamento: a própria evidência desta execução diz o que aconteceria, as liberadas viram presas comuns e não
+sucessos, de modo que a correção subiria o `sigma` e não mudaria mais nada. **[a]**
 
 ---
 

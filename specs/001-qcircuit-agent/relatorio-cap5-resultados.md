@@ -130,8 +130,8 @@ capítulo de que o gargalo está no gerador se sustenta.
 teto de 4.096 tokens (capítulo 6, §6.3). F-prime repete a suíte com penalidade 1.1 (perfil `local-1.5b-rp`), no mesmo
 código do laço mais o rótulo `GenerationTruncated`, com o cache frio. A previsão, registrada antes, era que a
 degeneração sumisse, que a fração de falhas presas caísse para perto de 38,8% e que o sucesso subisse para 2 a 5 de
-120. **A degeneração diminuiu (51 execuções para 18) mas a fração presa não caiu** (65,3% para 67,2%): as falhas presas
-que não são truncagem passaram de 26 para 62, porque o programa agora executa e o 1,5B repete cinco vezes erros
+120. **A degeneração diminuiu (51 execuções para 18) mas a fração presa não caiu** (65,3% para 68,1%): as falhas presas
+que não são truncagem passaram de 26 para 63, porque o programa agora executa e o 1,5B repete cinco vezes erros
 comuns (símbolos inexistentes, decomposição errada). **O sucesso foi 0 de 120**, abaixo da faixa; o ramo "acima de 10",
 que reescreveria a narrativa do 1,5B, não disparou. A decodificação explicava a executabilidade (`compila@1` de 8,3%
 para 15,8%, tokens e latência pela metade), não o que a narrativa sustenta: o 1,5B quase nunca conclui uma tarefa e

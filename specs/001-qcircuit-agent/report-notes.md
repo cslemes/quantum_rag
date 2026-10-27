@@ -6980,3 +6980,29 @@ real for executability, not for what the narrative rests on. F-prime is the dist
 sigma_error0=67.2%. The 50/40% sigma lines need no re-basing (67.2% is on the same side of them as 65.3%); "C rises"
 (doubling) becomes C1 >= 38, and S0=0 leaves any success ratio undefined. For the operator to confirm. Written up in
 `distill-pilot-families.md` (RESULT), chapter 5 (row and paragraph, pendency closed) and chapter 6 6.3.
+
+## 2026-10-27 (later) — what the failed prediction showed; thresholds; the 7B bar under the same decoding
+
+1. **Prediction and refutation side by side** (`distill-pilot-families.md`, "What the failed prediction showed").
+   Truncation MASKED the stuck behaviour: 34 more non-truncation failures (67 -> 101) brought 37 more stuck ones
+   (26 -> 63), i.e. every freed run became ordinary-stuck. Non-truncation stuck 38.8% -> 62.4%. This STRENGTHENS
+   the phase-2 premise (measured over 101 failures instead of 67). Corrected count: the first report said 80 / 67.2%
+   / 62 / 61.4%; one run (`qaoa_maxcut_5q`) has an extra planner error record and had been dropped by a rule needing
+   exactly five error records; ignoring planner records it is 81 (68.1%) and 63 of 101 (62.4%).
+2. **A retraction.** The registered "headline" (hints vary while the error is constant, hence the generator changes
+   its code) was an artefact: the "2 distinct hints" were four identical hints plus the empty hint of the last
+   attempt. The code hash in F-prime's trace shows the generator emits the SAME code in all five attempts in 71 of
+   119 failures (`sigma_code` = 59.7%, CI 50.7-68.0%). At temperature 0 with an unchanged retry prompt that is a
+   near-fixed point of a deterministic loop: after three equal codes the fourth is equal in 167 of 172 cases
+   (97.1%); not absolute (server-state effects). Stop-on-three-equal-codes would stop 109 runs and save 175 of 595
+   attempts (29%); noted in 8.2, not built.
+3. **Thresholds for the distilled model, registered before training:** 4 of 120 clears the base's interval
+   (S0 = 0, CI 0-3.1%); 1 to 3 is inside the noise and not reportable as an improvement; the headline bar is the
+   7B under the SAME decoding + 1, never below 4 (6 of 120 stands only if the 7B with the penalty reads 5);
+   "C rises" is C1 >= 29 (first count outside C0's CI 10.4-23.4%), replacing 38 (and, before it, 20).
+4. **7B bar under the same configuration:** profile `local-7b-rp` (repeat_penalty 1.1, repeat_last_n 64),
+   config `config.local-7b-rp.yaml`; E and G untouched. Prediction registered before the run (the operator's): 3 to
+   8 of 120.
+5. **Not done, with the reason:** no stop sequence on the closing fence for the 18 remaining truncation-stuck runs
+   (15.1% of F-prime's failures): freed runs became ordinary-stuck, not successes, so it would raise sigma and change
+   nothing else.

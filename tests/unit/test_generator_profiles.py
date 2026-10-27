@@ -600,3 +600,17 @@ def test_repeat_settings_are_refused_on_a_hosted_profile() -> None:
                 },
             }
         )
+
+
+def test_the_7b_penalty_profile_differs_from_the_7b_only_in_the_repetition_settings() -> None:
+    from qcagent.llm.profiles import get_profile
+
+    b, bp = get_profile("local-7b"), get_profile("local-7b-rp")
+    assert b.determinism.repeat_penalty is None  # E and G: nothing sent
+    assert (bp.determinism.repeat_penalty, bp.determinism.repeat_last_n) == (1.1, 64)
+    same = {"client_type", "model", "expected_server_version", "base_url", "role"}
+    assert all(getattr(b, k) == getattr(bp, k) for k in same)
+    assert (b.determinism.temperature, b.determinism.num_ctx) == (
+        bp.determinism.temperature,
+        bp.determinism.num_ctx,
+    )
