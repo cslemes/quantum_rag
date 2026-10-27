@@ -305,6 +305,44 @@ the 2-to-5 point estimate suggests. Reported with it: `compila@1`, `sigma_error`
 (`sigma_real` as the share of failures that are stuck and not truncations), the count of
 `GenerationTruncated` attempts, and success on all 120.
 
+
+## RESULT — F-prime (`cf4ba1617908dd4a`, 2026-10-27): the prediction failed; the premise it tested stands
+
+1.5B, Ollama 0.40.8, profile `local-1.5b-rp` (repeat_penalty 1.1, repeat_last_n 64), code at commit `960ef21`
+(with the `GenerationTruncated` label), one seed, 120 tasks, `reset_per_run`, protocol canary passed, response
+cache COLD (0 of 950 calls answered by an older entry; 168 self-hits). Time: 52.6 min of execution, 65.8 min of
+clock (launch to exit). Figures below are F-prime against F (`a6a6a63fb3611cb6`, same build, no penalty).
+
+| measure | F | F-prime | registered |
+|---|---|---|---|
+| success | 1 of 120 | **0 of 120** (95% CI 0 to 3.1%) | 2 to 5; above 10 would rewrite the 1.5B narrative |
+| `compila@1` | 10 of 120 (8.3%) | 19 of 120 (15.8%; 10.4 to 23.4%) | expected to rise |
+| semantic check reached in some attempt | 16 | 22 | |
+| failures that generated code | 118 | 119 | |
+| runs whose five attempts carry an identical error | 77 (65.3%) | 80 (67.2%; 58.4 to 75.0%) | `sigma_error` falls toward 38.8% |
+| ...of which truncation (the unclosed-fence mode) | 51 | 18 (`GenerationTruncated`, 90 attempts) | largely disappears |
+| ...of which not truncation (`sigma_real`: stuck / failures that are not truncation) | 26 of 67 (38.8%) | **62 of 101 (61.4%)** | |
+| output tokens | 1,228,283 | 514,977 | |
+
+**Read against the prediction.** (1) *The degeneration mode largely disappeared*: 51 runs to 18 (and 90
+truncated attempts, against 259 `line 1` syntax errors in F): confirmed, not eliminated. (2) *`sigma_error` falls
+toward 38.8%*: FALSE. It rose, 65.3% to 67.2%, because the stuck failures that are not truncation grew from 26
+to 62: with the program now executing, the 1.5B repeats ordinary errors five times (`UnknownSymbol` for
+`CXGate` and `ParameterVector` imports 22 runs, `WrongGateDecomposition` 8, `HallucinatedSymbol` 6). (3)
+*Success 2 to 5*: FALSE, 0 of 120 (one less than F: `qft_3q_perturbed` is lost, within noise). (4) *Success above
+10, the branch that would rewrite chapter 5*: not triggered. The decoding confound was real and large for
+executability (`compila@1` 8.3% to 15.8%, tokens and latency halved) and did not move the thing the 1.5B
+narrative rests on: it still essentially never finishes a task, and it still does not change its answer when told
+it is wrong. **The chapter 5 1.5B narrative stands**; F-prime is added to it as a row.
+
+**What it does to the distillation criterion.** F-prime is the distillation baseline: `C0` = 19, `S0` = 0,
+`sigma_error0` = 67.2% (`sigma_code` will be exact in the two base re-runs, which now carry the code hash). The
+50% / 40% lines were registered against F's 65.3% and are NOT disturbed by F-prime's 67.2%: no re-basing is needed.
+Two things change and are for the operator to confirm: "C rises" (a doubling of `C0`, my operationalisation) is now
+`C1 >= 38`; and `S0` = 0 makes any ratio of success undefined, which is one more reason `kappa` is description only.
+The criterion stands as registered: the quantity that will decide is `sigma`, on a baseline that is no longer
+confounded by decoding.
+
 ## Held-out slice (`bench/heldout.yaml`, rule heldout-v1) — SUPERSEDED 2026-10-27
 
 Seven families, 24 tasks, produced by the rule in that file (strata by oracle

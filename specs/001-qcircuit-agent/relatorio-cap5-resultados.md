@@ -113,6 +113,7 @@ E × F isola a escala do modelo. As duas são lidas separadamente.
 | C `1bf505bf…` | 7B | 0.35.1 | 7/120 (2,9–11,6%) | 20 | 61 / 51 / 1 | 58 | 88 | 29/88 (33,0%) |
 | **E** `7fd09e27…` | 7B | **0.40.8** | **5/120** (1,8–9,4%) | 19 | 56 / 58 / 1 | 63 | 87 | 23/87 (26,4%) |
 | **F** `a6a6a63f…` | 1,5B | **0.40.8** | **1/120** (0,1–4,6%) | 10 | 107 / 11 / 0 (+1 `rejected_input`) | 12 | 16 | 4/16 (25,0%) |
+| **F-prime** `cf4ba161…` | 1,5B + penalidade de repetição 1.1 | **0.40.8** | **0/120** (0–3,1%) | 19 | 99 / 20 / 0 (+1 `rejected_input`) | 20 | 22 | 2/22 (9,1%) |
 
 As previsões foram registradas antes das execuções e se confirmaram: E, 3 a 11
 de 120 (resultado 5); F, 0 a 3 sucessos e `compila@1` de no máximo 10/120
@@ -123,6 +124,19 @@ C e foi descartada (capítulo 6, §6.5). O resultado entre builds está em §5.3
 o de escala é que o 1,5B alcança a checagem semântica em 16 de 120 tarefas
 contra 87 do 7B: o gargalo de compilar piora com a escala, e a conclusão do
 capítulo de que o gargalo está no gerador se sustenta.
+
+**F-prime.** O Ollama 0.40.8 não envia penalidade de repetição por padrão (um parâmetro herdado e nunca fixado), e em F
+51 das 77 falhas que repetiam o mesmo erro nas cinco tentativas eram uma geração que degenerava em repetição até o
+teto de 4.096 tokens (capítulo 6, §6.3). F-prime repete a suíte com penalidade 1.1 (perfil `local-1.5b-rp`), no mesmo
+código do laço mais o rótulo `GenerationTruncated`, com o cache frio. A previsão, registrada antes, era que a
+degeneração sumisse, que a fração de falhas presas caísse para perto de 38,8% e que o sucesso subisse para 2 a 5 de
+120. **A degeneração diminuiu (51 execuções para 18) mas a fração presa não caiu** (65,3% para 67,2%): as falhas presas
+que não são truncagem passaram de 26 para 62, porque o programa agora executa e o 1,5B repete cinco vezes erros
+comuns (símbolos inexistentes, decomposição errada). **O sucesso foi 0 de 120**, abaixo da faixa; o ramo "acima de 10",
+que reescreveria a narrativa do 1,5B, não disparou. A decodificação explicava a executabilidade (`compila@1` de 8,3%
+para 15,8%, tokens e latência pela metade), não o que a narrativa sustenta: o 1,5B quase nunca conclui uma tarefa e
+não muda a resposta quando corrigido. A narrativa do 1,5B fica; F permanece a comparação de configuração idêntica
+contra E, e F-prime é a linha de base da destilação.
 
 ### O que estes números não permitem afirmar
 
@@ -465,10 +479,8 @@ sabendo-se isto.
 
 Não fazem parte do texto final; remover quando resolvidas.
 
-0. **F-prime (1,5B com penalidade de repetição 1.1), a medir.** F permanece como medida (comparação
-   de configuração idêntica contra E). Se o sucesso de F-prime passar de 10 em 120, o 1,5B de F era
-   dominado pela decodificação e toda a narrativa do 1,5B neste capítulo (a escala, o `compila@1` de
-   10 em 120, o 1 em 120) tem de ser reescrita; previsão e condição em `distill-pilot-families.md`.
+0. ~~F-prime (1,5B com penalidade de repetição 1.1), a medir.~~ Medido: 0 em 120, `compila@1` 19, a fração
+   de falhas presas não caiu; a narrativa do 1,5B fica (ver a seção F-prime acima e `distill-pilot-families.md`).
 
 1. ~~Confirmar os números de regressão.~~ Resolvido: 40/74 → 29/88, apurado do
    *trace*.

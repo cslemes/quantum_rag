@@ -6968,3 +6968,15 @@ every principal skill has a family passing (a), (b), (d). The four built familie
 statements (partly 55); adding diagonal-phase Ising circuits +37, BV/DJ +12, QAOA +11, QFT +12, W +6, Simon
 +6, reversible logic +6, Grover +6, QPE +6 reaches all 120 (9 new constructions). Equal-allocation ceiling
 binds at BV/DJ (2,035) and Simon (320). Target, ceiling, which to build: left for the operator.
+
+### RESULT — F-prime `cf4ba1617908dd4a` (2026-10-27): prediction failed; the 1.5B narrative stands
+
+0/120 success (F 1/120), `compila@1` 19/120 (F 10), semantic reached 22 (F 16), sigma_error 80/119 = 67.2% (F
+65.3%), truncation-stuck 51 -> 18 (90 `GenerationTruncated` attempts), non-truncation stuck 26 -> 62 (sigma_real
+38.8% -> 61.4%), output tokens 1.23M -> 0.51M, 52.6 min of execution and 65.8 of clock (F 112.4 execution);
+cache COLD (0/950 pre-existing hits). Registered: degeneration disappears (largely: yes), sigma_error toward 38.8%
+(no, it rose), success 2 to 5 (no, 0), above 10 would rewrite chapter 5 (not triggered). The decoding confound was
+real for executability, not for what the narrative rests on. F-prime is the distillation baseline: C0=19, S0=0,
+sigma_error0=67.2%. The 50/40% sigma lines need no re-basing (67.2% is on the same side of them as 65.3%); "C rises"
+(doubling) becomes C1 >= 38, and S0=0 leaves any success ratio undefined. For the operator to confirm. Written up in
+`distill-pilot-families.md` (RESULT), chapter 5 (row and paragraph, pendency closed) and chapter 6 6.3.

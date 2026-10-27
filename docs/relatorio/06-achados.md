@@ -358,7 +358,14 @@ Duas correções, nenhuma reescreve F. O gerador agora rotula `GenerationTruncat
 `truncated:finish_reason_length`. E o 1,5B ganha uma segunda configuração, **F-prime**, com penalidade de repetição
 1.1, medida numa nova execução, porque a penalidade é parte da identidade do modelo; F continua sendo a comparação
 de configuração idêntica contra E, e a afirmação de escala do capítulo 5 repousa nela. A previsão para F-prime foi
-registrada antes de rodar (`distill-pilot-families.md`).
+registrada antes de rodar (`distill-pilot-families.md`), e **falhou na quantidade que importava**: a degeneração
+diminuiu (51 execuções para 18), mas a fração de falhas presas não caiu para perto dos 38,8% medidos nas que não eram
+truncagem; subiu (65,3% para 67,2%), porque as falhas presas que não são truncagem passaram de 26 para 62 assim que o
+programa passou a executar. O sucesso foi 0 de 120, abaixo da faixa prevista de 2 a 5, e longe do limiar de 10 que
+reescreveria a narrativa do 1,5B. A confusão de decodificação era real (a executabilidade dobrou), mas não era o que
+a narrativa sustenta. **[a]** (F-prime `cf4ba161…`, uma execução, 120 tarefas.) Uma previsão registrada que falha é o
+resultado útil: a hipótese "o laço trava por culpa da decodificação" foi testada e refutada, e a premissa da
+sensibilidade ao reparo ficou de pé, agora numa linha de base que não está confundida.
 
 ---
 
