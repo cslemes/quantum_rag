@@ -7026,3 +7026,13 @@ sigma_error0=67.2%. The 50/40% sigma lines need no re-basing (67.2% is on the sa
    the tuned run only is a confound; both means re-running F-prime; the saving is wall-clock, not information). In 8.2.
 5. **repeat_last_n:** F-prime and 7B-rp both 64, explicit, identical request options, same build_client; checked, not
    assumed. No second sampling-parameter difference in F-prime against 7B-rp.
+
+### RESULT — 7B under the penalty (`03c22cdf06da02e1`, 2026-10-27): 4 of 120, prediction (3 to 8) held
+
+compila@1 27.5% (E 15.8%), verificado@1 1/120 (the first ever), semantic verdict 78 (E 63), sigma_error 12/116 (10.3%;
+E 14.8%), sigma_code 8/116 (6.9%), tokens 169k (E 229k), 55.6 min execution (E 67.2), cache COLD. Successes share
+nothing with E's (bell_phi_plus_2q, ghz_8q, vqe_h2_r075, ghz_linear5_endpoints against E's five): same count, a complete
+turnover. The 7B bar under the tuned model's decoding: 4/120 (CI 1.3-8.3%); reporting line 5 (4 + 1, floor 4); to
+clear it the tuned 1.5B needs 16 of 120 (non-overlap) or 13 (Fisher): out of reach, as predicted. F-prime (0) against
+7B-rp (4): Fisher p = 0.12, not distinguishable on success; the scale difference is in compila@1 (19 vs 33) and the
+semantic check reached (22 vs 99 of 120). Headline unchanged: base versus tuned, 8 of 120 or more (proposed).

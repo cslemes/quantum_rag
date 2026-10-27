@@ -114,6 +114,7 @@ E × F isola a escala do modelo. As duas são lidas separadamente.
 | **E** `7fd09e27…` | 7B | **0.40.8** | **5/120** (1,8–9,4%) | 19 | 56 / 58 / 1 | 63 | 87 | 23/87 (26,4%) |
 | **F** `a6a6a63f…` | 1,5B | **0.40.8** | **1/120** (0,1–4,6%) | 10 | 107 / 11 / 0 (+1 `rejected_input`) | 12 | 16 | 4/16 (25,0%) |
 | **F-prime** `cf4ba161…` | 1,5B + penalidade de repetição 1.1 | **0.40.8** | **0/120** (0–3,1%) | 19 | 99 / 20 / 0 (+1 `rejected_input`) | 20 | 22 | 2/22 (9,1%) |
+| **7B-rp** `03c22cdf…` | 7B + penalidade de repetição 1.1 | **0.40.8** | **4/120** (1,3–8,3%) | 33 | 42 / 74 / 0 | 78 | 99 | 21/99 (21,2%) |
 
 As previsões foram registradas antes das execuções e se confirmaram: E, 3 a 11
 de 120 (resultado 5); F, 0 a 3 sucessos e `compila@1` de no máximo 10/120
@@ -137,6 +138,14 @@ que reescreveria a narrativa do 1,5B, não disparou. A decodificação explicava
 para 15,8%, tokens e latência pela metade), não o que a narrativa sustenta: o 1,5B quase nunca conclui uma tarefa e
 não muda a resposta quando corrigido. A narrativa do 1,5B fica; F permanece a comparação de configuração idêntica
 contra E, e F-prime é a linha de base da destilação.
+
+**7B-rp.** Para que a barra do 1,5B ajustado (decodificado com penalidade) não carregue uma diferença de parâmetro de
+amostragem, o 7B foi medido sob a mesma configuração (`repeat_penalty` 1.1, `repeat_last_n` 64; E e G ficam como a
+comparação de escala de configuração idêntica contra F). Previsão registrada: 3 a 8 de 120; resultado **4 de 120**. O
+`compila@1` subiu de 15,8% para 27,5%, e os sucessos **não coincidem em nenhuma tarefa** com os de E (mesma contagem,
+tarefas diferentes). Sob a mesma decodificação, F-prime (0/120) e 7B-rp (4/120) **não se distinguem no sucesso**
+(Fisher p = 0,12); a diferença de escala aparece na executabilidade e no alcance (`compila@1` 19 contra 33; verificação
+semântica alcançada em 22 contra 99 das 120 execuções), não na contagem de sucessos.
 
 ### O que estes números não permitem afirmar
 

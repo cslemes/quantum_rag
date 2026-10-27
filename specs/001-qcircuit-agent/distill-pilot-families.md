@@ -487,6 +487,39 @@ identical hints plus the last attempt's empty one. The claim was kept because th
 true one ("the answer does not vary"): the strength of the phrasing stood in for verification. This is the THIRD
 reviewer failure on record, and its mechanism differs from the first two (chapter 6, section 6.5).
 
+
+## RESULT — the 7B under the penalty (`local-7b-rp`, `03c22cdf06da02e1`, 2026-10-27): the prediction held
+
+7B, Ollama 0.40.8, `repeat_penalty` 1.1, `repeat_last_n` 64, code at commit `99ce169`, one seed, 120 tasks, cache COLD (0
+of 1,092 calls answered by an older entry). 55.6 min of execution, 70 min of clock (launch to exit). Against E
+(`7fd09e27763b34ee`, same model and build, no penalty):
+
+| measure | E (no penalty) | 7B-rp | registered |
+|---|---|---|---|
+| success | 5 of 120 (1.8 to 9.4%) | **4 of 120** (1.3 to 8.3%) | 3 to 8: **held** |
+| `compila@1` | 19 of 120 (15.8%) | **33 of 120 (27.5%)** | |
+| `verificado@1` | 0 | 1 of 120 (0.8%) | |
+| semantic verdict reached (success + failed_semantic) | 63 | 78 | |
+| runs whose five attempts carry an identical error | 17 of 115 failures (14.8%) | 12 of 116 (10.3%) | |
+| `sigma_code` (identical code five times) | not measurable (no hash) | 8 of 116 (6.9%) | |
+| output tokens / execution | 229,140 / 67.2 min | 168,751 / 55.6 min | |
+
+The successes share NOTHING with E's: 7B-rp solves `bell_phi_plus_2q`, `ghz_8q`, `vqe_h2_r075`, `ghz_linear5_endpoints`;
+E solved `qaoa_maxcut_4q_perturbed`, `vqe_h2_r055`, `vqe_h2_r130_perturbed`, `ghz_linear5_mixed`,
+`ghz_linear5_scattered_even`. Same count, different tasks: a one-task difference in the total hides a complete
+turnover, which is what a change of decoding does to a per-task result on this suite (the same finding as C against
+E). The penalty moved executability for the 7B too (`compila@1` 15.8% to 27.5%), though the 7B "does not degenerate"
+(2 runs still hit the cap: 5 `GenerationTruncated` attempts), and left success where it was.
+
+**The bar, stated.** The 7B under the same decoding as the distilled 1.5B reads **4 of 120** (95% CI 1.3 to 8.3%).
+- As a reporting line: 4 + 1 = **5 of 120**, never below 4 (the base's floor).
+- *What it would take to clear it* (computed): a tuned 1.5B needs **16 of 120** for a non-overlapping 95% interval, or
+  **13 of 120** to pass Fisher's test at p < 0.05, against the 7B-rp's 4. Out of reach for this experiment, as
+  said in advance; the headline stays base versus tuned (8 of 120 or more, proposed).
+- *The scale comparison under one decoding configuration:* F-prime 0 of 120 against 7B-rp 4 of 120 is NOT
+  distinguishable on success (Fisher p = 0.12). The scale difference shows in executability and reach, not in the
+  success count: `compila@1` 19 against 33 of 120, and the semantic check reached in 22 against 99 of 120 runs.
+
 ## Held-out slice (`bench/heldout.yaml`, rule heldout-v1) — SUPERSEDED 2026-10-27
 
 Seven families, 24 tasks, produced by the rule in that file (strata by oracle
