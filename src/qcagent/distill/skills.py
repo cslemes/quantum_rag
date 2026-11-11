@@ -227,12 +227,12 @@ def in_family_statements() -> dict[str, str]:
 
     A held-out task file is skipped by NAME, before it is opened (the file stem is the
     task id), so the held-out slice is not read even to be discarded."""
-    held_out = set(yaml.safe_load(HELDOUT.read_text())["heldout"]["tasks"])
+    held_out = set(yaml.safe_load(HELDOUT.read_text(encoding="utf-8"))["heldout"]["tasks"])
     out: dict[str, str] = {}
     for path in sorted(TASKS.glob("*/*.json")):
         if path.stem in held_out:
             continue
-        task = json.loads(path.read_text())
+        task = json.loads(path.read_text(encoding="utf-8"))
         out[task["task_id"]] = task["prompt"]
     return out
 
@@ -242,7 +242,7 @@ def all_statements() -> dict[str, str]:
     is opened (a test spies on every file the code opens)."""
     out: dict[str, str] = {}
     for path in sorted(TASKS.glob("*/*.json")):
-        task = json.loads(path.read_text())
+        task = json.loads(path.read_text(encoding="utf-8"))
         out[task["task_id"]] = task["prompt"]
     return out
 

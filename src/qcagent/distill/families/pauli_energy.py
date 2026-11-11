@@ -37,7 +37,7 @@ from qiskit.circuit.library import StatePreparation
 from qiskit.quantum_info import SparsePauliOp
 from scipy.sparse import csr_matrix
 from scipy.sparse import kron as sparse_kron
-from scipy.sparse.linalg import eigsh
+from scipy.sparse.linalg import ArpackError, eigsh
 
 from qcagent.distill.families.base import Check, Family, Variation, Verification
 from qcagent.validators.semantic import check_energy
@@ -68,7 +68,14 @@ def ground_energy_b(labels: list[str], coeffs: list[float]) -> float:
             term = sparse_kron(term, csr_matrix(_PAULI[char]), format="csr")
         total = total + coeff * term
     v0 = np.ones(1 << n) / np.sqrt(1 << n)
-    return float(eigsh(total, k=1, which="SA", v0=v0, return_eigenvectors=False)[0])
+    try:
+        return float(eigsh(total, k=1, which="SA", v0=v0, return_eigenvectors=False)[0])
+    except ArpackError:
+        # The uniform vector is a null vector of some H (e.g. 0.75*XIIX - 0.75*XIII), so the
+        # Krylov space is empty. A fixed-seed random start is the fallback; the uniform start
+        # stays first so every result already recorded is reproduced unchanged.
+        v0 = np.random.default_rng(0).standard_normal(1 << n)
+        return float(eigsh(total, k=1, which="SA", v0=v0, return_eigenvectors=False)[0])
 
 
 def ground_state_circuit(labels: list[str], coeffs: list[float]) -> QuantumCircuit:
@@ -111,10 +118,16 @@ class PauliEnergy(Family):
     oracle_kind = "energy"
     closed_form = False
 
-    def variations(self) -> list[Variation]:
+    def variations(self, count: int = 20) -> list[Variation]:
+        """The first 20 are the pilot's, unchanged (same rng stream). Beyond 20 the same stream
+        continues with n drawn from 3..6 and duplicates skipped, so a larger set EXTENDS the pilot."""
         rng = random.Random("pauli_hamiltonian_energy-v1")
         out: list[Variation] = []
-        for index, n in enumerate([3] * 7 + [4] * 7 + [5] * 6):
+        seen: set[str] = set()
+        pilot_sizes = [3] * 7 + [4] * 7 + [5] * 6
+        while len(out) < count:
+            index = len(out)
+            n = pilot_sizes[index] if index < len(pilot_sizes) else rng.choice([3, 4, 5, 6])
             labels: list[str] = []
             n_terms = rng.randint(2, 5)
             while len(labels) < n_terms:
@@ -122,7 +135,11 @@ class PauliEnergy(Family):
                 if label not in labels:
                     labels.append(label)
             coeffs = [rng.choice(COEFF_GRID) for _ in labels]
-            out.append(Variation(self.name, index, {"n": n, "labels": labels, "coeffs": coeffs}))
+            v = Variation(self.name, index, {"n": n, "labels": labels, "coeffs": coeffs})
+            if v.key in seen:
+                continue
+            seen.add(v.key)
+            out.append(v)
         return out
 
     def statement(self, v: Variation) -> str:

@@ -68,9 +68,11 @@ def test_a_light_edit_lands_in_review_or_rejection(registry, tasks) -> None:
     assert registry._judge(prompt, "some_new_family")["verdict"] in ("review", "reject")
 
 
-def test_a_family_that_is_a_task_id_family_of_the_suite_is_rejected(registry) -> None:
+def test_a_training_family_named_like_a_task_family_is_not_rejected_for_its_name(registry) -> None:
+    """Decision 2 dropped the family-held-out slice; the name rule that enforced it went with it.
+    Statements are judged on their text (lexical), not on what their family is called."""
     judged = registry._judge("Something unrelated entirely about apples.", "grover")
-    assert judged["verdict"] == "reject" and "structural" in judged["reasons"][0]
+    assert judged["verdict"] == "pass"
 
 
 def test_a_family_whose_builders_disagree_admits_nothing(registry, monkeypatch) -> None:

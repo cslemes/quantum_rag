@@ -1,0 +1,199 @@
+{
+  "fired": true,
+  "rows": [
+    {
+      "family": "qubit_permutation",
+      "injected": "wrong",
+      "labelled": false,
+      "reject_reason": "rejected_by_oracle:strict_unitary",
+      "acceptance": {
+        "name": "strict_unitary",
+        "passed": false,
+        "max_abs_diff": 1.0,
+        "detail": ""
+      },
+      "behaved_as_required": true
+    },
+    {
+      "family": "qubit_permutation",
+      "injected": "correct",
+      "labelled": true,
+      "reject_reason": null,
+      "acceptance": {
+        "name": "strict_unitary",
+        "passed": true,
+        "max_abs_diff": 0.0,
+        "detail": ""
+      },
+      "behaved_as_required": true
+    },
+    {
+      "family": "qubit_permutation",
+      "injected": "unparseable",
+      "labelled": false,
+      "reject_reason": "static_failed:SyntaxError",
+      "acceptance": null,
+      "behaved_as_required": true
+    },
+    {
+      "family": "graph_state",
+      "injected": "wrong",
+      "labelled": false,
+      "reject_reason": "rejected_by_oracle:strict_state",
+      "acceptance": {
+        "name": "strict_state",
+        "passed": false,
+        "max_abs_diff": 0.4999999999999999,
+        "detail": ""
+      },
+      "behaved_as_required": true
+    },
+    {
+      "family": "graph_state",
+      "injected": "correct",
+      "labelled": true,
+      "reject_reason": null,
+      "acceptance": {
+        "name": "strict_state",
+        "passed": true,
+        "max_abs_diff": 8.326672684688674e-17,
+        "detail": ""
+      },
+      "behaved_as_required": true
+    },
+    {
+      "family": "pauli_hamiltonian_energy",
+      "injected": "wrong",
+      "labelled": false,
+      "reject_reason": "rejected_by_oracle:check_energy",
+      "acceptance": {
+        "name": "check_energy",
+        "passed": false,
+        "max_abs_diff": 4.514019903693615,
+        "detail": ""
+      },
+      "behaved_as_required": true
+    },
+    {
+      "family": "pauli_hamiltonian_energy",
+      "injected": "correct",
+      "labelled": true,
+      "reject_reason": null,
+      "acceptance": {
+        "name": "check_energy",
+        "passed": true,
+        "max_abs_diff": 3.1086244689504383e-15,
+        "detail": ""
+      },
+      "behaved_as_required": true
+    },
+    {
+      "family": "diagonal_phase_ising",
+      "injected": "wrong",
+      "labelled": false,
+      "reject_reason": "rejected_by_oracle:strict_state",
+      "acceptance": {
+        "name": "strict_state",
+        "passed": false,
+        "max_abs_diff": 0.6912181750150737,
+        "detail": ""
+      },
+      "behaved_as_required": true
+    },
+    {
+      "family": "diagonal_phase_ising",
+      "injected": "correct",
+      "labelled": true,
+      "reject_reason": null,
+      "acceptance": {
+        "name": "strict_state",
+        "passed": true,
+        "max_abs_diff": 1.1102230246251565e-16,
+        "detail": ""
+      },
+      "behaved_as_required": true
+    },
+    {
+      "family": "kickback_bv_dj",
+      "injected": "wrong",
+      "labelled": false,
+      "reject_reason": "rejected_by_oracle:strict_state",
+      "acceptance": {
+        "name": "strict_state",
+        "passed": false,
+        "max_abs_diff": 0.7071067811865475,
+        "detail": ""
+      },
+      "behaved_as_required": true
+    },
+    {
+      "family": "kickback_bv_dj",
+      "injected": "correct",
+      "labelled": true,
+      "reject_reason": null,
+      "acceptance": {
+        "name": "strict_state",
+        "passed": true,
+        "max_abs_diff": 3.3306690738754696e-16,
+        "detail": ""
+      },
+      "behaved_as_required": true
+    },
+    {
+      "family": "qaoa_p1",
+      "injected": "wrong",
+      "labelled": false,
+      "reject_reason": "rejected_by_oracle:strict_state",
+      "acceptance": {
+        "name": "strict_state",
+        "passed": false,
+        "max_abs_diff": 0.030709240034640387,
+        "detail": ""
+      },
+      "behaved_as_required": true
+    },
+    {
+      "family": "qaoa_p1",
+      "injected": "correct",
+      "labelled": true,
+      "reject_reason": null,
+      "acceptance": {
+        "name": "strict_state",
+        "passed": true,
+        "max_abs_diff": 6.206335383118183e-17,
+        "detail": ""
+      },
+      "behaved_as_required": true
+    },
+    {
+      "family": "qft",
+      "injected": "wrong",
+      "labelled": false,
+      "reject_reason": "rejected_by_oracle:strict_unitary",
+      "acceptance": {
+        "name": "strict_unitary",
+        "passed": false,
+        "max_abs_diff": 0.9999999999999999,
+        "detail": ""
+      },
+      "behaved_as_required": true
+    },
+    {
+      "family": "qft",
+      "injected": "correct",
+      "labelled": true,
+      "reject_reason": null,
+      "acceptance": {
+        "name": "strict_unitary",
+        "passed": true,
+        "max_abs_diff": 2.6891698152134724e-16,
+        "detail": ""
+      },
+      "behaved_as_required": true
+    }
+  ],
+  "work_dir": "results/distill/batch-v1/negative_control",
+  "halted": null,
+  "wrong_rejected": 8,
+  "correct_accepted": 7
+}

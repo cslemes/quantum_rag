@@ -82,13 +82,16 @@ class Family(ABC):
         """Analytic limit cases both builders must reproduce. Default none."""
         return []
 
-    def verify_all(self) -> list[Verification]:
+    def verify_all(self, count: int | None = None) -> list[Verification]:
+        """Check the calibration and every variation that will be used: the first `count`
+        (the family's pilot default when None). Admitting more than was verified is not allowed."""
         failed: list[str] = []
         results = []
         for check in self.calibrate():
             if not check.passed:
                 failed.append(f"calibration {check.name}: {check.detail}")
-        for v in self.variations():
+        variations = self.variations() if count is None else self.variations(count)  # type: ignore[call-arg]
+        for v in variations:
             result = self.verify(v)
             results.append(result)
             failed += [

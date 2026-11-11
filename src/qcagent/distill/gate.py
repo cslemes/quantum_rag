@@ -7,8 +7,12 @@ by `admit_family`, which first requires the family's builders to agree.
 
 Measures in phase 1, against all 120 test tasks:
   * LEXICAL: Jaccard over normalised word 5-grams, exact (80 x 120 pairs).
-  * STRUCTURAL: the training family's id must not be a task-id family of the
-    suite, and a (family, parameters) key may be registered once.
+  * STRUCTURAL: a (family, parameters) key may be registered once. (v1 also refused a
+    training family whose id is a task-id family of the suite. That rule enforced the
+    family-held-out slice, dropped by decision 2 on 2026-10-27, and fired on a name
+    coincidence: it rejected all of the `qft` training family. Removed 2026-11-10;
+    `structural-key-v2`. This changes the gate version, so entries admitted under v1,
+    such as pilot-v1's registry, are stale by design.)
   * CIRCUIT-LEVEL, after generation: an accepted circuit is compared, strictly,
     with every reference of the same width and kind (`circuit_leak_check`).
 The semantic (embedding) measure is phase 2 and every reject log says so.
@@ -50,7 +54,7 @@ from qcagent.distill.strict import circuit_state, circuit_unitary, states_equal,
 ROOT = Path(__file__).resolve().parents[3]
 TASKS_DIR = ROOT / "bench" / "tasks"
 CALIBRATION_PATH = ROOT / "bench" / "leakage_calibration.json"
-MEASURES = "lexical-jaccard-word5gram-v1;structural-family-v1;circuit-strict-v1"
+MEASURES = "lexical-jaccard-word5gram-v1;structural-key-v2;circuit-strict-v1"
 NGRAM = 5
 SEMANTIC_NOTE = "not measured (phase 2)"
 
@@ -83,7 +87,7 @@ def task_family(task_id: str) -> str:
 def load_test_tasks(tasks_dir: Path = TASKS_DIR) -> dict[str, dict[str, Any]]:
     tasks = {}
     for path in sorted(tasks_dir.glob("*/*.json")):
-        task = json.loads(path.read_text())
+        task = json.loads(path.read_text(encoding="utf-8"))
         tasks[task["task_id"]] = task
     return tasks
 
@@ -170,7 +174,6 @@ class StatementRegistry:
         self.reject_log = path.with_suffix(".rejects.jsonl")
         self.tasks = load_test_tasks(tasks_dir)
         self.test_grams = {t: grams(d["prompt"]) for t, d in self.tasks.items()}
-        self.test_families = {task_family(t) for t in self.tasks}
         self.calibration = calibration or calibrate(self.tasks, root)
         self.gate_version = hashlib.sha256(
             f"{self.calibration.test_set_hash}|{MEASURES}".encode()
@@ -212,11 +215,13 @@ class StatementRegistry:
 
     # -- writing -----------------------------------------------------------
 
-    def admit_family(self, family: Family) -> list[dict[str, Any]]:
-        """Admit a family's statements. `verify_all` raises `BuilderDisagreement`
-        first: a family whose builders disagree admits nothing."""
-        family.verify_all()
-        return [self._admit(family, v) for v in family.variations()]
+    def admit_family(self, family: Family, count: int | None = None) -> list[dict[str, Any]]:
+        """Admit a family's statements (its first `count` variations; the family's pilot
+        default when None). `verify_all` raises `BuilderDisagreement` first: a family whose
+        builders disagree admits nothing."""
+        family.verify_all(count)
+        variations = family.variations() if count is None else family.variations(count)  # type: ignore[call-arg]
+        return [self._admit(family, v) for v in variations]
 
     def record_review(self, sid: str, decision: str, reviewer: str) -> None:
         if decision not in ("accept", "reject"):
@@ -236,8 +241,6 @@ class StatementRegistry:
         neighbours = nearest(statement, self.test_grams)
         top = neighbours[0].score
         reasons = []
-        if family_name in self.test_families:
-            reasons.append(f"structural: family {family_name!r} is a task-id family of the suite")
         if top >= self.calibration.reject_at:
             reasons.append(f"lexical {top} >= reject {self.calibration.reject_at:.4f}")
         verdict = "reject" if reasons else "pass"

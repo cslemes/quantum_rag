@@ -1,0 +1,46 @@
+{
+  "dataset_version": "batch-v1",
+  "teacher": {
+    "profile": "teacher-deepseek-v4.1-flash-1017",
+    "model": "deepseek/deepseek-v4.1-flash-1017",
+    "canonical_slug": "deepseek/deepseek-v4.1-flash-20261017",
+    "reasoning_effort": "high",
+    "provider_options": {
+      "enforce_distillable_text": true
+    },
+    "temperature": 1.0,
+    "top_p": 1.0,
+    "system_prompt_sha256": "a82f0e46e91be6c9",
+    "seed": 1,
+    "max_tokens": 4096,
+    "max_tokens_headroom": 32000
+  },
+  "outcomes": {
+    "verified_against_oracle": 67,
+    "rejected_by_oracle:strict_unitary": 1,
+    "truncated:finish_reason_length": 2
+  },
+  "halted": null,
+  "spend": {
+    "estimate_usd": 0.09,
+    "actual_usd": 0.143533,
+    "actual_over_estimate": 1.595,
+    "stop_factor": 3.0,
+    "calls": 70,
+    "calls_priced_from_tokens": 0,
+    "actual_by_window_usd": {
+      "off-peak": 0.143533
+    }
+  },
+  "estimate": {
+    "usd": 0.0977,
+    "window": "off-peak",
+    "taken_at": "2026-11-11T16:50:50+00:00",
+    "rates_usd_per_mtok": [
+      0.15,
+      0.6
+    ],
+    "rates_source": "operator-stated 2026-10-24; pricing endpoint path unconfirmed",
+    "basis": "70 calls x (900 in + 2100 out tokens) at the off-peak rates"
+  }
+}

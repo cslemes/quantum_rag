@@ -67,7 +67,36 @@ class QubitPermutations(Family):
     oracle_kind = "unitary"
     closed_form = True
 
-    def variations(self) -> list[Variation]:
+    def variations(self, count: int = 20) -> list[Variation]:
+        """The first 20 are the pilot's. Beyond 20, non-identity permutations of n = 4..7 qubits
+        not already chosen, round-robin over n, from a separate seeded stream."""
+        base = self._pilot_variations()
+        if count <= len(base):
+            return base[:count]
+        taken = {tuple(v.params["pi"]) for v in base}
+        rng = random.Random("qubit_permutation-extension-v1")
+        pools: dict[int, list[tuple[int, ...]]] = {}
+        for n in (4, 5, 6, 7):
+            pool = [
+                p
+                for p in itertools.permutations(range(n))
+                if p != tuple(range(n)) and p not in taken
+            ]
+            rng.shuffle(pool)
+            pools[n] = pool
+        out = list(base)
+        while len(out) < count:
+            progressed = False
+            for n in (4, 5, 6, 7):
+                if pools[n] and len(out) < count:
+                    pi = list(pools[n].pop())
+                    out.append(Variation(self.name, len(out), {"n": n, "pi": pi}))
+                    progressed = True
+            if not progressed:
+                raise ValueError(f"only {len(out)} permutation variations exist")
+        return out
+
+    def _pilot_variations(self) -> list[Variation]:
         rng = random.Random("qubit_permutation-v1")
         chosen: list[list[int]] = []
         # n = 3: every non-identity permutation (3 transpositions, 2 three-cycles).

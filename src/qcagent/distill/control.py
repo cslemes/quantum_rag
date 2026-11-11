@@ -39,6 +39,9 @@ from qcagent.llm.profiles import Profile
 from qcagent.validators.sandbox import WorkerPool
 
 
+NL = chr(10)  # newline, for assembling generated source
+
+
 def _fence(code: str) -> str:
     return "```python\n" + code.strip() + "\n```"
 
@@ -94,6 +97,84 @@ def _energy_states(v: Variation) -> tuple[np.ndarray, np.ndarray]:
     return vectors[:, 0], wrong
 
 
+def _qft_code(m: int, targets: list[int], inverse: bool, swaps: bool) -> str:
+    return _fence(
+        NL.join(
+            [
+                "import math",
+                "from qiskit import QuantumCircuit",
+                f"targets = {list(targets)!r}",
+                "n = len(targets)",
+                f"qc = QuantumCircuit({m})",
+                "for j in range(n - 1, -1, -1):",
+                "    qc.h(targets[j])",
+                "    for k in range(j - 1, -1, -1):",
+                "        qc.cp(math.pi / 2 ** (j - k), targets[k], targets[j])",
+                *(["for i in range(n // 2):", "    qc.swap(targets[i], targets[n - 1 - i])"] if swaps else []),
+                *(["qc = qc.inverse()"] if inverse else []),
+            ]
+        )
+    )
+
+
+def _diagonal_code(n: int, terms: list[list[int]], coeffs: list[float]) -> str:
+    return _fence(
+        NL.join(
+            [
+                "from qiskit import QuantumCircuit",
+                f"terms = {terms!r}",
+                f"coeffs = {list(coeffs)!r}",
+                f"qc = QuantumCircuit({n})",
+                f"qc.h(range({n}))",
+                "for subset, c in zip(terms, coeffs):",
+                "    last = subset[-1]",
+                "    for i in subset[:-1]:",
+                "        qc.cx(i, last)",
+                "    qc.rz(2 * c, last)",
+                "    for i in reversed(subset[:-1]):",
+                "        qc.cx(i, last)",
+            ]
+        )
+    )
+
+
+def _kickback_code(n: int, s: int, c: int) -> str:
+    lines = [
+        "from qiskit import QuantumCircuit",
+        f"n, s = {n}, {s}",
+        "qc = QuantumCircuit(n + 1)",
+        "qc.x(n)",
+        "qc.h(range(n + 1))",
+        "for i in range(n):",
+        "    if (s >> i) & 1:",
+        "        qc.cx(i, n)",
+    ]
+    if c:
+        lines.append("qc.x(n)")
+    lines.append("qc.h(range(n))")
+    return _fence(NL.join(lines))
+
+
+def _qaoa_code(n: int, edges: list[list[int]], gamma: float, beta: float) -> str:
+    return _fence(
+        NL.join(
+            [
+                "from qiskit import QuantumCircuit",
+                f"edges = {edges!r}",
+                f"gamma, beta = {gamma!r}, {beta!r}",
+                f"qc = QuantumCircuit({n})",
+                f"qc.h(range({n}))",
+                "for i, j in edges:",
+                "    qc.cx(i, j)",
+                "    qc.rz(2 * gamma, j)",
+                "    qc.cx(i, j)",
+                f"for q in range({n}):",
+                "    qc.rx(2 * beta, q)",
+            ]
+        )
+    )
+
+
 def correct_code(family: Family, v: Variation) -> str:
     if family.name == "qubit_permutation":
         return _swap_code(v.params["pi"])
@@ -101,6 +182,15 @@ def correct_code(family: Family, v: Variation) -> str:
         return _graph_code(v.params["n"], v.params["edges"])
     if family.name == "pauli_hamiltonian_energy":
         return _energy_code(_energy_states(v)[0], v.params["n"])
+    q = v.params
+    if family.name == "qft":
+        return _qft_code(q["m"], q["targets"], q["inverse"], q["swaps"])
+    if family.name == "diagonal_phase_ising":
+        return _diagonal_code(q["n"], q["terms"], q["coeffs"])
+    if family.name == "kickback_bv_dj":
+        return _kickback_code(q["n"], q["s"], q["c"])
+    if family.name == "qaoa_p1":
+        return _qaoa_code(q["n"], q["edges"], q["gamma"], q["beta"])
     return _ry_code(v.params["p"])
 
 
@@ -116,6 +206,16 @@ def wrong_code(family: Family, v: Variation) -> str:
         return _graph_code(v.params["n"], v.params["edges"][:-1])  # one CZ edge missing
     if family.name == "pauli_hamiltonian_energy":
         return _energy_code(_energy_states(v)[1], v.params["n"])
+    q = v.params
+    if family.name == "qft":  # the SWAP layer flipped: the output register is bit-reversed
+        return _qft_code(q["m"], q["targets"], q["inverse"], not q["swaps"])
+    if family.name == "diagonal_phase_ising":  # the sign of every coefficient flipped
+        return _diagonal_code(q["n"], q["terms"], [-c for c in q["coeffs"]])
+    if family.name == "kickback_bv_dj":  # a different secret string
+        other = q["s"] ^ 1 or q["s"] ^ 2
+        return _kickback_code(q["n"], other, q["c"])
+    if family.name == "qaoa_p1":  # a different cost angle
+        return _qaoa_code(q["n"], q["edges"], q["gamma"] + 0.05, q["beta"])
     p = list(reversed(v.params["p"]))  # bit-reversed biases
     return _ry_code(p)
 

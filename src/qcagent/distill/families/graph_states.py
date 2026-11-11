@@ -124,7 +124,37 @@ class GraphStates(Family):
     oracle_kind = "statevector"
     closed_form = True
 
-    def variations(self) -> list[Variation]:
+    def variations(self, count: int = 20) -> list[Variation]:
+        """The first 20 are the pilot's. Beyond 20, random connected graphs outside GHZ's
+        local-Clifford class on 4..6 vertices (6 weighted up), from a separate seeded stream,
+        duplicates skipped. Not enumerated: 6 vertices has tens of thousands of graphs."""
+        base = self._pilot_variations()
+        if count <= len(base):
+            return base[:count]
+        rng = random.Random("graph_state-extension-v1")
+        out = list(base)
+        seen = {v.key for v in out}
+        excluded = {n: ghz_class(n) for n in (4, 5, 6)}
+        attempts = 0
+        while len(out) < count:
+            attempts += 1
+            if attempts > 200 * count:
+                raise ValueError(f"only {len(out)} graph variations found for {count} requested")
+            n = rng.choice([4, 5, 5, 6, 6, 6])
+            pairs = list(itertools.combinations(range(n), 2))
+            edges = tuple(p for p in pairs if rng.random() < 0.5)
+            if not edges or not _connected(n, edges) or edges in excluded[n]:
+                continue
+            v = Variation(
+                self.name, len(out), {"n": n, "edges": [list(e) for e in edges]}
+            )
+            if v.key in seen:
+                continue
+            seen.add(v.key)
+            out.append(v)
+        return out
+
+    def _pilot_variations(self) -> list[Variation]:
         rng = random.Random("graph_state-v1")
         chosen: list[tuple[int, Edges]] = []
         for n in (4, 5):

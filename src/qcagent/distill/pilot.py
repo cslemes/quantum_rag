@@ -171,6 +171,19 @@ def _latest_records(records: Path) -> dict[str, dict[str, Any]]:
     return latest
 
 
+def _order_entries(entries: list[dict[str, Any]], interleave: bool) -> list[dict[str, Any]]:
+    """Registry order, or round-robin over families (each family in its own order)."""
+    if not interleave:
+        return entries
+    by_family: dict[str, list[dict[str, Any]]] = {}
+    for e in entries:
+        by_family.setdefault(e["family"], []).append(e)
+    out: list[dict[str, Any]] = []
+    for rank in range(max((len(v) for v in by_family.values()), default=0)):
+        out += [v[rank] for v in by_family.values() if rank < len(v)]
+    return out
+
+
 def _is_infrastructure_failure(record: dict[str, Any]) -> bool:
     """A record whose check never reached the answer. Also recognises the older
     form (written before sandbox timeouts had their own reason code): a static
@@ -219,9 +232,17 @@ def run_pilot(
     only_ids: set[str] | None = None,
     breaker: RefusalBreaker | None = None,
     now=lambda: datetime.now(UTC),
+    variation_count: int | None = None,
+    per_family_target: int | None = None,
 ) -> dict[str, Any]:
     """Returns a summary. Raises nothing for a halt: the halt is recorded in the
-    summary (and the records written so far are kept)."""
+    summary (and the records written so far are kept).
+
+    `variation_count` is how many variations each family was admitted with (None: the family's
+    pilot default); it is how a registry entry is mapped back to its variation. With
+    `per_family_target`, entries are taken round-robin over families and a family stops once it
+    has that many ACCEPTED (labelled) records, counting those already on file, so a halt leaves
+    the set balanced and a resumed run does not overspend on a family that is already full."""
     if authorization is None:
         raise SpendNotAuthorized(
             "no spend authorization given; a credential present is not permission to spend"
@@ -256,18 +277,31 @@ def run_pilot(
     # nothing and the original call's cost and tokens are carried on the new record.
     done = {sid for sid, r in latest.items() if not _is_infrastructure_failure(r)}
     by_name = {f.name: f for f in families}
+    variations = {
+        f.name: {
+            v.key: v for v in (f.variations() if variation_count is None else f.variations(variation_count))  # type: ignore[call-arg]
+        }
+        for f in families
+    }
     halted: str | None = None
     counts: dict[str, int] = {}
+    accepted: dict[str, int] = {f.name: 0 for f in families}
+    for sid, r in latest.items():
+        if r.get("label") and r.get("family") in accepted:
+            accepted[r["family"]] += 1
+    queue = _order_entries(registry.entries(), per_family_target is not None)
 
     with records.open("a") as sink:
-        for entry in registry.entries():
+        for entry in queue:
             if entry["id"] in done or entry["verdict"] != "pass":
                 continue
             if only_ids is not None and entry["id"] not in only_ids:
                 continue
+            if per_family_target is not None and accepted[entry["family"]] >= per_family_target:
+                continue
             registry.require_pass(entry["id"])  # by id, and the gate is still current
             family = by_name[entry["family"]]
-            v = next(x for x in family.variations() if x.key == entry["variation_key"])
+            v = variations[entry["family"]][entry["variation_key"]]
             outcome = call_teacher(
                 client,
                 statement_id=entry["id"],
@@ -292,6 +326,8 @@ def run_pilot(
             # never lost to the stop that it triggered.
             sink.write(json.dumps(record) + "\n")
             sink.flush()
+            if record["label"]:
+                accepted[entry["family"]] += 1
             key = LABEL if record["label"] else (record["reject_reason"] or record["state"])
             counts[key] = counts.get(key, 0) + 1
             try:

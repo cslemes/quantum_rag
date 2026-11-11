@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import shutil
 import sys
 from datetime import UTC, datetime
@@ -23,7 +24,7 @@ from pathlib import Path
 
 from qcagent.config import settings
 from qcagent.distill.control import run_negative_control
-from qcagent.distill.families import PILOT_FAMILIES
+from qcagent.distill.families import PILOT_FAMILIES, PRODUCTION_FAMILIES
 from qcagent.distill.gate import StatementRegistry
 from qcagent.distill.listing import listing_entry, snapshot_facts
 from qcagent.distill.pilot import SpendAuthorization, run_pilot
@@ -43,6 +44,34 @@ def main() -> int:
     parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument("--dataset-version", required=True)
     parser.add_argument(
+        "--families",
+        choices=("pilot", "production"),
+        default="pilot",
+        help="pilot: 4 families x 20 (the registered pilot). production: the 7 approved "
+        "training families, see --per-family and --oversample",
+    )
+    parser.add_argument(
+        "--per-family",
+        type=int,
+        default=None,
+        help="production: stop a family at this many ACCEPTED examples (registered: 350)",
+    )
+    parser.add_argument(
+        "--oversample",
+        type=float,
+        default=1.5,
+        help="production: statements admitted per family = ceil(per-family x this), the room "
+        "for teacher failures and gate rejections",
+    )
+    parser.add_argument(
+        "--registered-estimate",
+        type=float,
+        default=None,
+        metavar="USD",
+        help="production: the operator's registered cost estimate for the whole run (required; "
+        "the stop ceiling is 3x it)",
+    )
+    parser.add_argument(
         "--authorize-spend",
         type=float,
         default=None,
@@ -52,7 +81,17 @@ def main() -> int:
     args = parser.parse_args()
 
     # 1. The positive gate, before anything that could spend or even look for a key.
-    guard = SpendGuard(estimate_usd=REGISTERED_ESTIMATE_USD)
+    production = args.families == "production"
+    if production and (args.per_family is None or args.registered_estimate is None):
+        print(
+            "refusing: production needs --per-family and --registered-estimate (no default "
+            "is registered for the full run)",
+            file=sys.stderr,
+        )
+        return 2
+    guard = SpendGuard(
+        estimate_usd=args.registered_estimate if production else REGISTERED_ESTIMATE_USD
+    )
     if args.authorize_spend is None:
         print(
             "refusing: no --authorize-spend given (a credential is not permission)", file=sys.stderr
@@ -86,11 +125,15 @@ def _run(args, guard: SpendGuard, authorization: SpendAuthorization, pool: Worke
     facts = snapshot_facts(listing_entry(profile.model))  # public listing; no credential
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
+    families = PRODUCTION_FAMILIES if args.families == "production" else PILOT_FAMILIES
+    admit_count = (
+        math.ceil(args.per_family * args.oversample) if args.families == "production" else None
+    )
     # 2. The negative control, on the real pipeline, with no network and no spend.
     control_dir = args.out_dir / "negative_control"
     shutil.rmtree(control_dir, ignore_errors=True)  # our own output, rebuilt each time
     control = run_negative_control(
-        families=PILOT_FAMILIES, profile=profile, snapshot=facts, pool=pool, work_dir=control_dir
+        families=families, profile=profile, snapshot=facts, pool=pool, work_dir=control_dir
     )
     (args.out_dir / "negative_control.json").write_text(json.dumps(control, indent=2) + "\n")
     print(
@@ -104,8 +147,15 @@ def _run(args, guard: SpendGuard, authorization: SpendAuthorization, pool: Worke
 
     client = build_client(profile)  # ProfileError, without the value, if the key is absent
     registry = StatementRegistry(args.out_dir / "registry.jsonl")
-    for family in PILOT_FAMILIES:
-        registry.admit_family(family)  # BuilderDisagreement stops here, before any spend
+    for family in families:
+        registry.admit_family(family, admit_count)  # BuilderDisagreement stops here, before spend
+    pending_review = sum(1 for e in registry.entries() if e["verdict"] == "review")
+    if pending_review:
+        print(
+            f"note: {pending_review} statements await human review and are NOT generated "
+            f"(they need record_review first)",
+            file=sys.stderr,
+        )
 
     n_statements = sum(1 for e in registry.entries() if e["verdict"] == "pass")
     estimate = estimate_from_tokens(
@@ -118,7 +168,7 @@ def _run(args, guard: SpendGuard, authorization: SpendAuthorization, pool: Worke
     )
     summary = run_pilot(
         registry=registry,
-        families=PILOT_FAMILIES,
+        families=families,
         client=client,
         profile=profile,
         out_dir=args.out_dir,
@@ -128,6 +178,8 @@ def _run(args, guard: SpendGuard, authorization: SpendAuthorization, pool: Worke
         pool=pool,
         snapshot=facts,
         authorization=authorization,
+        variation_count=admit_count,
+        per_family_target=args.per_family if args.families == "production" else None,
     )
     print(json.dumps(summary["spend"], indent=2))
     print(f"outcomes: {summary['outcomes']}; halted: {summary['halted']}", file=sys.stderr)
