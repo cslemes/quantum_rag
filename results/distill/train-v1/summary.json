@@ -1,0 +1,57 @@
+{
+  "dataset_version": "train-v1",
+  "teacher": {
+    "profile": "teacher-deepseek-v4.1-flash-1017",
+    "model": "deepseek/deepseek-v4.1-flash-1017",
+    "canonical_slug": "deepseek/deepseek-v4.1-flash-20261017",
+    "reasoning_effort": "high",
+    "provider_options": {
+      "enforce_distillable_text": true
+    },
+    "temperature": 1.0,
+    "top_p": 1.0,
+    "system_prompt_sha256": "a82f0e46e91be6c9",
+    "seed": 1,
+    "max_tokens": 4096,
+    "max_tokens_headroom": 32000
+  },
+  "outcomes": {
+    "rejected_by_oracle:strict_unitary": 99,
+    "verified_against_oracle": 2049,
+    "static_failed:SyntaxError": 25,
+    "static_failed:MissingImport": 11,
+    "static_failed:HallucinatedSymbol": 4,
+    "matches_test_reference:bv_6q,bv_6q_perturbed,dj_balanced_6q": 1,
+    "matches_test_reference:bv_4q,bv_4q_perturbed,dj_balanced_4q,dj_balanced_4q_perturbed": 1,
+    "rejected_by_oracle:check_energy": 4,
+    "static_failed:DeprecatedAPI": 1,
+    "matches_test_reference:bv_5q": 3,
+    "provider_error": 2,
+    "truncated:finish_reason_length": 4,
+    "rejected_by_oracle:strict_state": 4
+  },
+  "halted": null,
+  "spend": {
+    "estimate_usd": 7.0,
+    "actual_usd": 5.096581,
+    "actual_over_estimate": 0.728,
+    "stop_factor": 3.0,
+    "calls": 2206,
+    "calls_priced_from_tokens": 0,
+    "actual_by_window_usd": {
+      "peak": 2.144298,
+      "off-peak": 2.952283
+    }
+  },
+  "estimate": {
+    "usd": 13.671,
+    "window": "peak",
+    "taken_at": "2026-11-12T01:14:18+00:00",
+    "rates_usd_per_mtok": [
+      0.3,
+      1.2
+    ],
+    "rates_source": "operator-stated 2026-10-24; pricing endpoint path unconfirmed",
+    "basis": "4900 calls x (900 in + 2100 out tokens) at the peak rates"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "dataset_version": "negative-control",
+  "identity": {
+    "profile": "teacher-deepseek-v4.1-flash-1017",
+    "model": "deepseek/deepseek-v4.1-flash-1017",
+    "canonical_slug": "deepseek/deepseek-v4.1-flash-20261017",
+    "reasoning_effort": "high",
+    "provider_options": {
+      "enforce_distillable_text": true
+    },
+    "temperature": 1.0,
+    "top_p": 1.0,
+    "system_prompt_sha256": "a82f0e46e91be6c9",
+    "seed": 1,
+    "max_tokens": 4096,
+    "max_tokens_headroom": 32000
+  },
+  "first_estimate": {
+    "usd": 0.0,
+    "window": "peak",
+    "taken_at": "2026-11-12T01:05:14+00:00",
+    "rates_usd_per_mtok": [
+      0.3,
+      1.2
+    ],
+    "rates_source": "operator-stated 2026-10-24; pricing endpoint path unconfirmed",
+    "basis": "15 calls x (1 in + 1 out tokens) at the peak rates"
+  },
+  "spend_authorization": {
+    "ceiling_usd": 1.0,
+    "granted_by": "negative control: local transport, no network, no spend"
+  },
+  "snapshot_facts": {
+    "id": "deepseek/deepseek-v4.1-flash-1017",
+    "canonical_slug": "deepseek/deepseek-v4.1-flash-20261017",
+    "hugging_face_id": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+    "supported_efforts": [
+      "max",
+      "high",
+      "low",
+      "none"
+    ],
+    "default_effort": "high",
+    "listed_pricing": {
+      "prompt": "0.000000006",
+      "completion": "0.0000005",
+      "input_cache_read": "0.000000005"
+    }
+  },
+  "listing_discrepancies": [
+    "base price 0.000000006/0.0000005 per token",
+    "peak windows [] differ from [(1, 4), (6, 10)]"
+  ],
+  "created_at": "2026-11-12T01:05:14+00:00"
+}
