@@ -119,7 +119,10 @@ profiles:
     base_url: http://localhost:11434
     base_url_env: OLLAMA_BASE_URL
     model: qwen2.5-coder:1.5b
-    expected_server_version: "0.40.8"
+    # Re-pinned 0.40.8 -> 0.40.15 on 2026-11-12 (the host drifted: 0.40.12, then 0.40.15) so the
+    # distillation training set is built on the server that will serve the student. Benchmark
+    # runs stamped 0.40.8 are NOT directly comparable with runs under this pin.
+    expected_server_version: "0.40.15"
     determinism:
       reset_strategy: per_run
       temperature: 0.0
