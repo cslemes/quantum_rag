@@ -98,6 +98,8 @@ def _energy_states(v: Variation) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _qft_code(m: int, targets: list[int], inverse: bool, swaps: bool) -> str:
+    # The inverse negates the angles and keeps the gate order (the statement's formula, see
+    # families/qft.py). It is NOT `qc.inverse()`: without the swap layer that is another matrix.
     return _fence(
         NL.join(
             [
@@ -105,13 +107,13 @@ def _qft_code(m: int, targets: list[int], inverse: bool, swaps: bool) -> str:
                 "from qiskit import QuantumCircuit",
                 f"targets = {list(targets)!r}",
                 "n = len(targets)",
+                f"sign = {-1 if inverse else 1}",
                 f"qc = QuantumCircuit({m})",
                 "for j in range(n - 1, -1, -1):",
                 "    qc.h(targets[j])",
                 "    for k in range(j - 1, -1, -1):",
-                "        qc.cp(math.pi / 2 ** (j - k), targets[k], targets[j])",
+                "        qc.cp(sign * math.pi / 2 ** (j - k), targets[k], targets[j])",
                 *(["for i in range(n // 2):", "    qc.swap(targets[i], targets[n - 1 - i])"] if swaps else []),
-                *(["qc = qc.inverse()"] if inverse else []),
             ]
         )
     )

@@ -1,0 +1,33 @@
+{
+  "dataset_version": "train-v2",
+  "derived_from": {
+    "dataset_version": "train-v1",
+    "records_sha256": "54977bf86b3bc3c6f14a92fd8b794b309d96273e65148bf0950ecf344575f364",
+    "reason": "qft inverse/no-SWAP cell: until 2026-11-12 the oracle was the adjoint of the no-swap transform (F^dagger R) while the statement spells out the inverse DFT with bit-reversed output (R F^dagger); the oracle now follows the statement and the answers on file are judged again",
+    "families": [
+      "qft"
+    ],
+    "rejudged_statements": 112,
+    "control_statements": 356,
+    "created_at": "2026-11-13T02:17:08+00:00"
+  },
+  "verdict_changes": {
+    "rejected_by_oracle:strict_unitary -> verified_against_oracle": 106,
+    "truncated:finish_reason_length -> truncated:finish_reason_length": 2,
+    "verified_against_oracle -> rejected_by_oracle:strict_unitary": 4
+  },
+  "control": {
+    "judged_again": 356,
+    "changed": 0
+  },
+  "accepted_per_family": {
+    "diagonal_phase_ising": 350,
+    "graph_state": 350,
+    "kickback_bv_dj": 350,
+    "pauli_hamiltonian_energy": 350,
+    "qaoa_p1": 350,
+    "qft": 452,
+    "qubit_permutation": 350
+  },
+  "teacher_calls": 0
+}

@@ -7036,3 +7036,126 @@ turnover. The 7B bar under the tuned model's decoding: 4/120 (CI 1.3-8.3%); repo
 clear it the tuned 1.5B needs 16 of 120 (non-overlap) or 13 (Fisher): out of reach, as predicted. F-prime (0) against
 7B-rp (4): Fisher p = 0.12, not distinguishable on success; the scale difference is in compila@1 (19 vs 33) and the
 semantic check reached (22 vs 99 of 120). Headline unchanged: base versus tuned, 8 of 120 or more (proposed).
+
+## 2026-11-10: gate rule removed, four families built, three scaled (before any generation)
+
+- **Structural family-name rule removed from the leakage gate** (`structural-family-v1` -> `structural-key-v2`).
+  The rule rejected a training family whose id is a task-id family of the suite. It enforced the family-held-out
+  slice that decision 2 dropped, and fired only on a name coincidence: it rejected all 525 statements of the `qft`
+  training family. Decided by the owner. The gate version changes, so entries admitted under v1 (pilot-v1's
+  registry) are stale by design; pilot-v1 is a record, not training data. With the rule gone, 7 x 525 statements
+  all pass the gate (no review cases). The lexical and circuit-level measures and the calibrated thresholds are
+  unchanged.
+- **Gate read the task files in the platform default encoding.** On Windows that is cp1252, which garbles the
+  non-ASCII characters in the prompts and changed both the test-set hash and the n-grams. Any gate result produced
+  on Windows before this date was computed on garbled prompts. Now read as UTF-8; the calibration on file matches.
+- Built: `qft`, `diagonal_phase_ising`, `kickback_bv_dj`, `qaoa_p1`. The three older families take a `count` and
+  their first 20 variations are pinned to the pilot-v1 registry keys by a test.
+- `verify_all` checked only the first 20 variations; it now checks every variation that is admitted.
+- Pauli energy builder B (ARPACK) failed on H = 0.75*XIIX - 0.75*XIII: its uniform start vector is a null vector.
+  A fixed-seed fallback start was added; the uniform start stays first, so recorded results are unchanged.
+- The sandbox that runs generated code needs POSIX `select` on pipes; the generation run has to be in WSL/Docker.
+
+## 2026-11-12: train-v1 generated and exported; the student's planner aborts on 52 BV/DJ statements
+
+- **Generation (train-v1).** Teacher `deepseek-v4.1-flash-1017`, 7 families x 350 accepted = 2450 oracle-verified
+  records, 2634 calls, no halt, no 402. Spend 5.71 of the 21.5 ceiling (registered estimate 7): peak 2.14,
+  off-peak 2.95 in the last run segment. Runs were paused before the 01:00 UTC peak and resumed by the owner's
+  decision inside it. Rejections were few except `qft` (109 `strict_unitary` rejections; 258 -> 350 needed the
+  2x oversampling); 5 responses were dropped by the circuit-level leak check (BV/DJ matching a test reference).
+  **[CORRECTED in the next section: 106 of the 109 qft rejections were the ORACLE's error, not the teacher's, and
+  4 of the 350 accepted qft records contradict their statement. train-v1 is kept as the record; train-v2 is the
+  dataset.]**
+- **Known gap, not fixed:** on resume, a HARD_STOP (402) record and INFRASTRUCTURE_FAILED / `provider_error` teacher
+  records count as done and are not retried (only sandbox timeouts are). Two `provider_error` (`choice_error`)
+  records exist in train-v1 and were not retried.
+- **Export (`data/train.jsonl`, local only, 64 MB, not in git).** 2395 rows of 2450. The prompt of each row is
+  what the harness sends the generator on attempt 1, built with the STUDENT's planner and the real retriever
+  (`local-1.5b-rp`, `qwen2.5-coder:1.5b`, Ollama 0.40.15, Qdrant `qdocs`, 1020 points). Hash in
+  `data/train.meta.json`. The profile pin moved 0.40.8 -> 0.40.15 (the host drifted); runs stamped 0.40.8 are not
+  directly comparable with runs under the new pin.
+- **Skipped at export: 52 `kickback_bv_dj` (298 of 350 kept) and 3 `pauli_hamiltonian_energy`.** Cause, replayed
+  on 12 of the 52 BV/DJ statements (all 12 identical, deterministic at temperature 0): the student's planner
+  returns well-formed JSON containing a requirement whose `value` is a LIST (seen: `kind: "resource"`,
+  `value: [6, 1]`, "6 input qubits and one ancilla"). The `Requirement` schema takes a string, a number or null, so
+  the planner marks the run `aborted` (`MalformedPlannerResponse`). Of the 52, 42 are Bernstein-Vazirani (26% of
+  the labelled BV statements) and 10 Deutsch-Jozsa; 41 have 7 or 8 qubits. The 3 Pauli skips are `rejected_input`
+  (investigated in the next section).
+- **What it means.** This is a planner-schema weakness of the system under test, not a dataset defect: the tuned
+  student would abort on the same statements before the generator is ever called, so training the generator on
+  them would not change the outcome. The dataset therefore matches what the generator sees at inference, and
+  large BV instances are under-represented in it. Accepting the schema (list values) would change the planner and
+  break comparability with earlier benchmark runs; not done. If the tuned run's BV/DJ tasks abort at the planner,
+  this is the predicted reason and must be reported as planner `aborted`, not as a generator failure.
+
+## 2026-11-12 (later): CORRECTION. The qft inverse/no-SWAP oracle was wrong, not the teacher; train-v2 re-judged at no cost; the Pauli rejections checked
+
+- **What was wrong (an error in the family built on 2026-11-10).** In `families/qft.py`, for `inverse=True,
+  swaps=False`, the oracle and the construction were the adjoint of the no-swap transform (F^dagger R, what
+  Qiskit's `QFT(do_swaps=False).inverse()` builds: INPUT bit-reversed), while the statement spells out
+  `|x> -> N^-1/2 sum_y exp(-2 pi i x y / N) |bitrev(y)>` (R F^dagger: OUTPUT bit-reversed). Different matrices for
+  every n >= 2. The statement's formula against the oracle, over the 700 admitted variations: 0 of 163 agree in
+  that cell; all agree in the other three (185, 176, 176).
+- **How it went unseen.** `verify` compares the oracle with the construction; both encoded the same reading and
+  neither is read off the statement. The negative control built its "correct" circuit the same way. The symptom
+  was on the table: 106 of 110 answers rejected in one cell against 1 in each of the others. It was first reported
+  as a convention error of the teacher, without a test, with the advice to accept the gap. The owner asked whether
+  that was certain; the check (the statement's formula written independently) showed the opposite. Rule taken
+  from it: a cause for oracle rejections is not reported before the statement's literal formula has been tested
+  against the oracle.
+- **Effect on train-v1 (committed, bab4f0e; kept as the record).** 106 answers that satisfy their statement are
+  filed `rejected_by_oracle:strict_unitary`; 4 answers that do NOT satisfy it are filed `verified_against_oracle`
+  (48f5221ce84fe2f1, 446af36fb43758bb, e4d086abe6a9a925, d442b02dd1ca600f) and are in the first export. The 73%
+  qft acceptance was the oracle's: under the corrected oracle it is 96.4% (452 of 469 asked), and about 100 qft
+  calls were paid only because the family could not reach 350. **The first export (`data/train.jsonl`, sha256
+  114d82cc..., described by `data/train.meta.json` in commit b78bba5) must not be trained on.**
+- **Fix.** The oracle follows the statement. The statement text is unchanged, so statement ids, the registry and
+  the gate version are unchanged. The inverse flips the sign of the exponent BEFORE the bit reversal; the
+  construction and the negative-control code negate the controlled-phase angles instead of reversing the circuit.
+  New tests (`test_distill_family_qft.py`): the statement's formula, written a third time, equals the oracle in
+  every cell, and the test pins the wording it encodes; the negated ladder is accepted and
+  `QFT(do_swaps=False).inverse()` rejected; the other three cells equal Qiskit's library; the control circuits
+  follow the contract in all four cells. Mutation check: under the old oracle the first two fail.
+- **train-v2 = train-v1 judged again, no teacher call** (`distill/rejudge.py`, `scripts/rejudge_dataset.py`).
+  `results/distill/train-v2/records.jsonl` is train-v1's records byte for byte (sha256 54977bf8...) plus one
+  appended record per re-judged statement (the latest record wins, as everywhere), scored by the same `_score`
+  the generation uses, cost 0, the previous verdict kept under `rejudged.previous`. 112 statements of the cell:
+  106 rejected -> verified, 4 verified -> rejected, 2 truncated unchanged. CONTROL: the other 356 qft answers
+  judged again, 0 changed verdict, so the path is the generation's and the change is confined to the cell. qft
+  labelled: 452 (forward no-swap 119, forward swap 112, inverse no-swap 106, inverse swap 115); the other six
+  families 350, untouched. The export takes the first 350 in registry order, which is what a run under the right
+  oracle would have accepted: 82 / 94 / 86 / 88 by cell before planner skips.
+- **The 120 test tasks and the qft conventions (prompts read in full, checked against the .qpy oracles).** 20
+  tasks involve a QFT: 14 forward with SWAP, 1 forward without (`qft_8q_perturbed`), 6 with an inverse QFT inside
+  QPE. The 6 forward test oracles checked equal the family's matrices (qft_3q, 5q, 8q and the two perturbed with
+  SWAP; `qft_8q_perturbed` without). The 5 QPE oracles checked are reproduced only by the inverse WITH SWAP
+  (state overlap 1.0, against 0.10 to 0.85 for either no-swap reading); `qpe_6q_perturbed` was not checked
+  numerically. No test task uses the inverse without SWAP, in either reading. These prompts were read to decide
+  whether the gap mattered; nothing in the dataset was chosen from them.
+- **Other families.** Oracle rejections in train-v1: graph_state 0, qaoa_p1 1, diagonal_phase_ising 2,
+  kickback_bv_dj 3, qubit_permutation 3, pauli 5. No cluster like qft's, so no cell-level statement/oracle
+  mismatch is hiding there. That is indirect evidence: the direct test (the statement's formula written
+  independently) exists for qft and, as a one-off, for pauli (next item); not yet for the other five.
+- **Pauli, checked the same way.** H rebuilt by hand from the statement text (Kronecker product in the stated
+  label order) and diagonalised exactly: agrees with the stored verdict on all 355 scored answers (350 accepted
+  within 0.01, largest error 0.0098; 5 rejected). The 5 rejections are real: energy errors 1.25 to 2.95 against a
+  0.01 tolerance; 3 are exact excited eigenstates; none is explained by a reversed label order. The other 17
+  non-acceptances: 15 filed `static_failed:SyntaxError`, of which only one is a syntax error in the literal sense
+  and that one is a refusal in prose ("I cannot solve this..."); the rest are runtime errors of the teacher's
+  code (4 x `StatePreparation(..., num_qubits=...)` misuse, 4 x "object of type 'float' has no len()", 3 other
+  TypeErrors) and 3 answers with no `qc` (2 with an EMPTY response at finish_reason stop, after 415 and 20,577
+  output tokens; 1 rambling). The verdict (not accepted) is right in every case; the reason code is a catch-all
+  and overstates syntax errors. Plus 1 hallucinated symbol and 1 truncated.
+- **The 3 Pauli statements skipped at export** (`rejected_input`): the student's planner answers
+  `satisfiable: false`, "The description does not specify a qubit count or gate set", while itself emitting the
+  requirement "exactly 6 qubits" (2 statements) or "5 qubits" (1). A false rejection by the 1.5B planner,
+  deterministic at temperature 0; same consequence as the BV/DJ aborts (the generator is never called on them).
+- **QLoRA smoke run (20 steps, the 64 longest examples, on the FIRST export; a pipeline test only).** Passed on
+  the 3070 in Docker (`Dockerfile.train`: torch 2.11.0+cu128, bitsandbytes 0.50.2): trainable 1.18%, loss 1.20 ->
+  0.28, peak 4.67 GB, 93 to 95 s per step, about 1,730 tokens/s, no nan. The prompts are 4.7k to 11k tokens
+  (median 7.7k; the handoff assumed 2.5k), so three changes to `scripts/train_qlora.py` were needed: the loss is
+  computed from logits at the completion positions only (`logits_to_keep`; same loss, no 11k-row vocabulary
+  tensor); `attn_implementation="sdpa"`; plain non-reentrant gradient checkpointing instead of
+  `prepare_model_for_kbit_training` (with it, memory grew quadratically and failed past about 6k tokens). The
+  last two were changed together: which one removed the quadratic growth was not isolated. Projected real run:
+  about 6 hours for two epochs.

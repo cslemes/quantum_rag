@@ -321,7 +321,7 @@ def run_pilot(
             stop: Exception | None = None
             if outcome.response is not None:
                 stop = _account(record, outcome, guard, now())
-                _score(record, outcome, family, v, pool)
+                _score(record, outcome.response.text, family, v, pool)
             # The record is written before any halt is raised: a paid call is
             # never lost to the stop that it triggered.
             sink.write(json.dumps(record) + "\n")
@@ -386,23 +386,25 @@ def _account(
 
 def _score(
     record: dict[str, Any],
-    outcome: TeacherOutcome,
+    text: str,
     family: Family,
     v: Variation,
     pool: WorkerPool,
 ) -> None:
-    assert outcome.response is not None
+    """Judge one teacher answer (`text`) and write the verdict on `record`, whose `provenance`
+    must already be set. Takes the text, not the call outcome, so a stored answer can be judged
+    again without a call (distill/rejudge.py): one judging path, whoever asks."""
     finish = (record.get("provenance") or {}).get("derived", {}).get("finish_reason")
     if finish == "length":
         # The reasoning (or the answer) used the whole completion budget: whatever
         # code there is, is cut off. Not a syntax error and not a verdict on the
         # teacher's circuit; a budget fact, coded as such.
-        record["code"] = _extract_code(outcome.response.text)
+        record["code"] = _extract_code(text)
         record["static"] = None
         record["acceptance"] = None
         record["reject_reason"] = "truncated:finish_reason_length"
         return
-    code = _extract_code(outcome.response.text)
+    code = _extract_code(text)
     record["code"] = code
     static = check_static(code, None, pool)
     record["static"] = {

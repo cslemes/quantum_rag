@@ -1,0 +1,11 @@
+# QLoRA training environment (specs/001-qcircuit-agent/training-handoff.md, step 1).
+# Pins match the versions the CPU round-trip ran on; torch and bitsandbytes are NOT pinned
+# because they were never verified together on the 3070: the build records what installed.
+FROM python:3.12-slim
+RUN apt-get update && apt-get install -y --no-install-recommends git build-essential \
+    && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu128
+RUN pip install --no-cache-dir transformers==5.21.0 peft==0.21.2 accelerate==1.15.0 \
+    safetensors==0.8.0 gguf==0.19.0 bitsandbytes sentencepiece httpx
+RUN pip freeze > /qlora-env-freeze.txt
+WORKDIR /app
