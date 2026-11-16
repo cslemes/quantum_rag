@@ -1,0 +1,32 @@
+{
+ "base": "Qwen/Qwen2.5-Coder-1.5B-Instruct",
+ "args": {
+  "train": "data/train-v2.jsonl",
+  "out": "runs/ft-v1",
+  "base": "Qwen/Qwen2.5-Coder-1.5B-Instruct",
+  "val_fraction": "0.05",
+  "seed": "1",
+  "epochs": "2",
+  "lr": "0.0002",
+  "rank": "16",
+  "alpha": "32",
+  "dropout": "0.05",
+  "grad_accum": "16",
+  "max_len": "12288",
+  "eval_every": "25",
+  "max_drop_fraction": "0.02",
+  "smoke": "False"
+ },
+ "train_file_sha256": "80e0c386331285d0cadf63ce04063b60d6b858e5da7412f1346eb9ea4ca4ef13",
+ "n_train": 2273,
+ "n_val": 122,
+ "best_val_loss": 0.2622,
+ "libs": {
+  "torch": "2.11.0+cu128",
+  "transformers": "5.21.0",
+  "peft": "0.21.2",
+  "bitsandbytes": "0.50.2",
+  "accelerate": "1.15.0"
+ },
+ "note": "adapter-best = lowest validation loss; adapter-last = final step"
+}

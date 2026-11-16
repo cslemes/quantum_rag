@@ -1,0 +1,55 @@
+{
+  "dataset_version": "train-v2",
+  "teacher": {
+    "profile": "teacher-deepseek-v4.1-flash-1017",
+    "model": "deepseek/deepseek-v4.1-flash-1017",
+    "canonical_slug": "deepseek/deepseek-v4.1-flash-20261017",
+    "reasoning_effort": "high",
+    "provider_options": {
+      "enforce_distillable_text": true
+    },
+    "temperature": 1.0,
+    "top_p": 1.0,
+    "system_prompt_sha256": "a82f0e46e91be6c9",
+    "seed": 1,
+    "max_tokens": 4096,
+    "max_tokens_headroom": 32000
+  },
+  "environment": {
+    "student_profile": "local-1.5b-rp",
+    "student_model": "qwen2.5-coder:1.5b",
+    "student_model_digest": "d7372fd828518a4d38b1eb196c673c31a85f2ed302b3d1e406c4c2d1b64a0668",
+    "server_version": "0.40.15",
+    "expected_server_version": "0.40.15",
+    "determinism": {
+      "reset_strategy": "per_run",
+      "temperature": 0.0,
+      "top_p": null,
+      "num_ctx": 16384,
+      "repeat_penalty": 1.1,
+      "repeat_last_n": 64
+    },
+    "planner_seed": 1,
+    "qdrant_collection": "qdocs",
+    "qdrant_points": 1020,
+    "library_version": "1.2.4",
+    "embedder": "FastEmbedEmbedder"
+  },
+  "gate_version": "999ddbb58ad6195f",
+  "rows": 2395,
+  "per_family": {
+    "qubit_permutation": 350,
+    "graph_state": 350,
+    "pauli_hamiltonian_energy": 347,
+    "diagonal_phase_ising": 350,
+    "kickback_bv_dj": 298,
+    "qaoa_p1": 350,
+    "qft": 350
+  },
+  "skipped": {
+    "pauli_hamiltonian_energy:planner:rejected_input": 3,
+    "kickback_bv_dj:planner:aborted": 52
+  },
+  "per_family_target": 350,
+  "file_sha256": "80e0c386331285d0cadf63ce04063b60d6b858e5da7412f1346eb9ea4ca4ef13"
+}

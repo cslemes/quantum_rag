@@ -1,0 +1,9 @@
+{
+  "llm_calls": 943,
+  "cache_hits": 943,
+  "cache_hits_preexisting": 943,
+  "cache_hits_self": 0,
+  "hit_rate_preexisting": 1.0,
+  "hit_rate": 1.0,
+  "verdict": "REPLAY: almost nothing was asked of the model; this is not a measurement"
+}

@@ -130,6 +130,23 @@ profiles:
       repeat_penalty: 1.1
       repeat_last_n: 64
 
+  - name: local-1.5b-ft-v1
+    label: "Local — qwen2.5-coder 1.5B QLoRA ft-v1 (q4_K_M)"
+    client_type: ollama
+    base_url: http://localhost:11434
+    base_url_env: OLLAMA_BASE_URL
+    # The tuned student (runs/ft-v1/adapter-best, val_loss 0.2622). Its identity is the DIGEST in
+    # runs/ft-v1/serve-manifest.json (998a635fa129...), not this name. Created on 0.40.15, the pin of
+    # local-1.5b-rp, whose prompts it was trained on; determinism mirrors that profile.
+    model: qwen2.5-coder-ft:1.5b-v1
+    expected_server_version: "0.40.15"
+    determinism:
+      reset_strategy: per_run
+      temperature: 0.0
+      num_ctx: 16384
+      repeat_penalty: 1.1
+      repeat_last_n: 64
+
   # TEACHER for the distillation dataset. Never shown in the UI, never run on
   # the suite (the loaders refuse a non-generator role). Held to a stricter
   # schema than a generator: the distillation guarantee, a DATED SNAPSHOT as the

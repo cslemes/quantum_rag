@@ -7159,3 +7159,67 @@ semantic check reached (22 vs 99 of 120). Headline unchanged: base versus tuned,
   `prepare_model_for_kbit_training` (with it, memory grew quadratically and failed past about 6k tokens). The
   last two were changed together: which one removed the quadratic growth was not isolated. Projected real run:
   about 6 hours for two epochs.
+
+## 2026-11-15: ft-v1 trained, served and measured. Attempt 1 compiles (18 -> 109 of 120); success stays at the floor (0 -> 1); the gain is flat across adjacency bins
+
+**Training.** `data/train-v2.jsonl` (2,395 rows, sha256 `80e0c386…a4ef13`; the six non-qft families identical row
+for row to the first export, the 4 contradictory qft rows absent, qft 82 / 94 / 86 / 88 by cell). The first
+export attempt died with a machine reboot and wrote nothing; it was re-run from scratch. QLoRA on the RTX 3070,
+`--max-len 12288`: 286 optimizer steps, 2,273 train / 122 validation, 5.4 h of step time, peak 4.67 GB, no
+non-finite loss. Validation loss 0.428 (step 25) -> 0.2622 (step 275, `adapter-best`) -> 0.2627 (final).
+
+**Serving: handoff step 7 does not work on Ollama 0.40.15.** `/api/create` with `quantize` refuses a GGUF
+("create-time quantization is only supported for safetensors imports"), and the safetensors path offers
+`int4, int8, nvfp4, mxfp4, mxfp8`, not `q4_K_M`. What was done instead: f16 GGUF with `convert_hf_to_gguf.py`
+(llama.cpp `3549c274`), `llama-quantize Q4_K_M` from `ghcr.io/ggml-org/llama.cpp@sha256:7f282973…`, import without
+`quantize` (`serve_adapter.py --quantized-by`). Result: `qwen2.5-coder-ft:1.5b-v1`, digest `998a635fa129…`, 986 MB,
+`Q4_K_M` as reported by the server. **Not the same quantiser as the base's** (the base is the Ollama library's
+`Q4_K_M` blob): same level, not shown to be the same procedure. Format check: `prompt_eval_count` equals the
+Hugging Face template token count exactly on one validation prompt per family (7 of 7) and on the toy prompt;
+every answer ends with `stop`.
+
+**The retrieval index is not the pinned one, and was not during the export either.** `qdocs` has 1020 points;
+`bench/environment.yaml` pins 875. `data/train.meta.json` and `data/train-v2.meta.json` both record
+`qdrant_points = 1020`, which nobody (I, at export time) compared with the pin. Why the volume holds the
+1020-point corpus was NOT investigated. Owner's decision (2026-11-15): compare on the index the student was
+trained on. All three runs carry `qdocs_points_gate: OVERRIDDEN`; none is comparable with the runs on 875.
+
+**Runs (same day, Ollama 0.40.15, cold cache, `--allow-index-mismatch`).**
+
+| run | profile | outcome |
+|---|---|---|
+| `9c9bf3fa94b7fe22` | local-1.5b-rp | 97 failed_static, 22 failed_semantic, 1 rejected_input |
+| `39c098084afdcfdc` | local-1.5b-rp | NOT a measurement: 943/943 calls replayed from the cache of the run above (my omission: the cache was not emptied) |
+| `a4949d939492f7f5` | local-1.5b-rp | final base; identical to `9c9bf3fa` on 120/120 (status, every attempt's code hash, error sequence) |
+| `08f01d00e29bd76f` | local-1.5b-ft-v1 | 105 failed_semantic, 14 failed_static, 1 success (`qft_8q`, attempt 2) |
+
+`analysis.compare` refuses the two base runs on `hostname` (each `docker run` names its container at random); the
+120/120 identity above was computed ignoring that field. `analysis/cross_profile.py` (new: the registered
+base-versus-tuned analysis) declares a `hostname` difference instead of refusing, by the owner's decision.
+
+**Registered analysis** (threshold registered in `distill-family-selection-v2.md` after the base and before the
+tuned run: the 95% interval of the paired depth change above zero over all tasks AND in bin 2+).
+
+| bin (strict) | n | base depth | tuned depth | paired change | 95% | compila@1 | sigma_code |
+|---|---|---|---|---|---|---|---|
+| all | 119 | 1.19 | 2.82 | +1.62 | +1.44, +1.80 | 18 -> 109 | 62/119 -> 48/119 |
+| 0 | 18 | 1.06 | 2.89 | +1.83 | +1.39, +2.22 | 2 -> 18 | 5/18 -> 7/19 |
+| 1 | 59 | 1.22 | 2.76 | +1.54 | +1.27, +1.80 | 9 -> 52 | 31/59 -> 24/59 |
+| 2+ | 42 | 1.21 | 2.86 | +1.64 | +1.36, +1.90 | 7 -> 39 | 26/42 -> 17/41 |
+
+General adjacency (sensitivity): bin 1 +1.70 [+1.46, +1.92] (n = 71), bin 2+ +1.50 [+1.21, +1.77] (n = 48).
+
+- **The threshold is met.** 93 tasks up, 25 same, 1 down.
+- **What moved is compiling, not correctness.** Tuned attempt 1: level 3 in 109 tasks, level 4 in none (base:
+  none either). Attempt-1 errors went from `UnknownSymbol` 49 / `MissingImport` 21 / `HallucinatedSymbol` 14 /
+  `GenerationTruncated` 13 to `WrongGateDecomposition` 103 / `ConceptualAlgorithmError` 6.
+- **No dose-response.** Bin 0 (no adjacent training family) gained as much as bin 2+. By the registered reading
+  that is general capability (valid Qiskit against this harness), not transfer of the trained skills. The
+  registered caveat stands: bin 0 is four whole families, so the contrast is confounded.
+- **The negative control moved**: sigma_code 62/119 -> 48/119, against the registered prediction of no movement.
+  Not with adjacency (it rose in bin 0). No numeric criterion for "does not move" was registered, so this is
+  reported, not adjudicated.
+- **Not verified:** `w_state_5q_perturbed` was rejected by the planner in the base and attempted in the tuned
+  run, which suggests the planner is served by the tuned model too; the code was not read to confirm it.
+- **Rule added on 2026-11-15, not in the registration:** a task with no generator call has no depth and is left
+  out of the pairing (that one task).

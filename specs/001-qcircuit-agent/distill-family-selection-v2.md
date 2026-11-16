@@ -231,3 +231,35 @@ not a template). That has to be run on the new statements before any family is g
 5. **The sigma thresholds** (50% / 40%) were registered against the F baseline (sigma_error 65.3%); they are to be
    re-registered against the F-prime baseline BEFORE training, once F-prime is measured, and not re-based on
    `sigma_real` (see `distill-pilot-families.md`).
+
+## Claim threshold, registered 2026-11-15 after the final base run and BEFORE the tuned run
+
+**Final base run:** `results/a4949d939492f7f5` (`local-1.5b-rp`, digest `d7372fd82851`, Ollama 0.40.15, cold
+cache), identical on 120/120 tasks to `results/9c9bf3fa94b7fe22` run the same day (status, every attempt's code,
+error sequence; compared ignoring `hostname`, which differs between any two `docker run` containers).
+`results/39c098084afdcfdc` is NOT a measurement (943/943 calls replayed from the response cache).
+
+**Conditions that differ from the registration, declared:** the retrieval index has 1020 points, not the pinned
+875 (`qdocs_points_gate: OVERRIDDEN` in every record). The training prompts were built on that same 1020-point
+index (`data/train-v2.meta.json`), and base and tuned both run on it (owner's decision, 2026-11-15). These runs
+are not comparable with the runs on 875. Server 0.40.15, not 0.40.8 (re-pin of 2026-11-12).
+
+**Base, attempt-1 depth** (`analysis/cross_profile.py`; one task has no generator call and no depth):
+
+| bin (strict) | n with an attempt | levels 0/1/2/3/4 | mean | compila@1 | sigma_code |
+|---|---|---|---|---|---|
+| all | 119 | 14/86/1/18/0 | 1.19 | 18 | 62/119 |
+| 0 | 18 | 3/13/0/2/0 | 1.06 | 2 | 5/18 |
+| 1 | 59 | 6/43/1/9/0 | 1.22 | 9 | 31/59 |
+| 2+ | 42 | 5/30/0/7/0 | 1.21 | 7 | 26/42 |
+
+**Threshold (owner, 2026-11-15):** an effect of training on attempt-1 depth is claimed only if the bootstrap 95%
+interval of the paired change (tuned minus base, per task) lies above zero BOTH over all tasks AND in bin 2+.
+No minimum effect size. Bootstrap: 10,000 resamples, seed 20261028, fixed in the code before the tuned run.
+
+**Rule added here, not in the 2026-10-28 registration:** a task with no generator call on either side (planner
+rejected or aborted) has no attempt 1 and is left out of the paired analysis, and listed.
+
+**`SyntaxError` audit of the final base run:** one attempt-1 `SyntaxError` record in 120 tasks
+(`CircuitError: 'register size error'`, sandbox-raised, level 1, correctly assigned). 0 misassigned; levels 0
+and 1 are not merged. The base's 14 level-0 tasks come from `DeprecatedAPI` / `GenerationTruncated`.

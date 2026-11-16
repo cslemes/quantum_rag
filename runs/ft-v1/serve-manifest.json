@@ -1,0 +1,12 @@
+{
+ "name": "qwen2.5-coder-ft:1.5b-v1",
+ "model_digest": "998a635fa12972878f0e3589b955f353853a06dbdc9f1d16750f77a0c5f20039",
+ "base_model": "qwen2.5-coder:1.5b",
+ "base_digest": "d7372fd828518a4d38b1eb196c673c31a85f2ed302b3d1e406c4c2d1b64a0668",
+ "quantize": "q4_K_M",
+ "gguf_sha256": "sha256:529e2fab5375be19316be60172101dba3177c018f89cd98ab2089ec439d9d494",
+ "server_version": "0.40.15",
+ "quantized_by": "llama-quantize Q4_K_M, image ghcr.io/ggml-org/llama.cpp@sha256:7f28297330fa357a2ba6ddcdafbf70ba46e78aba37150c4a4f41699e9c76b5b3; f16 GGUF by convert_hf_to_gguf.py at llama.cpp 3549c274dc22001d9118713fa56a10085b85de3b",
+ "quantization_level_reported": "Q4_K_M",
+ "template_copied_from": "qwen2.5-coder:1.5b"
+}

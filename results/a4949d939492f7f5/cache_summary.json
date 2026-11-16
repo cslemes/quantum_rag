@@ -1,0 +1,9 @@
+{
+  "llm_calls": 943,
+  "cache_hits": 154,
+  "cache_hits_preexisting": 0,
+  "cache_hits_self": 154,
+  "hit_rate_preexisting": 0.0,
+  "hit_rate": 0.1633,
+  "verdict": "COLD: no call was answered by an entry that pre-dated the run"
+}
